@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NihonGo Study</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">学</div>
+        <div>
+          <div class="brand-title">NihonGo</div>
+          <div class="brand-subtitle">개인 일본어 학습 DB</div>
+        </div>
+      </div>
+
+      <nav class="tabbar" aria-label="주요 페이지 탭">
+        <button class="tab active" data-page="home">홈</button>
+        <button class="tab" data-page="today">오늘 공부</button>
+        <button class="tab" data-page="sources">자료</button>
+        <button class="tab" data-page="words">단어</button>
+        <button class="tab" data-page="grammar">문법</button>
+        <button class="tab" data-page="expressions">표현</button>
+        <button class="tab" data-page="kanji">한자</button>
+        <button class="tab" data-page="review">복습 큐</button>
+        <button class="tab" data-page="stats">통계</button>
+        <button class="tab" data-page="settings">설정</button>
+      </nav>
+
+      <label class="search" aria-label="전체 검색">
+        <span>⌕</span>
+        <input id="globalSearch" placeholder="단어, 문법, 표현, 자료 검색" />
+        <span class="shortcut">Ctrl K</span>
+      </label>
+
+      <div class="top-actions">
+        <div class="date-chip" id="todayDate"></div>
+        <button class="primary-btn" id="quickAddBtn">+ 빠른 추가</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <p class="sidebar-title">현재 페이지 목차</p>
+          <div class="toc-list" id="tocList"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <p class="sidebar-title">빠른 필터</p>
+          <div class="toc-list">
+            <button class="toc-item filter-btn" data-filter="review"><span>복습 필요</span><span class="count" id="reviewFilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="N3"><span>JLPT N3</span><span class="count" id="n3FilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="source"><span>자료 연결됨</span><span class="count" id="sourceFilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="pending"><span>미완료</span><span class="count" id="pendingFilterCount">0</span></button>
+          </div>
+        </div>
+
+        <div class="mini-card">
+          <strong>오늘의 초점</strong>
+          <p id="focusText">새 항목을 추가하고 복습 큐를 정리하세요.</p>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="page" id="home">
+          <div class="hero" id="home-overview">
+            <div class="panel welcome">
+              <div class="eyebrow">오늘의 학습 워크스페이스</div>
+              <h1>오늘도 일본어 감각을<br />조금 더 선명하게.</h1>
+              <p class="lead">자료에서 단어, 문법, 표현, 한자를 추출하고 복습 큐로 보내는 흐름을 한 화면에서 관리합니다.</p>
+              <div class="hero-actions">
+                <button class="primary-btn" data-open-page="today">오늘 공부 기록하기</button>
+                <button class="ghost-btn" data-open-page="review">복습 시작</button>
+                <button class="ghost-btn" data-open-page="sources">자료 이어서 보기</button>
+              </div>
+            </div>
+
+            <div class="panel today-panel" id="home-progress">
+              <div class="panel-header">
+                <h2 class="panel-title">오늘 진행률</h2>
+                <span class="badge red">목표 90분</span>
+              </div>
+              <div class="progress-ring" id="progressRing">
+                <div class="progress-inner">
+                  <div>
+                    <strong id="progressPercent">0%</strong>
+                    <span>완료</span>
+                  </div>
+                </div>
+              </div>
+              <p class="muted" id="progressText">오늘 공부 시간을 기록하면 진행률이 갱신됩니다.</p>
+            </div>
+          </div>
+
+          <div class="stat-grid" id="home-stats">
+            <div class="stat-card">
+              <div class="stat-label">오늘 공부 항목</div>
+              <div class="stat-value" id="todayDoneCount">0개</div>
+              <div class="stat-note">완료한 할 일 기준</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">새 항목</div>
+              <div class="stat-value" id="newItemCount">0개</div>
+              <div class="stat-note">단어 · 문법 · 표현 · 한자</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">복습 항목</div>
+              <div class="stat-value" id="reviewItemCount">0개</div>
+              <div class="stat-note">오늘/대기 복습 대상</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">오늘 공부 시간</div>
+              <div class="stat-value" id="studyMinutes">0분</div>
+              <div class="stat-note">목표 90분</div>
+            </div>
+          </div>
+
+          <div class="content-grid">
+            <div>
+              <section class="panel section" id="home-today">
+                <div class="panel-header">
+                  <h2 class="panel-title">오늘 할 일</h2>
+                  <button class="ghost-btn" id="addTaskBtn">+ 할 일 추가</button>
+                </div>
+                <div class="task-list" id="taskList"></div>
+              </section>
+
+              <section class="panel section" id="home-recent">
+                <div class="panel-header">
+                  <h2 class="panel-title">최근 추가 항목</h2>
+                  <button class="ghost-btn" data-open-page="words">전체 보기</button>
+                </div>
+                <div class="cards" id="recentItems"></div>
+              </section>
+            </div>
+
+            <div>
+              <section class="panel section" id="home-queue">
+                <div class="panel-header">
+                  <h2 class="panel-title">복습 큐</h2>
+                  <button class="primary-btn" data-open-page="review">복습 보기</button>
+                </div>
+                <table class="table">
+                  <thead>
+                    <tr><th>유형</th><th>개수</th><th>상태</th></tr>
+                  </thead>
+                  <tbody id="reviewSummary"></tbody>
+                </table>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="page hidden-page" id="today">
+          <section class="panel section" id="today-log">
+            <div class="panel-header">
+              <h2 class="panel-title">오늘 공부 기록</h2>
+              <button class="primary-btn" id="saveStudyLogBtn">저장</button>
+            </div>
+            <div class="form-grid">
+              <label>공부 시간(분)<input id="studyMinutesInput" type="number" min="0" step="5" /></label>
+              <label>오늘 요약<input id="studySummaryInput" placeholder="예: NHK 기사 1개, 단어 12개" /></label>
+            </div>
+            <textarea id="studyNoteInput" placeholder="오늘 배운 문장, 헷갈린 점, 다음에 볼 자료를 기록하세요."></textarea>
+          </section>
+
+          <section class="panel section" id="today-sentences">
+            <div class="panel-header">
+              <h2 class="panel-title">문장 · 읽기 · 해석</h2>
+              <button class="ghost-btn" data-kind="sentence" data-add-item>+ 문장 추가</button>
+            </div>
+            <div class="cards" id="sentenceCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="sources">
+          <section class="panel section" id="sources-library">
+            <div class="panel-header">
+              <h2 class="panel-title">자료 라이브러리</h2>
+              <button class="primary-btn" data-kind="source" data-add-item>+ 자료 추가</button>
+            </div>
+            <div class="cards" id="sourceCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="words">
+          <section class="panel section" id="words-list">
+            <div class="panel-header">
+              <h2 class="panel-title">단어장</h2>
+              <button class="primary-btn" data-kind="word" data-add-item>+ 단어 추가</button>
+            </div>
+            <div class="table-tools">
+              <select id="wordPartFilter">
+                <option value="">전체 품사</option>
+                <option>명사</option>
+                <option>동사</option>
+                <option>부사</option>
+                <option>문법표현</option>
+              </select>
+              <select id="wordReviewFilter">
+                <option value="">전체 복습</option>
+                <option>오늘</option>
+                <option>내일</option>
+                <option>3일 후</option>
+                <option>대기</option>
+              </select>
+            </div>
+            <table class="table">
+              <thead><tr><th>단어</th><th>읽기</th><th>뜻</th><th>한자</th><th>품사</th><th>문자</th><th>복습</th><th></th></tr></thead>
+              <tbody id="wordRows"></tbody>
+            </table>
+          </section>
+
+          <section class="taxonomy-section" id="words-taxonomy">
+            <div class="panel-header">
+              <h3 class="panel-title">단어장 분류 체계</h3>
+              <span class="badge green">검색 · 필터 기준</span>
+            </div>
+            <div class="taxonomy-grid">
+              <article class="taxonomy-card">
+                <h4>품사</h4>
+                <div class="taxonomy-chip-wrap" id="partChips"></div>
+              </article>
+              <article class="taxonomy-card">
+                <h4>문자</h4>
+                <div class="taxonomy-chip-wrap" id="scriptChips"></div>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="grammar">
+          <section class="panel section" id="grammar-detail">
+            <div class="panel-header">
+              <h2 class="panel-title">문법 노트</h2>
+              <button class="primary-btn" data-kind="grammar" data-add-item>+ 문법 추가</button>
+            </div>
+            <div class="cards" id="grammarCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="expressions">
+          <section class="panel section" id="expressions-list">
+            <div class="panel-header">
+              <h2 class="panel-title">표현 · 관용구</h2>
+              <button class="primary-btn" data-kind="expression" data-add-item>+ 표현 추가</button>
+            </div>
+            <div class="cards" id="expressionCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="kanji">
+          <section class="panel section" id="kanji-grid">
+            <div class="panel-header">
+              <h2 class="panel-title">한자 노트</h2>
+              <button class="primary-btn" data-kind="kanji" data-add-item>+ 한자 추가</button>
+            </div>
+            <div class="kanji-grid" id="kanjiCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="review">
+          <section class="panel section" id="review-queue">
+            <div class="panel-header">
+              <h2 class="panel-title">복습 큐</h2>
+              <button class="primary-btn" id="completeReviewBtn">선택 복습 완료</button>
+            </div>
+            <div class="cards" id="reviewCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="stats">
+          <section class="panel section" id="stats-overview">
+            <div class="panel-header"><h2 class="panel-title">학습 통계</h2><span class="muted">이번 주</span></div>
+            <div class="stat-grid">
+              <div class="stat-card"><div class="stat-label">총 공부 시간</div><div class="stat-value" id="totalMinutes">0분</div><div class="stat-note">누적 기록</div></div>
+              <div class="stat-card"><div class="stat-label">등록 단어</div><div class="stat-value" id="totalWords">0</div><div class="stat-note">단어장 기준</div></div>
+              <div class="stat-card"><div class="stat-label">문법/표현</div><div class="stat-value" id="totalGrammarExpression">0</div><div class="stat-note">노트 기준</div></div>
+              <div class="stat-card"><div class="stat-label">완료 자료</div><div class="stat-value" id="completedSources">0</div><div class="stat-note">진행률 100%</div></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="settings">
+          <section class="panel section" id="settings-general">
+            <div class="panel-header"><h2 class="panel-title">설정</h2><button class="primary-btn" id="resetDataBtn">샘플 데이터 초기화</button></div>
+            <table class="table">
+              <tbody>
+                <tr><th>저장 방식</th><td>브라우저 로컬 저장소(localStorage)</td></tr>
+                <tr><th>기본 복습 방식</th><td>SRS 간격 반복 준비 구조</td></tr>
+                <tr><th>단축키</th><td>Ctrl K 전체 검색 · Ctrl N 빠른 추가</td></tr>
+                <tr><th>추후 기능</th><td>퀴즈 · 음성 재생</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="modal" id="itemDialog">
+    <form method="dialog" id="itemForm">
+      <div class="modal-header">
+        <h2 id="dialogTitle">항목 추가</h2>
+        <button class="icon-btn" type="button" id="closeDialogBtn" aria-label="닫기">×</button>
+      </div>
+      <input type="hidden" id="itemKind" />
+      <div class="form-grid">
+        <label>제목<input id="itemTitle" required /></label>
+        <label>읽기/분류<input id="itemReading" /></label>
+        <label>뜻/요약<input id="itemMeaning" /></label>
+        <label>레벨<input id="itemLevel" placeholder="N3, 회화, 뉴스" /></label>
+        <label>품사<input id="itemPart" placeholder="명사, 동사, 표현" /></label>
+        <label>문자<input id="itemScript" placeholder="한자, 히라가나, 혼합" /></label>
+        <label>복습<input id="itemReview" placeholder="오늘, 내일, 대기" /></label>
+        <label>한자/진행률<input id="itemDetail" placeholder="한자 정보 또는 자료 진행률 0-100" /></label>
+        <label>연결 자료<input id="itemSource" placeholder="영상, 뉴스, 교재명" /></label>
+      </div>
+      <textarea id="itemNote" placeholder="예문, 메모, 사용 상황"></textarea>
+      <div class="modal-actions">
+        <button class="ghost-btn" type="button" id="cancelDialogBtn">취소</button>
+        <button class="primary-btn" type="submit">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="./app.js"></script>
+</body>
+</html>

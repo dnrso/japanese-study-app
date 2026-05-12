@@ -1,0 +1,12 @@
+{
+  "name": "japanese-study-app",
+  "version": "0.1.0",
+  "description": "Electron Japanese study app",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^42.0.1"
+  }
+}
