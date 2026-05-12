@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NihonGo Study</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
+
 <body>
   <div class="app">
     <header class="topbar">
@@ -52,10 +54,14 @@
         <div class="sidebar-section">
           <p class="sidebar-title">빠른 필터</p>
           <div class="toc-list">
-            <button class="toc-item filter-btn" data-filter="review"><span>복습 필요</span><span class="count" id="reviewFilterCount">0</span></button>
-            <button class="toc-item filter-btn" data-filter="N3"><span>JLPT N3</span><span class="count" id="n3FilterCount">0</span></button>
-            <button class="toc-item filter-btn" data-filter="source"><span>자료 연결됨</span><span class="count" id="sourceFilterCount">0</span></button>
-            <button class="toc-item filter-btn" data-filter="pending"><span>미완료</span><span class="count" id="pendingFilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="review"><span>복습 필요</span><span class="count"
+                id="reviewFilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="N3"><span>JLPT N3</span><span class="count"
+                id="n3FilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="source"><span>자료 연결됨</span><span class="count"
+                id="sourceFilterCount">0</span></button>
+            <button class="toc-item filter-btn" data-filter="pending"><span>미완료</span><span class="count"
+                id="pendingFilterCount">0</span></button>
           </div>
         </div>
 
@@ -146,7 +152,11 @@
                 </div>
                 <table class="table">
                   <thead>
-                    <tr><th>유형</th><th>개수</th><th>상태</th></tr>
+                    <tr>
+                      <th>유형</th>
+                      <th>개수</th>
+                      <th>상태</th>
+                    </tr>
                   </thead>
                   <tbody id="reviewSummary"></tbody>
                 </table>
@@ -156,24 +166,77 @@
         </section>
 
         <section class="page hidden-page" id="today">
-          <section class="panel section" id="today-log">
-            <div class="panel-header">
-              <h2 class="panel-title">오늘 공부 기록</h2>
-              <button class="primary-btn" id="saveStudyLogBtn">저장</button>
-            </div>
-            <div class="form-grid">
-              <label>공부 시간(분)<input id="studyMinutesInput" type="number" min="0" step="5" /></label>
-              <label>오늘 요약<input id="studySummaryInput" placeholder="예: NHK 기사 1개, 단어 12개" /></label>
-            </div>
-            <textarea id="studyNoteInput" placeholder="오늘 배운 문장, 헷갈린 점, 다음에 볼 자료를 기록하세요."></textarea>
-          </section>
+          <div class="today-top-grid">
+            <section class="panel section" id="today-log">
+              <div class="panel-header">
+                <h2 class="panel-title" id="selectedDateTitle">문장 추가</h2>
+                <button class="primary-btn" id="addDailyEntryBtn">문장 추가</button>
+              </div>
+              <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな…
+읽기 わたし なんか きにさわる こと したかな…
+해석 나 따위가 기분 상할 만한 일을 한 걸까…
+단어장
+`私` (わたし) 나, 저 | 한자=私 (사사 사) | 품사=대명사 | 문자=한자
+`気に障る` (きにさわる) 비위에 거슬리다, 기분 상하다 | 한자=気 (기운 기), 障 (가로막을 장) | 품사=동사표현 | 문자=한자+히라가나
+문법
+`したかな` 동사 'する'의 과거형 'した'에 의문을 나타내는 종조사 'かな'가 붙어, 자신의 행동을 되돌아보며 자문하는 뉘앙스를 나타냅니다."></textarea>
+            </section>
+
+            <section class="panel section" id="today-manual-entry">
+              <div class="panel-header">
+                <h2 class="panel-title">새 항목 추가</h2>
+                <button class="primary-btn" id="addManualEntryBtn">추가</button>
+              </div>
+              <div class="daily-kind-radios">
+                <label><input type="radio" name="dailyManualKind" value="word" checked /> 새 단어</label>
+                <label><input type="radio" name="dailyManualKind" value="grammar" /> 새 문법</label>
+                <label><input type="radio" name="dailyManualKind" value="expression" /> 새 표현</label>
+              </div>
+              <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder="`私` (わたし) 나, 저 | 한자=私 (사사 사) | 품사=대명사 | 문자=한자"></textarea>
+            </section>
+
+            <section class="panel section" id="today-calendar">
+              <div class="panel-header">
+                <h2 class="panel-title" id="calendarTitle">학습 캘린더</h2>
+                <div class="calendar-actions">
+                  <button class="ghost-btn" id="prevMonthBtn">이전</button>
+                  <button class="ghost-btn" id="todayBtn">오늘</button>
+                  <button class="ghost-btn" id="nextMonthBtn">다음</button>
+                </div>
+              </div>
+              <div class="calendar-weekdays">
+                <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              </div>
+              <div class="calendar-grid" id="calendarGrid"></div>
+            </section>
+          </div>
 
           <section class="panel section" id="today-sentences">
             <div class="panel-header">
-              <h2 class="panel-title">문장 · 읽기 · 해석</h2>
-              <button class="ghost-btn" data-kind="sentence" data-add-item>+ 문장 추가</button>
+              <h2 class="panel-title">저장된 문장 카드</h2>
             </div>
-            <div class="cards" id="sentenceCards"></div>
+            <div class="cards daily-entry-list" id="dailyEntryCards"></div>
+          </section>
+
+          <section class="panel section" id="today-learned">
+            <div class="panel-header">
+              <h2 class="panel-title">오늘 배운 항목</h2>
+              <button class="primary-btn compact-action-btn" id="registerLearnedBtn">전체 등록</button>
+            </div>
+            <div class="learned-grid">
+              <section class="learned-section">
+                <h3>새 단어</h3>
+                <div class="cards compact-cards" id="learnedWordCards"></div>
+              </section>
+              <section class="learned-section">
+                <h3>새 문법</h3>
+                <div class="cards compact-cards" id="learnedGrammarCards"></div>
+              </section>
+              <section class="learned-section">
+                <h3>새 표현</h3>
+                <div class="cards compact-cards" id="learnedExpressionCards"></div>
+              </section>
+            </div>
           </section>
         </section>
 
@@ -210,7 +273,19 @@
               </select>
             </div>
             <table class="table">
-              <thead><tr><th>단어</th><th>읽기</th><th>뜻</th><th>한자</th><th>품사</th><th>문자</th><th>복습</th><th></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>단어</th>
+                  <th>읽기</th>
+                  <th>뜻</th>
+                  <th>한자</th>
+                  <th>품사</th>
+                  <th>문자</th>
+                  <th>원본 문장</th>
+                  <th>복습</th>
+                  <th></th>
+                </tr>
+              </thead>
               <tbody id="wordRows"></tbody>
             </table>
           </section>
@@ -275,27 +350,89 @@
 
         <section class="page hidden-page" id="stats">
           <section class="panel section" id="stats-overview">
-            <div class="panel-header"><h2 class="panel-title">학습 통계</h2><span class="muted">이번 주</span></div>
+            <div class="panel-header">
+              <h2 class="panel-title">학습 통계</h2><span class="muted">이번 주</span>
+            </div>
             <div class="stat-grid">
-              <div class="stat-card"><div class="stat-label">총 공부 시간</div><div class="stat-value" id="totalMinutes">0분</div><div class="stat-note">누적 기록</div></div>
-              <div class="stat-card"><div class="stat-label">등록 단어</div><div class="stat-value" id="totalWords">0</div><div class="stat-note">단어장 기준</div></div>
-              <div class="stat-card"><div class="stat-label">문법/표현</div><div class="stat-value" id="totalGrammarExpression">0</div><div class="stat-note">노트 기준</div></div>
-              <div class="stat-card"><div class="stat-label">완료 자료</div><div class="stat-value" id="completedSources">0</div><div class="stat-note">진행률 100%</div></div>
+              <div class="stat-card">
+                <div class="stat-label">총 공부 시간</div>
+                <div class="stat-value" id="totalMinutes">0분</div>
+                <div class="stat-note">누적 기록</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">등록 단어</div>
+                <div class="stat-value" id="totalWords">0</div>
+                <div class="stat-note">단어장 기준</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">문법/표현</div>
+                <div class="stat-value" id="totalGrammarExpression">0</div>
+                <div class="stat-note">노트 기준</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">완료 자료</div>
+                <div class="stat-value" id="completedSources">0</div>
+                <div class="stat-note">진행률 100%</div>
+              </div>
             </div>
           </section>
         </section>
 
         <section class="page hidden-page" id="settings">
           <section class="panel section" id="settings-general">
-            <div class="panel-header"><h2 class="panel-title">설정</h2><button class="primary-btn" id="resetDataBtn">샘플 데이터 초기화</button></div>
+            <div class="panel-header">
+              <h2 class="panel-title">설정</h2><button class="primary-btn" id="resetDataBtn">데이터 초기화</button>
+            </div>
             <table class="table">
               <tbody>
-                <tr><th>저장 방식</th><td>브라우저 로컬 저장소(localStorage)</td></tr>
-                <tr><th>기본 복습 방식</th><td>SRS 간격 반복 준비 구조</td></tr>
-                <tr><th>단축키</th><td>Ctrl K 전체 검색 · Ctrl N 빠른 추가</td></tr>
-                <tr><th>추후 기능</th><td>퀴즈 · 음성 재생</td></tr>
+                <tr>
+                  <th>저장 방식</th>
+                  <td>SQLite 실제 데이터베이스</td>
+                </tr>
+                <tr>
+                  <th>데이터 폴더</th>
+                  <td id="appDataPath">확인 중</td>
+                </tr>
+                <tr>
+                  <th>SQLite</th>
+                  <td id="sqlitePath">확인 중</td>
+                </tr>
+                <tr>
+                  <th>Export</th>
+                  <td id="exportPath">확인 중</td>
+                </tr>
+                <tr>
+                  <th>Backup</th>
+                  <td id="backupPath">확인 중</td>
+                </tr>
+                <tr>
+                  <th>기본 복습 방식</th>
+                  <td>SRS 간격 반복 준비 구조</td>
+                </tr>
+                <tr>
+                  <th>CSV</th>
+                  <td>words.csv · grammar.csv · expressions.csv · kanji.csv · sources.csv · sentences.csv</td>
+                </tr>
+                <tr>
+                  <th>YAML</th>
+                  <td>study-log.yaml · full-backup.yaml</td>
+                </tr>
+                <tr>
+                  <th>단축키</th>
+                  <td>Ctrl K 전체 검색 · Ctrl N 빠른 추가</td>
+                </tr>
+                <tr>
+                  <th>추후 기능</th>
+                  <td>퀴즈 · 음성 재생</td>
+                </tr>
               </tbody>
             </table>
+            <div class="settings-actions">
+              <button class="ghost-btn" id="exportDataBtn">CSV/YAML 내보내기</button>
+              <button class="ghost-btn" id="importCsvBtn">exports CSV 가져오기</button>
+              <button class="ghost-btn" id="importBackupBtn">full-backup.yaml 복원</button>
+            </div>
+            <p class="muted" id="storageStatus"></p>
           </section>
         </section>
       </main>
@@ -330,4 +467,5 @@
 
   <script src="./app.js"></script>
 </body>
+
 </html>
