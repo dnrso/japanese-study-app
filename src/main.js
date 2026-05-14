@@ -1,6 +1,48 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const store = require("./dbBridge");
+const { registerDataHandlers } = require("./dataHandlers");
+
+const VOICEVOX_BASE_URL = "http://localhost:50021";
+
+async function fetchVoicevox(pathname, params = {}, options = {}) {
+  const url = new URL(pathname, VOICEVOX_BASE_URL);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(`VOICEVOX 요청 실패: ${pathname} (${response.status})`);
+  }
+  return response;
+}
+
+function registerTtsHandlers(ipcMain) {
+  ipcMain.handle("tts:voicevox-speakers", async () => {
+    const response = await fetchVoicevox("/speakers");
+    return response.json();
+  });
+
+  ipcMain.handle("tts:voicevox-synthesize", async (_event, payload) => {
+    const text = String(payload?.text || "").trim();
+    const speaker = String(payload?.speakerId || "").trim();
+    if (!text || !speaker) {
+      throw new Error("VOICEVOX 합성에 필요한 텍스트 또는 speaker가 없습니다.");
+    }
+
+    const queryResponse = await fetchVoicevox("/audio_query", { text, speaker }, { method: "POST" });
+    const audioQuery = await queryResponse.json();
+    audioQuery.speedScale = Number(payload?.rate || 1);
+
+    const synthesisResponse = await fetchVoicevox("/synthesis", { speaker }, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(audioQuery)
+    });
+    return {
+      mimeType: synthesisResponse.headers.get("content-type") || "audio/wav",
+      audioData: Buffer.from(await synthesisResponse.arrayBuffer())
+    };
+  });
+}
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -22,7 +64,8 @@ function createWindow() {
 
 app.whenReady().then(() => {
   store.initDatabase();
-  registerDataHandlers();
+  registerDataHandlers(ipcMain, store);
+  registerTtsHandlers(ipcMain);
   createWindow();
 
   app.on("activate", () => {
@@ -37,22 +80,3 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
-
-function registerDataHandlers() {
-  ipcMain.handle("data:get-state", (_event, studyDate) => store.getState(studyDate));
-  ipcMain.handle("data:save-study-log", (_event, studyLog) => store.saveStudyLog(studyLog));
-  ipcMain.handle("data:add-daily-entry", (_event, entry) => store.addDailyEntry(entry));
-  ipcMain.handle("data:delete-daily-entry", (_event, id, studyDate) => store.deleteDailyEntry(id, studyDate));
-  ipcMain.handle("data:register-daily-entry", (_event, id) => store.registerDailyEntry(id));
-  ipcMain.handle("data:add-task", (_event, task) => store.addTask(task));
-  ipcMain.handle("data:update-task-done", (_event, id, done, studyDate) => store.updateTaskDone(id, done, studyDate));
-  ipcMain.handle("data:upsert-item", (_event, item) => store.upsertItem(item));
-  ipcMain.handle("data:delete-item", (_event, id, studyDate) => store.deleteItem(id, studyDate));
-  ipcMain.handle("data:update-item-review", (_event, id, review, studyDate) => store.updateItemReview(id, review, studyDate));
-  ipcMain.handle("data:complete-review", (_event, ids, studyDate) => store.completeReview(ids, studyDate));
-  ipcMain.handle("data:reset-sample", () => store.resetSampleData());
-  ipcMain.handle("data:export", () => store.exportData());
-  ipcMain.handle("data:import-csv", (_event, studyDate) => store.importCsvExports(studyDate));
-  ipcMain.handle("data:import-backup", () => store.importFullBackup());
-  ipcMain.handle("data:get-paths", () => store.paths);
-}

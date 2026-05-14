@@ -2,7 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const Database = require("better-sqlite3");
-const YAML = require("yaml");
+const { databaseSchema } = require("./dataSchema");
+const { createDataImportExport } = require("./dataImportExport");
+const { parseDailyEntry, dailyEntryToItems, withKanjiItems, itemToRawText } = require("./dailyEntryParser");
 
 const rootDir = path.resolve(__dirname, "..");
 const appDataDir = path.join(rootDir, "app-data");
@@ -40,81 +42,8 @@ function initDatabase() {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS study_log (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      minutes INTEGER NOT NULL DEFAULT 0,
-      summary TEXT NOT NULL DEFAULT '',
-      note TEXT NOT NULL DEFAULT '',
-      total_minutes INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
+  db.exec(databaseSchema);
 
-    CREATE TABLE IF NOT EXISTS study_days (
-      study_date TEXT PRIMARY KEY,
-      minutes INTEGER NOT NULL DEFAULT 0,
-      summary TEXT NOT NULL DEFAULT '',
-      note TEXT NOT NULL DEFAULT '',
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS daily_entries (
-      id TEXT PRIMARY KEY,
-      study_date TEXT NOT NULL,
-      parent_id TEXT,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      reading TEXT NOT NULL DEFAULT '',
-      meaning TEXT NOT NULL DEFAULT '',
-      raw_text TEXT NOT NULL DEFAULT '',
-      parsed_json TEXT NOT NULL DEFAULT '{}',
-      registered INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS daily_entry_links (
-      entry_id TEXT NOT NULL,
-      sentence_id TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (entry_id, sentence_id),
-      FOREIGN KEY (entry_id) REFERENCES daily_entries(id) ON DELETE CASCADE,
-      FOREIGN KEY (sentence_id) REFERENCES daily_entries(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      note TEXT NOT NULL DEFAULT '',
-      tag TEXT NOT NULL DEFAULT '',
-      done INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS items (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      reading TEXT NOT NULL DEFAULT '',
-      meaning TEXT NOT NULL DEFAULT '',
-      level TEXT NOT NULL DEFAULT '',
-      part TEXT NOT NULL DEFAULT '',
-      script TEXT NOT NULL DEFAULT '',
-      review TEXT NOT NULL DEFAULT '',
-      kanji TEXT NOT NULL DEFAULT '',
-      source TEXT NOT NULL DEFAULT '',
-      note TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_items_kind ON items(kind);
-    CREATE INDEX IF NOT EXISTS idx_items_review ON items(review);
-    CREATE INDEX IF NOT EXISTS idx_daily_entries_date ON daily_entries(study_date);
-    CREATE INDEX IF NOT EXISTS idx_daily_entries_kind_title ON daily_entries(kind, title);
-    CREATE INDEX IF NOT EXISTS idx_daily_entry_links_sentence ON daily_entry_links(sentence_id);
-  `);
 
   ensureColumn("daily_entries", "parent_id", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_daily_entries_parent ON daily_entries(parent_id);");
@@ -429,17 +358,6 @@ function dailyCandidatePayload(parent, kind, item) {
   };
 }
 
-function itemToRawText(item) {
-  const parts = [`### ${text(item.title)}`];
-  if (item.reading) parts.push(`- **읽기**: ${item.reading}`);
-  if (item.meaning) parts.push(`- **해석**: ${item.meaning}`);
-  if (item.kanji) parts.push(`- **한자**: ${item.kanji}`);
-  if (item.part) parts.push(`- **품사**: ${item.part}`);
-  if (item.script) parts.push(`- **문자**: ${item.script}`);
-  if (item.note && item.note !== item.meaning) parts.push(`- **메모**: ${item.note}`);
-  return parts.join("\n");
-}
-
 function registerDailyEntry(id) {
   const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ?").get(id);
   if (!entry) {
@@ -481,6 +399,29 @@ function registerDailyEntry(id) {
   };
 }
 
+function registerDailyEntries(ids, studyDate) {
+  const registered = [];
+  const duplicates = [];
+  const errors = [];
+  let nextDate = normalizeDate(studyDate);
+
+  ids.forEach(id => {
+    try {
+      const response = registerDailyEntry(id);
+      nextDate = response.state.selectedDate || nextDate;
+      registered.push(...response.result.registered);
+      duplicates.push(...response.result.duplicates);
+    } catch (error) {
+      errors.push(error.message || String(error));
+    }
+  });
+
+  return {
+    state: getState(nextDate),
+    result: { registered, duplicates, errors }
+  };
+}
+
 function addTask(task) {
   db.prepare(`
     INSERT INTO tasks (id, title, note, tag, done)
@@ -517,7 +458,8 @@ function upsertItem(item) {
 
   db.transaction(() => {
     insert.run(payload);
-    kanjiItemsFromWord(payload).forEach(kanjiItem => {
+    const generatedItems = payload.kind === "word" ? withKanjiItems([payload]).slice(1) : [];
+    generatedItems.forEach(kanjiItem => {
       if (!exists.get(kanjiItem.kind, kanjiItem.title)) {
         insert.run(normalizeItem({ ...kanjiItem, id: createId(), review: payload.review || "대기" }));
       }
@@ -559,312 +501,12 @@ function resetSampleData() {
   return clearAllData();
 }
 
-function exportData() {
-  ensureDirectories();
-  const state = getState();
-  const byKind = groupItemsByKind(state.items);
-
-  Object.entries(csvFilesByKind).forEach(([kind, filename]) => {
-    writeUtf8(path.join(exportsDir, filename), toCsv(byKind[kind] || []));
-  });
-
-  writeUtf8(path.join(exportsDir, "study-log.yaml"), YAML.stringify({
-    selectedDate: state.selectedDate,
-    studyDays: state.studyDays,
-    dailyEntries: state.dailyEntries
-  }));
-  writeUtf8(path.join(backupsDir, "full-backup.yaml"), YAML.stringify({
-    ...state,
-    allDailyEntries: db.prepare(`
-      SELECT id, study_date AS studyDate, parent_id AS parentId, kind, title, reading, meaning, raw_text AS rawText,
-        parsed_json AS parsedJson, registered
-      FROM daily_entries
-      ORDER BY study_date DESC, datetime(created_at) DESC
-    `).all(),
-    dailyEntryLinks: db.prepare(`
-      SELECT entry_id AS entryId, sentence_id AS sentenceId
-      FROM daily_entry_links
-      ORDER BY datetime(created_at) ASC
-    `).all()
-  }));
-
-  return {
-    appDataDir,
-    sqlite: dbPath,
-    exportsDir,
-    backupsDir,
-    files: [
-      ...Object.values(csvFilesByKind).map(filename => path.join(exportsDir, filename)),
-      path.join(exportsDir, "study-log.yaml"),
-      path.join(backupsDir, "full-backup.yaml")
-    ]
-  };
-}
-
-function importCsvExports(studyDate) {
-  ensureDirectories();
-  Object.entries(csvFilesByKind).forEach(([kind, filename]) => {
-    const filePath = path.join(exportsDir, filename);
-    if (!fs.existsSync(filePath)) {
-      return;
-    }
-    parseCsv(readUtf8(filePath)).forEach(row => upsertItem(normalizeItem({ ...row, kind, id: row.id || createId() })));
-  });
-  return getState(studyDate);
-}
-
-function importFullBackup() {
-  const backupPath = path.join(backupsDir, "full-backup.yaml");
-  if (!fs.existsSync(backupPath)) {
-    throw new Error("full-backup.yaml 파일이 없습니다.");
-  }
-  const backup = YAML.parse(readUtf8(backupPath));
-  return replaceBackup(backup);
-}
-
-function replaceBackup(backup) {
-  const insertDay = db.prepare(`
-    INSERT INTO study_days (study_date, minutes, summary, note)
-    VALUES (@studyDate, @minutes, @summary, @note)
-  `);
-  const insertEntry = db.prepare(`
-    INSERT INTO daily_entries (id, study_date, parent_id, kind, title, reading, meaning, raw_text, parsed_json, registered)
-    VALUES (@id, @studyDate, @parentId, @kind, @title, @reading, @meaning, @rawText, @parsedJson, @registered)
-  `);
-  const insertLink = db.prepare(`
-    INSERT OR IGNORE INTO daily_entry_links (entry_id, sentence_id)
-    VALUES (@entryId, @sentenceId)
-  `);
-  const insertItem = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note)
-  `);
-
-  db.transaction(() => {
-    clearAllData();
-    (backup.studyDays || []).forEach(day => insertDay.run({
-      studyDate: normalizeDate(day.studyDate),
-      minutes: toNumber(day.minutes),
-      summary: text(day.summary),
-      note: text(day.note)
-    }));
-    (backup.allDailyEntries || backup.dailyEntries || []).forEach(entry => insertEntry.run(normalizeDailyEntry(entry)));
-    (backup.dailyEntryLinks || []).forEach(link => insertLink.run({
-      entryId: text(link.entryId || link.entry_id),
-      sentenceId: text(link.sentenceId || link.sentence_id)
-    }));
-    migrateParentLinks();
-    (backup.items || []).forEach(item => insertItem.run(normalizeItem(item)));
-  })();
-
-  return getState(backup.selectedDate);
-}
-
 function ensureStudyDay(studyDate) {
   db.prepare(`
     INSERT INTO study_days (study_date)
     VALUES (?)
     ON CONFLICT(study_date) DO NOTHING
   `).run(studyDate);
-}
-
-function parseDailyEntry(kind, rawText) {
-  const normalizedKind = normalizeDailyKind(kind);
-  const raw = text(rawText).trim();
-  const title = firstMatch(raw, /^#{1,6}\s*(.+)$/m) || firstMatch(raw, /`([^`]+)`/) || raw.split(/\r?\n/)[0] || "";
-  const reading = firstMatch(raw, /^읽기\s+(.+)$/m) || firstMatch(raw, /\*\*읽기\*\*\s*:\s*(.+)/) || firstMatch(raw, /`[^`]+`\s*\(([^)]+)\)/) || "";
-  const meaning = firstMatch(raw, /^해석\s+(.+)$/m) || firstMatch(raw, /\*\*해석\*\*\s*:\s*(.+)/) || inlineMeaning(raw) || "";
-
-  return {
-    kind: normalizedKind,
-    title: title.trim(),
-    reading: reading.trim(),
-    meaning: meaning.trim(),
-    words: parseWordLines(raw),
-    grammar: parseGrammarLines(raw),
-    expressions: parseExpressionLines(raw),
-    note: raw
-  };
-}
-
-function sectionedBulletLines(raw) {
-  const result = [];
-  let section = "";
-
-  raw.split(/\r?\n/).forEach(line => {
-    const trimmed = line.trim();
-    if (/^(?:-\s*)?(?:\*\*)?단어장(?:\*\*)?$/.test(trimmed)) section = "word";
-    if (/^(?:-\s*)?(?:\*\*)?문법(?:\*\*)?$/.test(trimmed)) section = "grammar";
-    if (/^(?:-\s*)?(?:\*\*)?표현(?:\*\*)?$/.test(trimmed)) section = "expression";
-    if (/^(?:-\s*)?`.+`/.test(trimmed)) {
-      result.push({ section, line: trimmed });
-    }
-  });
-
-  return result;
-}
-
-function parseWordLines(raw) {
-  return sectionedBulletLines(raw)
-    .filter(item => item.section === "word" || /품사=|문자=|한자=/.test(item.line))
-    .map(item => {
-      const line = item.line;
-      const title = firstMatch(line, /`([^`]+)`/) || "";
-      const reading = firstMatch(line, /`[^`]+`\s*\(([^)]+)\)/) || "";
-      const meaning = inlineMeaning(line) || "";
-      return {
-        kind: "word",
-        title,
-        reading,
-        meaning: meaning.trim(),
-        kanji: fieldValue(line, "한자"),
-        part: fieldValue(line, "품사"),
-        script: fieldValue(line, "문자")
-      };
-    });
-}
-
-function parseGrammarLines(raw) {
-  return sectionedBulletLines(raw)
-    .filter(item => item.section === "grammar")
-    .map(item => ({
-      kind: "grammar",
-      title: firstMatch(item.line, /`([^`]+)`/) || "",
-      reading: "",
-      meaning: inlineDescription(item.line) || "",
-      note: inlineDescription(item.line) || ""
-    }));
-}
-
-function parseExpressionLines(raw) {
-  return sectionedBulletLines(raw)
-    .filter(item => item.section === "expression")
-    .map(item => ({
-      kind: "expression",
-      title: firstMatch(item.line, /`([^`]+)`/) || "",
-      reading: firstMatch(item.line, /`[^`]+`\s*\(([^)]+)\)/) || "",
-      meaning: inlineMeaning(item.line) || "",
-      note: inlineDescription(item.line) || ""
-    }));
-}
-
-function inlineMeaning(line) {
-  return firstMatch(text(line), /`[^`]+`\s*(?:\([^)]+\))?\s*:?\s*([^|\n]+)/).trim();
-}
-
-function inlineDescription(line) {
-  return firstMatch(text(line), /`[^`]+`\s*(?:\([^)]+\))?\s*:?\s*(.+)$/).trim();
-}
-
-function dailyEntryToItems(kind, parsed) {
-  if (kind === "sentence") {
-    return [
-      {
-        kind: "sentence",
-        title: parsed.title,
-        reading: parsed.reading,
-        meaning: parsed.meaning,
-        part: "문장",
-        script: "혼합",
-        note: parsed.note
-      }
-    ];
-  }
-
-  if (kind === "word") {
-    const inlineWord = parseWordLines(parsed.note || "")[0];
-    return [{
-      kind: "word",
-      title: parsed.title,
-      reading: parsed.reading,
-      meaning: parsed.meaning,
-      kanji: parsed.kanji || "",
-      part: parsed.part || "",
-      script: parsed.script || "",
-      note: parsed.note,
-      ...inlineWord
-    }];
-  }
-
-  if (kind === "grammar") {
-    return [{ kind: "grammar", title: parsed.title, reading: parsed.reading, meaning: parsed.meaning, part: "문법", script: "혼합", note: parsed.note }];
-  }
-
-  if (kind === "expression") {
-    return [{ kind: "expression", title: parsed.title, reading: parsed.reading, meaning: parsed.meaning, part: "표현", script: "혼합", note: parsed.note }];
-  }
-
-  return [];
-}
-
-function withKanjiItems(items) {
-  return items.flatMap(item => [item, ...kanjiItemsFromWord(item)]);
-}
-
-function kanjiItemsFromWord(item) {
-  if (item.kind !== "word" || !text(item.kanji).trim()) {
-    return [];
-  }
-
-  return splitOutsideParens(item.kanji)
-    .map(parseKanjiToken)
-    .filter(Boolean)
-    .map(kanji => ({
-      kind: "kanji",
-      title: kanji.title,
-      reading: "",
-      meaning: kanji.meaning,
-      level: item.level || "",
-      part: "한자",
-      script: "한자",
-      source: item.title,
-      note: `${item.title}${item.reading ? ` (${item.reading})` : ""}`
-    }));
-}
-
-function splitOutsideParens(value) {
-  const result = [];
-  let depth = 0;
-  let current = "";
-
-  for (const char of text(value)) {
-    if (char === "(" || char === "（") {
-      depth += 1;
-    } else if ((char === ")" || char === "）") && depth > 0) {
-      depth -= 1;
-    }
-
-    if ((char === "," || char === "、") && depth === 0) {
-      if (current.trim()) {
-        result.push(current.trim());
-      }
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  if (current.trim()) {
-    result.push(current.trim());
-  }
-
-  return result;
-}
-
-function parseKanjiToken(value) {
-  const token = text(value).trim();
-  const match = token.match(/^([一-龯々〆ヵヶ]+)\s*[（(]([^）)]+)[）)]/u);
-  if (match) {
-    return { title: match[1], meaning: match[2].trim() };
-  }
-
-  const title = firstMatch(token, /([一-龯々〆ヵヶ]+)/u);
-  if (!title) {
-    return null;
-  }
-
-  return { title, meaning: token.replace(title, "").trim() };
 }
 
 function normalizeDailyEntry(entry) {
@@ -880,14 +522,6 @@ function normalizeDailyEntry(entry) {
     parsedJson: text(entry.parsedJson || entry.parsed_json || "{}"),
     registered: entry.registered ? 1 : 0
   };
-}
-
-function groupItemsByKind(items) {
-  return items.reduce((acc, item) => {
-    acc[item.kind] ||= [];
-    acc[item.kind].push(item);
-    return acc;
-  }, {});
 }
 
 function normalizeStudyLog(studyLog) {
@@ -934,14 +568,6 @@ function normalizeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : todayKey();
 }
 
-function firstMatch(value, pattern) {
-  return value.match(pattern)?.[1] || "";
-}
-
-function fieldValue(line, fieldName) {
-  return firstMatch(line, new RegExp(`${fieldName}=([^|]+)`)).trim();
-}
-
 function safeJson(value) {
   try {
     return JSON.parse(value || "{}");
@@ -970,72 +596,24 @@ function toNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
-function toCsv(rows) {
-  const columns = ["id", "kind", "title", "reading", "meaning", "level", "part", "script", "review", "kanji", "source", "note"];
-  return [
-    columns.join(","),
-    ...rows.map(row => columns.map(column => csvCell(row[column])).join(","))
-  ].join("\r\n");
-}
+const importExport = createDataImportExport({
+  getDb: () => db,
+  paths: { appDataDir, exportsDir, backupsDir, dbPath },
+  csvFilesByKind,
+  ensureDirectories,
+  getState,
+  clearAllData,
+  upsertItem,
+  normalizeDailyEntry,
+  normalizeItem,
+  normalizeDate,
+  toNumber,
+  text,
+  createId,
+  migrateParentLinks
+});
 
-function csvCell(value) {
-  const textValue = text(value);
-  if (/[",\r\n]/.test(textValue)) {
-    return `"${textValue.replaceAll('"', '""')}"`;
-  }
-  return textValue;
-}
-
-function parseCsv(content) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index];
-    const next = content[index + 1];
-
-    if (char === '"' && inQuotes && next === '"') {
-      cell += '"';
-      index += 1;
-    } else if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === "," && !inQuotes) {
-      row.push(cell);
-      cell = "";
-    } else if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") {
-        index += 1;
-      }
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += char;
-    }
-  }
-
-  if (cell || row.length) {
-    row.push(cell);
-    rows.push(row);
-  }
-
-  const [header, ...dataRows] = rows.filter(cells => cells.some(value => value.trim() !== ""));
-  if (!header) {
-    return [];
-  }
-  return dataRows.map(cells => Object.fromEntries(header.map((column, index) => [column, cells[index] || ""])));
-}
-
-function readUtf8(filePath) {
-  return fs.readFileSync(filePath, "utf8");
-}
-
-function writeUtf8(filePath, content) {
-  fs.writeFileSync(filePath, content, "utf8");
-}
+const { exportData, importCsvExports, importFullBackup } = importExport;
 
 module.exports = {
   initDatabase,
@@ -1044,6 +622,7 @@ module.exports = {
   addDailyEntry,
   deleteDailyEntry,
   registerDailyEntry,
+  registerDailyEntries,
   addTask,
   updateTaskDone,
   upsertItem,

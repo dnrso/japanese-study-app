@@ -19,6 +19,8 @@ function run() {
       return store.deleteDailyEntry(payload.id, payload.studyDate);
     case "registerDailyEntry":
       return store.registerDailyEntry(payload.id);
+    case "registerDailyEntries":
+      return store.registerDailyEntries(payload.ids || [], payload.studyDate);
     case "addTask":
       return store.addTask(payload);
     case "updateTaskDone":

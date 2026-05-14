@@ -1,0 +1,19 @@
+const dataApi = {
+  getState: studyDate => window.studyData.getState(studyDate),
+  saveStudyLog: studyLog => window.studyData.saveStudyLog(studyLog),
+  addDailyEntry: entry => window.studyData.addDailyEntry(entry),
+  deleteDailyEntry: (id, studyDate) => window.studyData.deleteDailyEntry(id, studyDate),
+  registerDailyEntry: id => window.studyData.registerDailyEntry(id),
+  registerDailyEntries: (ids, studyDate) => window.studyData.registerDailyEntries(ids, studyDate),
+  addTask: task => window.studyData.addTask(task),
+  updateTaskDone: (id, done, studyDate) => window.studyData.updateTaskDone(id, done, studyDate),
+  upsertItem: item => window.studyData.upsertItem(item),
+  deleteItem: (id, studyDate) => window.studyData.deleteItem(id, studyDate),
+  updateItemReview: (id, review, studyDate) => window.studyData.updateItemReview(id, review, studyDate),
+  completeReview: (ids, studyDate) => window.studyData.completeReview(ids, studyDate),
+  resetSampleData: () => window.studyData.resetSampleData(),
+  exportData: () => window.studyData.exportData(),
+  importCsv: studyDate => window.studyData.importCsv(studyDate),
+  importBackup: () => window.studyData.importBackup(),
+  getPaths: () => window.studyData.getPaths()
+};

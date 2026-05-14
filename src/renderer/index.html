@@ -423,7 +423,7 @@
                 </tr>
                 <tr>
                   <th>추후 기능</th>
-                  <td>퀴즈 · 음성 재생</td>
+                  <td>퀴즈</td>
                 </tr>
               </tbody>
             </table>
@@ -434,19 +434,41 @@
             </div>
             <p class="muted" id="storageStatus"></p>
           </section>
+
+          <section class="panel section" id="settings-tts">
+            <div class="panel-header">
+              <h2 class="panel-title">음성 재생</h2>
+              <button class="ghost-btn" id="ttsRefreshBtn" type="button">목록 새로고침</button>
+            </div>
+            <div class="settings-grid">
+              <label>
+                VOICEVOX speaker
+                <select id="ttsVoicevoxSpeakerSelect">
+                  <option value="">VOICEVOX 목록 확인 중</option>
+                </select>
+              </label>
+              <label>
+                속도 <span id="ttsRateValue">1.0</span>
+                <input id="ttsRateRange" type="range" min="0.5" max="2" step="0.1" value="1" />
+              </label>
+            </div>
+            <p class="muted tts-status" id="ttsStatus">스피커 버튼을 누르면 VOICEVOX 엔진 API로 일본어를 재생합니다.</p>
+          </section>
         </section>
       </main>
     </div>
   </div>
 
+  <div class="tts-toast" id="ttsToast" role="status" aria-live="polite"></div>
+
   <dialog class="modal" id="itemDialog">
-    <form method="dialog" id="itemForm">
+    <form method="dialog" id="itemForm" novalidate>
       <div class="modal-header">
         <h2 id="dialogTitle">항목 추가</h2>
         <button class="icon-btn" type="button" id="closeDialogBtn" aria-label="닫기">×</button>
       </div>
       <input type="hidden" id="itemKind" />
-      <div class="form-grid">
+      <div class="form-grid" id="defaultItemFields">
         <label>제목<input id="itemTitle" required /></label>
         <label>읽기/분류<input id="itemReading" /></label>
         <label>뜻/요약<input id="itemMeaning" /></label>
@@ -458,6 +480,14 @@
         <label>연결 자료<input id="itemSource" placeholder="영상, 뉴스, 교재명" /></label>
       </div>
       <textarea id="itemNote" placeholder="예문, 메모, 사용 상황"></textarea>
+
+      <div class="form-grid source-item-fields" id="sourceItemFields" hidden>
+        <label>자료 제목<input id="sourceTitle" /></label>
+        <label>자료 링크<input id="sourceLink" placeholder="https://..." /></label>
+        <label>난이도<input id="sourceLevel" placeholder="N3, 초급, 중급" /></label>
+        <label>자료 태그<input id="sourceTags" placeholder="N3, 회화, 뉴스, 유튜브" /></label>
+        <label class="form-wide">자료 설명<textarea id="sourceNote" placeholder="자료 설명, 학습 포인트, 메모"></textarea></label>
+      </div>
       <div class="modal-actions">
         <button class="ghost-btn" type="button" id="cancelDialogBtn">취소</button>
         <button class="primary-btn" type="submit">저장</button>
@@ -465,6 +495,14 @@
     </form>
   </dialog>
 
+  <script src="./config.js"></script>
+  <script src="./domUtils.js"></script>
+  <script src="./api.js"></script>
+  <script src="./state.js"></script>
+  <script src="./render.js"></script>
+  <script src="./tts.js"></script>
+  <script src="./actions.js"></script>
+  <script src="./events.js"></script>
   <script src="./app.js"></script>
 </body>
 

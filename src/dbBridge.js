@@ -19,6 +19,7 @@ module.exports = {
   addDailyEntry: entry => call("addDailyEntry", entry),
   deleteDailyEntry: (id, studyDate) => call("deleteDailyEntry", { id, studyDate }),
   registerDailyEntry: id => call("registerDailyEntry", { id }),
+  registerDailyEntries: (ids, studyDate) => call("registerDailyEntries", { ids, studyDate }),
   addTask: task => call("addTask", task),
   updateTaskDone: (id, done, studyDate) => call("updateTaskDone", { id, done, studyDate }),
   upsertItem: item => call("upsertItem", item),
