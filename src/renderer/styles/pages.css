@@ -510,7 +510,8 @@ mark {
   .hero,
   .content-grid,
   .today-top-grid,
-  .learned-grid {
+  .learned-grid,
+  .quiz-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -559,8 +560,34 @@ mark {
   .form-grid,
   .taxonomy-grid,
   .stat-grid,
-  .daily-reading-meaning {
+  .daily-reading-meaning,
+  .word-quiz-choices {
     grid-template-columns: 1fr;
+  }
+
+  .word-quiz-question {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .word-quiz-question > div:first-child,
+  .word-quiz-score {
+    grid-column: 1;
+  }
+
+  .word-quiz-score {
+    justify-content: center;
+  }
+
+  .word-quiz-feedback {
+    grid-template-columns: 1fr;
+  }
+
+  .word-quiz-feedback strong,
+  .word-quiz-feedback span,
+  .word-quiz-feedback .primary-btn {
+    grid-column: 1;
+    justify-self: center;
   }
 
   .daily-reading-meaning section {

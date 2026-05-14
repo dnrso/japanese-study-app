@@ -98,8 +98,8 @@ function replaceBackup(backup) {
     VALUES (@entryId, @sentenceId)
   `);
   const insertItem = getDb().prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
   `);
 
   getDb().transaction(() => {
@@ -131,7 +131,7 @@ function groupItemsByKind(items) {
 }
 
 function toCsv(rows) {
-  const columns = ["id", "kind", "title", "reading", "meaning", "level", "part", "script", "review", "kanji", "source", "note"];
+  const columns = ["id", "kind", "title", "reading", "meaning", "level", "part", "script", "review", "kanji", "source", "note", "quizCorrectCount", "quizWrongCount", "lastQuizzedAt"];
   return [
     columns.join(","),
     ...rows.map(row => columns.map(column => csvCell(row[column])).join(","))

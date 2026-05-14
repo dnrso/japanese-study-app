@@ -63,6 +63,9 @@ const databaseSchema = `
       kanji TEXT NOT NULL DEFAULT '',
       source TEXT NOT NULL DEFAULT '',
       note TEXT NOT NULL DEFAULT '',
+      quiz_correct_count INTEGER NOT NULL DEFAULT 0,
+      quiz_wrong_count INTEGER NOT NULL DEFAULT 0,
+      last_quizzed_at TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );

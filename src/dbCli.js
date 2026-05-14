@@ -33,6 +33,8 @@ function run() {
       return store.updateItemReview(payload.id, payload.review, payload.studyDate);
     case "completeReview":
       return store.completeReview(payload.ids || [], payload.studyDate);
+    case "submitWordQuizAnswer":
+      return store.submitWordQuizAnswer(payload);
     case "resetSampleData":
       return store.resetSampleData();
     case "clearAllData":

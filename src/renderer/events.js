@@ -37,6 +37,49 @@ function bindEvents() {
       return;
     }
 
+    const quizTarget = event.target.closest("[data-quiz-kind]");
+    if (quizTarget) {
+      if (quizTarget.dataset.quizKind === "word") {
+        startWordQuiz();
+        return;
+      }
+      if (quizTarget.dataset.quizKind === "kanji") {
+        startKanjiQuiz();
+        return;
+      }
+      const label = quizTarget.querySelector("strong")?.textContent || "퀴즈";
+      byId("quizStatus").textContent = `${label} 기능은 이후 구현 예정입니다.`;
+      wordQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
+      kanjiQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
+      renderWordQuiz();
+      renderKanjiQuiz();
+      return;
+    }
+
+    const wordQuizChoiceTarget = event.target.closest("[data-word-quiz-choice]");
+    if (wordQuizChoiceTarget && wordQuiz.question && !wordQuiz.answered) {
+      await submitQuizChoice("word", wordQuizChoiceTarget.dataset.wordQuizChoice);
+      return;
+    }
+
+    const kanjiQuizChoiceTarget = event.target.closest("[data-kanji-quiz-choice]");
+    if (kanjiQuizChoiceTarget && kanjiQuiz.question && !kanjiQuiz.answered) {
+      await submitQuizChoice("kanji", kanjiQuizChoiceTarget.dataset.kanjiQuizChoice);
+      return;
+    }
+
+    const nextWordQuizTarget = event.target.closest("[data-next-word-quiz]");
+    if (nextWordQuizTarget) {
+      startWordQuiz();
+      return;
+    }
+
+    const nextKanjiQuizTarget = event.target.closest("[data-next-kanji-quiz]");
+    if (nextKanjiQuizTarget) {
+      startKanjiQuiz();
+      return;
+    }
+
     const taxonomyTarget = event.target.closest("[data-word-taxonomy]");
     if (taxonomyTarget) {
       const selectId = taxonomyTarget.dataset.wordTaxonomy === "part" ? "wordPartFilter" : "wordScriptFilter";
@@ -178,6 +221,24 @@ function bindEvents() {
     input.addEventListener("change", updateManualEntryPlaceholder);
   });
 
+  document.querySelectorAll("input[name='wordQuizMode']").forEach(input => {
+    input.addEventListener("change", event => {
+      wordQuizMode = event.target.value;
+      wordQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
+      byId("quizStatus").textContent = "단어 퀴즈 유형을 선택했습니다.";
+      renderWordQuiz();
+    });
+  });
+
+  document.querySelectorAll("input[name='kanjiQuizMode']").forEach(input => {
+    input.addEventListener("change", event => {
+      kanjiQuizMode = event.target.value;
+      kanjiQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
+      byId("quizStatus").textContent = "한자 퀴즈 유형을 선택했습니다.";
+      renderKanjiQuiz();
+    });
+  });
+
   byId("registerLearnedBtn").addEventListener("click", async () => {
     const targets = (state.dailyEntries || []).filter(entry =>
       ["word", "grammar", "expression"].includes(entry.kind) && !entry.registered
@@ -271,4 +332,33 @@ function bindEvents() {
       openDialog("word");
     }
   });
+}
+
+async function submitQuizChoice(kind, selectedAnswer) {
+  const quiz = kind === "kanji" ? kanjiQuiz : wordQuiz;
+  const response = await dataApi.submitWordQuizAnswer({
+    quizKind: kind,
+    itemId: quiz.question.item.id,
+    selectedAnswer,
+    answerType: quiz.question.answerType,
+    studyDate: selectedDate
+  });
+  const updatedItem = response.state.items.find(item => item.id === quiz.question.item.id) || quiz.question.item;
+  const nextQuiz = {
+    ...quiz,
+    question: { ...quiz.question, item: updatedItem },
+    answered: true,
+    selectedAnswer,
+    result: response.result
+  };
+  state = response.state;
+
+  if (kind === "kanji") {
+    kanjiQuiz = nextQuiz;
+    renderKanjiQuiz();
+  } else {
+    wordQuiz = nextQuiz;
+    renderWordQuiz();
+  }
+  renderStats();
 }

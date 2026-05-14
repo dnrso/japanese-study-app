@@ -26,6 +26,7 @@ module.exports = {
   deleteItem: (id, studyDate) => call("deleteItem", { id, studyDate }),
   updateItemReview: (id, review, studyDate) => call("updateItemReview", { id, review, studyDate }),
   completeReview: (ids, studyDate) => call("completeReview", { ids, studyDate }),
+  submitWordQuizAnswer: payload => call("submitWordQuizAnswer", payload),
   resetSampleData: () => call("resetSampleData"),
   clearAllData: () => call("clearAllData"),
   exportData: () => call("exportData"),

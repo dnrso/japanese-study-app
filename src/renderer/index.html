@@ -27,6 +27,7 @@
         <button class="tab" data-page="grammar">문법</button>
         <button class="tab" data-page="expressions">표현</button>
         <button class="tab" data-page="kanji">한자</button>
+        <button class="tab" data-page="quiz">퀴즈</button>
         <button class="tab" data-page="review">복습 큐</button>
         <button class="tab" data-page="stats">통계</button>
         <button class="tab" data-page="settings">설정</button>
@@ -334,6 +335,52 @@
               <button class="primary-btn" data-kind="kanji" data-add-item>+ 한자 추가</button>
             </div>
             <div class="kanji-grid" id="kanjiCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="quiz">
+          <section class="panel section" id="quiz-select">
+            <div class="panel-header">
+              <h2 class="panel-title">퀴즈</h2>
+              <span class="badge yellow">준비 중</span>
+            </div>
+            <div class="quiz-grid">
+              <article class="quiz-card word-quiz-card">
+                <span class="badge red">단어</span>
+                <strong>단어 퀴즈</strong>
+                <span>4지선다</span>
+                <div class="quiz-mode-options" aria-label="단어 퀴즈 유형">
+                  <label><input type="radio" name="wordQuizMode" value="random" checked /> 완전 랜덤</label>
+                  <label><input type="radio" name="wordQuizMode" value="jpToMeaning" /> 일본어 → 뜻</label>
+                  <label><input type="radio" name="wordQuizMode" value="meaningToJp" /> 뜻 → 일본어</label>
+                </div>
+                <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="word">시작</button>
+              </article>
+              <button class="quiz-card" type="button" data-quiz-kind="grammar">
+                <span class="badge blue">문법</span>
+                <strong>문법 퀴즈</strong>
+                <span>준비 중</span>
+              </button>
+              <button class="quiz-card" type="button" data-quiz-kind="expression">
+                <span class="badge green">표현</span>
+                <strong>표현 퀴즈</strong>
+                <span>준비 중</span>
+              </button>
+              <article class="quiz-card kanji-quiz-card">
+                <span class="badge yellow">한자</span>
+                <strong>한자 퀴즈</strong>
+                <span>4지선다</span>
+                <div class="quiz-mode-options" aria-label="한자 퀴즈 유형">
+                  <label><input type="radio" name="kanjiQuizMode" value="random" checked /> 완전 랜덤</label>
+                  <label><input type="radio" name="kanjiQuizMode" value="kanjiToMeaning" /> 한자 → 뜻</label>
+                  <label><input type="radio" name="kanjiQuizMode" value="meaningToKanji" /> 뜻 → 한자</label>
+                </div>
+                <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="kanji">시작</button>
+              </article>
+            </div>
+            <p class="muted quiz-status" id="quizStatus">퀴즈 기능은 이후 구현 예정입니다.</p>
+            <div class="word-quiz-panel" id="wordQuizPanel" hidden></div>
+            <div class="word-quiz-panel kanji-quiz-panel" id="kanjiQuizPanel" hidden></div>
           </section>
         </section>
 

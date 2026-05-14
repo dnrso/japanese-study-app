@@ -11,6 +11,7 @@ const dataChannels = {
   deleteItem: "data:delete-item",
   updateItemReview: "data:update-item-review",
   completeReview: "data:complete-review",
+  submitWordQuizAnswer: "data:submit-word-quiz-answer",
   resetSample: "data:reset-sample",
   exportData: "data:export",
   importCsv: "data:import-csv",

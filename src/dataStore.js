@@ -46,6 +46,9 @@ function initDatabase() {
 
 
   ensureColumn("daily_entries", "parent_id", "TEXT");
+  ensureColumn("items", "quiz_correct_count", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("items", "quiz_wrong_count", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("items", "last_quizzed_at", "TEXT NOT NULL DEFAULT ''");
   db.exec("CREATE INDEX IF NOT EXISTS idx_daily_entries_parent ON daily_entries(parent_id);");
   migrateParentLinks();
   migrateLegacyStudyLog();
@@ -92,7 +95,10 @@ function getState(studyDate = todayKey()) {
   const tasks = db.prepare("SELECT id, title, note, tag, done FROM tasks ORDER BY datetime(created_at) DESC, rowid DESC").all()
     .map(task => ({ ...task, done: Boolean(task.done) }));
   const items = db.prepare(`
-    SELECT id, kind, title, reading, meaning, level, part, script, review, kanji, source, note
+    SELECT id, kind, title, reading, meaning, level, part, script, review, kanji, source, note,
+      quiz_correct_count AS quizCorrectCount,
+      quiz_wrong_count AS quizWrongCount,
+      last_quizzed_at AS lastQuizzedAt
     FROM items
     ORDER BY datetime(created_at) DESC, rowid DESC
   `).all();
@@ -371,8 +377,8 @@ function registerDailyEntry(id) {
 
   const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? LIMIT 1");
   const insert = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
   `);
 
   db.transaction(() => {
@@ -437,9 +443,17 @@ function updateTaskDone(id, done, studyDate) {
 
 function upsertItem(item) {
   const payload = normalizeItem({ ...item, id: item.id || createId() });
+  const existingQuizStats = item.id
+    ? db.prepare("SELECT quiz_correct_count AS quizCorrectCount, quiz_wrong_count AS quizWrongCount, last_quizzed_at AS lastQuizzedAt FROM items WHERE id = ?").get(item.id)
+    : null;
+  if (existingQuizStats && item.quizCorrectCount === undefined && item.quiz_correct_count === undefined) {
+    payload.quizCorrectCount = existingQuizStats.quizCorrectCount;
+    payload.quizWrongCount = existingQuizStats.quizWrongCount;
+    payload.lastQuizzedAt = existingQuizStats.lastQuizzedAt;
+  }
   const insert = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
     ON CONFLICT(id) DO UPDATE SET
       kind = excluded.kind,
       title = excluded.title,
@@ -452,6 +466,9 @@ function upsertItem(item) {
       kanji = excluded.kanji,
        source = excluded.source,
        note = excluded.note,
+       quiz_correct_count = excluded.quiz_correct_count,
+       quiz_wrong_count = excluded.quiz_wrong_count,
+       last_quizzed_at = excluded.last_quizzed_at,
        updated_at = CURRENT_TIMESTAMP
   `);
   const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? LIMIT 1");
@@ -483,6 +500,31 @@ function completeReview(ids, studyDate) {
   const update = db.prepare("UPDATE items SET review = '3일 후', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
   db.transaction(itemIds => itemIds.forEach(id => update.run(id)))(ids);
   return getState(studyDate);
+}
+
+function submitWordQuizAnswer(payload = {}) {
+  const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
+  const item = db.prepare("SELECT id, title, meaning FROM items WHERE id = ? AND kind = ?").get(text(payload.itemId), quizKind);
+  if (!item) {
+    return { state: getState(payload.studyDate), result: { correct: false, missing: true } };
+  }
+
+  const answerType = text(payload.answerType) === "title" ? "title" : "meaning";
+  const correctAnswer = answerType === "title" ? item.title : item.meaning;
+  const correct = text(payload.selectedAnswer ?? payload.selectedMeaning) === text(correctAnswer);
+  const column = correct ? "quiz_correct_count" : "quiz_wrong_count";
+  db.prepare(`
+    UPDATE items SET
+      ${column} = ${column} + 1,
+      last_quizzed_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(item.id);
+
+  return {
+    state: getState(payload.studyDate),
+    result: { correct, correctAnswer, correctMeaning: item.meaning }
+  };
 }
 
 function clearAllData() {
@@ -556,7 +598,10 @@ function normalizeItem(item) {
     review: text(item.review),
     kanji: text(item.kanji),
     source: text(item.source),
-    note: text(item.note)
+    note: text(item.note),
+    quizCorrectCount: toNumber(item.quizCorrectCount || item.quiz_correct_count),
+    quizWrongCount: toNumber(item.quizWrongCount || item.quiz_wrong_count),
+    lastQuizzedAt: text(item.lastQuizzedAt || item.last_quizzed_at)
   };
 }
 
@@ -629,6 +674,7 @@ module.exports = {
   deleteItem,
   updateItemReview,
   completeReview,
+  submitWordQuizAnswer,
   resetSampleData,
   clearAllData,
   exportData,

@@ -11,6 +11,7 @@ const dataApi = {
   deleteItem: (id, studyDate) => window.studyData.deleteItem(id, studyDate),
   updateItemReview: (id, review, studyDate) => window.studyData.updateItemReview(id, review, studyDate),
   completeReview: (ids, studyDate) => window.studyData.completeReview(ids, studyDate),
+  submitWordQuizAnswer: payload => window.studyData.submitWordQuizAnswer(payload),
   resetSampleData: () => window.studyData.resetSampleData(),
   exportData: () => window.studyData.exportData(),
   importCsv: studyDate => window.studyData.importCsv(studyDate),

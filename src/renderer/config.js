@@ -7,6 +7,7 @@ window.NihonGoConfig = {
     grammar: [["grammar-detail", "문법 상세", ""]],
     expressions: [["expressions-list", "표현 목록", ""]],
     kanji: [["kanji-grid", "한자 목록", ""]],
+    quiz: [["quiz-select", "퀴즈 선택", "4"]],
     review: [["review-queue", "복습 큐", ""]],
     stats: [["stats-overview", "주간 통계", ""]],
     settings: [["settings-general", "일반 설정", ""], ["settings-tts", "음성 재생", ""]]

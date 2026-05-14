@@ -13,6 +13,7 @@ function registerDataHandlers(ipcMain, store) {
   ipcMain.handle(dataChannels.deleteItem, (_event, id, studyDate) => store.deleteItem(id, studyDate));
   ipcMain.handle(dataChannels.updateItemReview, (_event, id, review, studyDate) => store.updateItemReview(id, review, studyDate));
   ipcMain.handle(dataChannels.completeReview, (_event, ids, studyDate) => store.completeReview(ids, studyDate));
+  ipcMain.handle(dataChannels.submitWordQuizAnswer, (_event, payload) => store.submitWordQuizAnswer(payload));
   ipcMain.handle(dataChannels.resetSample, () => store.resetSampleData());
   ipcMain.handle(dataChannels.exportData, () => store.exportData());
   ipcMain.handle(dataChannels.importCsv, (_event, studyDate) => store.importCsvExports(studyDate));
