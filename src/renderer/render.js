@@ -7,6 +7,7 @@ function renderAll() {
   renderToday();
   renderLearnedSections();
   renderSources();
+  renderWordFilters();
   renderWords();
   renderCards("grammar", "grammarCards");
   renderCards("expression", "expressionCards");
@@ -285,8 +286,14 @@ function renderSources() {
 
 function renderWords() {
   const part = byId("wordPartFilter").value;
+  const script = byId("wordScriptFilter").value;
   const review = byId("wordReviewFilter").value;
-  const rows = items("word").filter(item => (!part || item.part === part) && (!review || item.review === review));
+  renderWordSortHeaders();
+  const rows = sortedWords(items("word").filter(item =>
+    (!part || item.part === part) &&
+    (!script || item.script === script) &&
+    (!review || item.review === review)
+  ));
   byId("wordRows").innerHTML = rows.length ? rows.map(item => `
     <tr data-item-id="${item.id}">
       <td><div class="japanese word-table-title">${speakerButton(item.title)}<span>${highlight(item.title)}</span></div></td>
@@ -300,6 +307,39 @@ function renderWords() {
       <td><button class="danger-btn" data-delete-item="${item.id}">삭제</button></td>
     </tr>
   `).join("") : `<tr><td colspan="9">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`;
+}
+
+function renderWordFilters() {
+  renderSelectOptions("wordPartFilter", "전체 품사", partOptions);
+  renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
+}
+
+function renderSelectOptions(selectId, allLabel, options) {
+  const select = byId(selectId);
+  const currentValue = select.value;
+  select.innerHTML = [
+    `<option value="">${allLabel}</option>`,
+    ...options.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)
+  ].join("");
+  select.value = options.includes(currentValue) ? currentValue : "";
+}
+
+function renderWordSortHeaders() {
+  document.querySelectorAll("[data-word-sort]").forEach(button => {
+    const isActive = button.dataset.wordSort === wordSort.key;
+    const label = isActive && wordSort.direction === "asc"
+      ? "오름차순 정렬됨"
+      : isActive && wordSort.direction === "desc"
+        ? "내림차순 정렬됨"
+        : "정렬 없음";
+    button.classList.toggle("active", isActive && Boolean(wordSort.direction));
+    button.setAttribute("aria-sort", isActive && wordSort.direction ? (wordSort.direction === "asc" ? "ascending" : "descending") : "none");
+    button.title = label;
+  });
+  document.querySelectorAll("[data-word-sort-indicator]").forEach(indicator => {
+    const isActive = indicator.dataset.wordSortIndicator === wordSort.key;
+    indicator.textContent = isActive && wordSort.direction === "asc" ? "▲" : isActive && wordSort.direction === "desc" ? "▼" : "";
+  });
 }
 
 function renderSourceSentenceLinks(sourceSentences = []) {
@@ -391,8 +431,14 @@ function renderStats() {
 }
 
 function renderTaxonomy() {
-  byId("partChips").innerHTML = partOptions.map(option => `<span class="taxonomy-chip">${option}</span>`).join("");
-  byId("scriptChips").innerHTML = scriptOptions.map(option => `<span class="taxonomy-chip">${option}</span>`).join("");
+  const selectedPart = byId("wordPartFilter").value;
+  const selectedScript = byId("wordScriptFilter").value;
+  byId("partChips").innerHTML = partOptions.map(option => renderTaxonomyChip("part", option, selectedPart === option)).join("");
+  byId("scriptChips").innerHTML = scriptOptions.map(option => renderTaxonomyChip("script", option, selectedScript === option)).join("");
+}
+
+function renderTaxonomyChip(type, option, isActive) {
+  return `<button class="taxonomy-chip ${isActive ? "active" : ""}" type="button" data-word-taxonomy="${type}" data-word-taxonomy-value="${escapeHtml(option)}" aria-pressed="${isActive}">${escapeHtml(option)}</button>`;
 }
 
 function renderQuickFilters() {

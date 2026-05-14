@@ -259,10 +259,9 @@
             <div class="table-tools">
               <select id="wordPartFilter">
                 <option value="">전체 품사</option>
-                <option>명사</option>
-                <option>동사</option>
-                <option>부사</option>
-                <option>문법표현</option>
+              </select>
+              <select id="wordScriptFilter">
+                <option value="">전체 문자</option>
               </select>
               <select id="wordReviewFilter">
                 <option value="">전체 복습</option>
@@ -275,13 +274,13 @@
             <table class="table">
               <thead>
                 <tr>
-                  <th>단어</th>
+                  <th><button class="sort-btn" data-word-sort="title" type="button" aria-label="단어 정렬">단어 <span data-word-sort-indicator="title"></span></button></th>
                   <th>읽기</th>
-                  <th>뜻</th>
-                  <th>한자</th>
-                  <th>품사</th>
-                  <th>문자</th>
-                  <th>원본 문장</th>
+                  <th><button class="sort-btn" data-word-sort="meaning" type="button" aria-label="뜻 정렬">뜻 <span data-word-sort-indicator="meaning"></span></button></th>
+                  <th><button class="sort-btn" data-word-sort="kanji" type="button" aria-label="한자 정렬">한자 <span data-word-sort-indicator="kanji"></span></button></th>
+                  <th><button class="sort-btn" data-word-sort="part" type="button" aria-label="품사 정렬">품사 <span data-word-sort-indicator="part"></span></button></th>
+                  <th><button class="sort-btn" data-word-sort="script" type="button" aria-label="문자 정렬">문자 <span data-word-sort-indicator="script"></span></button></th>
+                  <th><button class="sort-btn" data-word-sort="sourceSentence" type="button" aria-label="원본 문장 정렬">원본 문장 <span data-word-sort-indicator="sourceSentence"></span></button></th>
                   <th>복습</th>
                   <th></th>
                 </tr>

@@ -23,6 +23,31 @@ function bindEvents() {
       return;
     }
 
+    const wordSortTarget = event.target.closest("[data-word-sort]");
+    if (wordSortTarget) {
+      const key = wordSortTarget.dataset.wordSort;
+      if (wordSort.key !== key) {
+        wordSort = { key, direction: "asc" };
+      } else if (wordSort.direction === "asc") {
+        wordSort = { key, direction: "desc" };
+      } else {
+        wordSort = { key: "", direction: "" };
+      }
+      renderWords();
+      return;
+    }
+
+    const taxonomyTarget = event.target.closest("[data-word-taxonomy]");
+    if (taxonomyTarget) {
+      const selectId = taxonomyTarget.dataset.wordTaxonomy === "part" ? "wordPartFilter" : "wordScriptFilter";
+      const select = byId(selectId);
+      const value = taxonomyTarget.dataset.wordTaxonomyValue;
+      select.value = select.value === value ? "" : value;
+      renderWords();
+      renderTaxonomy();
+      return;
+    }
+
     const addTarget = event.target.closest("[data-add-item]");
     if (addTarget) {
       openDialog(addTarget.dataset.kind);
@@ -103,7 +128,14 @@ function bindEvents() {
     renderAll();
   });
 
-  byId("wordPartFilter").addEventListener("change", renderWords);
+  byId("wordPartFilter").addEventListener("change", () => {
+    renderWords();
+    renderTaxonomy();
+  });
+  byId("wordScriptFilter").addEventListener("change", () => {
+    renderWords();
+    renderTaxonomy();
+  });
   byId("wordReviewFilter").addEventListener("change", renderWords);
 
   byId("quickAddBtn").addEventListener("click", () => openDialog("word"));
