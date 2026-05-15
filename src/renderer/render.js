@@ -18,6 +18,7 @@ function renderAll() {
   renderStats();
   renderTaxonomy();
   renderQuickFilters();
+  renderQuizSettings();
   renderStoragePaths();
 }
 
@@ -553,4 +554,16 @@ function renderStoragePaths() {
   byId("sqlitePath").textContent = storagePaths.dbPath;
   byId("exportPath").textContent = storagePaths.exportsDir;
   byId("backupPath").textContent = storagePaths.backupsDir;
+}
+
+function renderQuizSettings() {
+  applyQuizQuestionFontSize();
+  const range = byId("quizQuestionFontSizeRange");
+  const value = byId("quizQuestionFontSizeValue");
+  if (range) {
+    range.value = String(quizQuestionFontSize);
+  }
+  if (value) {
+    value.textContent = `${quizQuestionFontSize}px`;
+  }
 }

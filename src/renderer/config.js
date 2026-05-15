@@ -10,7 +10,7 @@ window.NihonGoConfig = {
     quiz: [["quiz-select", "퀴즈 선택", "4"]],
     review: [["review-queue", "복습 큐", ""]],
     stats: [["stats-overview", "주간 통계", ""]],
-    settings: [["settings-general", "일반 설정", ""], ["settings-tts", "음성 재생", ""]]
+    settings: [["settings-general", "일반 설정", ""], ["settings-quiz", "퀴즈 표시", ""], ["settings-tts", "음성 재생", ""]]
   },
   kindLabels: {
     word: "단어",

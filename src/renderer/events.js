@@ -239,6 +239,11 @@ function bindEvents() {
     });
   });
 
+  byId("quizQuestionFontSizeRange").addEventListener("input", event => {
+    setQuizQuestionFontSize(event.target.value);
+    byId("quizQuestionFontSizeValue").textContent = `${quizQuestionFontSize}px`;
+  });
+
   byId("registerLearnedBtn").addEventListener("click", async () => {
     const targets = (state.dailyEntries || []).filter(entry =>
       ["word", "grammar", "expression"].includes(entry.kind) && !entry.registered

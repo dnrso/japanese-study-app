@@ -27,6 +27,7 @@ let wordQuizMode = "random";
 let wordQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
 let kanjiQuizMode = "random";
 let kanjiQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
+let quizQuestionFontSize = loadQuizQuestionFontSize();
 let reviewSelection = new Set();
 let storagePaths = null;
 let selectedDate = localTodayKey();
@@ -37,6 +38,25 @@ function applyState(nextState) {
   selectedDate = nextState.selectedDate || selectedDate;
   calendarMonth = selectedDate.slice(0, 7);
   renderAll();
+}
+
+function loadQuizQuestionFontSize() {
+  const stored = Number(localStorage.getItem("quizQuestionFontSize"));
+  return Number.isFinite(stored) ? clampQuizQuestionFontSize(stored) : 32;
+}
+
+function clampQuizQuestionFontSize(value) {
+  return Math.min(64, Math.max(24, Number(value) || 32));
+}
+
+function setQuizQuestionFontSize(value) {
+  quizQuestionFontSize = clampQuizQuestionFontSize(value);
+  localStorage.setItem("quizQuestionFontSize", String(quizQuestionFontSize));
+  applyQuizQuestionFontSize();
+}
+
+function applyQuizQuestionFontSize() {
+  document.documentElement.style.setProperty("--quiz-question-font-size", `${quizQuestionFontSize}px`);
 }
 
 function highlight(value) {
