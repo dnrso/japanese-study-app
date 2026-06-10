@@ -246,7 +246,7 @@ function bindEvents() {
 
   byId("registerLearnedBtn").addEventListener("click", async () => {
     const targets = (state.dailyEntries || []).filter(entry =>
-      ["word", "grammar", "expression"].includes(entry.kind) && !entry.registered
+      ["word", "grammar", "expression"].includes(entry.kind)
     );
 
     if (!targets.length) {
@@ -257,11 +257,13 @@ function bindEvents() {
     const response = await dataApi.registerDailyEntries(targets.map(entry => entry.id), selectedDate);
     const registered = response.result.registered || [];
     const duplicates = response.result.duplicates || [];
+    const linked = response.result.linked || [];
     const errors = response.result.errors || [];
 
     applyState(response.state);
     window.alert([
       registered.length ? `등록: ${registered.join(", ")}` : "",
+      linked.length ? `원본 문장 추가: ${linked.join(", ")}` : "",
       duplicates.length ? `중복: ${duplicates.join(", ")}` : "",
       errors.length ? `오류: ${errors.join(", ")}` : ""
     ].filter(Boolean).join("\n") || "등록된 항목이 없습니다.");

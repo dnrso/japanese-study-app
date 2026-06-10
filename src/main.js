@@ -1,6 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
-const store = require("./dbBridge");
 const { registerDataHandlers } = require("./dataHandlers");
 
 const VOICEVOX_BASE_URL = "http://localhost:50021";
@@ -62,7 +61,16 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
+function configureDataPath() {
+  const appDataDir = app.isPackaged
+    ? path.join(path.dirname(app.getPath("exe")), "app-data")
+    : path.resolve(__dirname, "..", "app-data");
+  process.env.NIHONGO_APP_DATA_DIR = appDataDir;
+}
+
 app.whenReady().then(() => {
+  configureDataPath();
+  const store = require("./dataStore");
   store.initDatabase();
   registerDataHandlers(ipcMain, store);
   registerTtsHandlers(ipcMain);

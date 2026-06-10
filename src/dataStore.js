@@ -6,8 +6,7 @@ const { databaseSchema } = require("./dataSchema");
 const { createDataImportExport } = require("./dataImportExport");
 const { parseDailyEntry, dailyEntryToItems, withKanjiItems, itemToRawText } = require("./dailyEntryParser");
 
-const rootDir = path.resolve(__dirname, "..");
-const appDataDir = path.join(rootDir, "app-data");
+const appDataDir = process.env.NIHONGO_APP_DATA_DIR || path.join(path.resolve(__dirname, ".."), "app-data");
 const exportsDir = path.join(appDataDir, "exports");
 const backupsDir = path.join(appDataDir, "backups");
 const dbPath = path.join(appDataDir, "nihongo.sqlite");
@@ -331,10 +330,18 @@ function mergeDailyCandidate(existing, payload) {
 }
 
 function linkDailyEntryToSentence(entryId, sentenceId) {
-  db.prepare(`
+  if (!sentenceId) {
+    return 0;
+  }
+  const result = db.prepare(`
     INSERT OR IGNORE INTO daily_entry_links (entry_id, sentence_id)
     VALUES (?, ?)
   `).run(entryId, sentenceId);
+  return result.changes;
+}
+
+function ensureDailyEntrySourceLinks(entry) {
+  return linkDailyEntryToSentence(entry.id, entry.parent_id);
 }
 
 function dailyCandidatePayload(parent, kind, item) {
@@ -367,13 +374,14 @@ function dailyCandidatePayload(parent, kind, item) {
 function registerDailyEntry(id) {
   const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ?").get(id);
   if (!entry) {
-    return { state: getState(), result: { registered: [], duplicates: ["항목을 찾을 수 없습니다."] } };
+    return { state: getState(), result: { registered: [], duplicates: ["항목을 찾을 수 없습니다."], linked: [] } };
   }
 
   const parsed = safeJson(entry.parsed_json);
   const candidates = withKanjiItems(dailyEntryToItems(entry.kind, parsed));
   const duplicates = [];
   const registered = [];
+  const linked = [];
 
   const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? LIMIT 1");
   const insert = db.prepare(`
@@ -388,26 +396,30 @@ function registerDailyEntry(id) {
       }
       if (exists.get(item.kind, item.title)) {
         duplicates.push(`${kindLabel(item.kind)}: ${item.title}`);
+        if (ensureDailyEntrySourceLinks(entry) > 0) {
+          linked.push(`${kindLabel(item.kind)}: ${item.title}`);
+        }
         return;
       }
       insert.run(normalizeItem({ ...item, id: createId(), review: "대기" }));
       registered.push(`${kindLabel(item.kind)}: ${item.title}`);
     });
 
-    if (registered.length > 0) {
+    if (registered.length > 0 || duplicates.length > 0 || linked.length > 0) {
       db.prepare("UPDATE daily_entries SET registered = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
     }
   })();
 
   return {
     state: getState(entry.study_date),
-    result: { registered, duplicates }
+    result: { registered, duplicates, linked }
   };
 }
 
 function registerDailyEntries(ids, studyDate) {
   const registered = [];
   const duplicates = [];
+  const linked = [];
   const errors = [];
   let nextDate = normalizeDate(studyDate);
 
@@ -417,6 +429,7 @@ function registerDailyEntries(ids, studyDate) {
       nextDate = response.state.selectedDate || nextDate;
       registered.push(...response.result.registered);
       duplicates.push(...response.result.duplicates);
+      linked.push(...(response.result.linked || []));
     } catch (error) {
       errors.push(error.message || String(error));
     }
@@ -424,7 +437,7 @@ function registerDailyEntries(ids, studyDate) {
 
   return {
     state: getState(nextDate),
-    result: { registered, duplicates, errors }
+    result: { registered, duplicates, linked, errors }
   };
 }
 
