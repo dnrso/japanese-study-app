@@ -549,10 +549,10 @@ function renderStoragePaths() {
   }
   const storageModeLabel = byId("storageModeLabel");
   if (storageModeLabel) {
-    storageModeLabel.textContent = dataApi.platform === "web" ? "브라우저 localStorage" : "SQLite 실제 데이터베이스";
+    storageModeLabel.textContent = "브라우저 IndexedDB";
   }
   byId("appDataPath").textContent = storagePaths.appDataDir;
-  byId("sqlitePath").textContent = storagePaths.dbPath;
+  byId("indexedDbPath").textContent = storagePaths.dbPath;
   byId("exportPath").textContent = storagePaths.exportsDir;
   byId("backupPath").textContent = storagePaths.backupsDir;
 }

@@ -1,5 +1,9 @@
 (function () {
-  const STORAGE_KEY = "nihongo-study-web-data-v1";
+  const DB_NAME = "nihongo-study";
+  const DB_VERSION = 1;
+  const SNAPSHOT_STORE = "snapshots";
+  const SNAPSHOT_KEY = "default";
+  const LEGACY_STORAGE_KEY = "nihongo-study-web-data-v1";
   const reviewIntervals = {
     "내일": 1,
     "3일 후": 3,
@@ -8,6 +12,7 @@
     "한달": 30
   };
   const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
+  let databasePromise = null;
 
   function createEmptySnapshot() {
     return {
@@ -18,16 +23,86 @@
     };
   }
 
-  function loadSnapshot() {
+  function openDatabase() {
+    if (!("indexedDB" in window)) {
+      return Promise.reject(new Error("이 브라우저는 IndexedDB를 지원하지 않습니다."));
+    }
+    if (databasePromise) {
+      return databasePromise;
+    }
+    databasePromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains(SNAPSHOT_STORE)) {
+          database.createObjectStore(SNAPSHOT_STORE);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("IndexedDB를 열 수 없습니다."));
+      request.onblocked = () => reject(new Error("다른 탭에서 IndexedDB 업데이트를 막고 있습니다."));
+    });
+    return databasePromise;
+  }
+
+  function idbRequest(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("IndexedDB 요청에 실패했습니다."));
+    });
+  }
+
+  async function readSnapshotRecord() {
+    const database = await openDatabase();
+    const transaction = database.transaction(SNAPSHOT_STORE, "readonly");
+    return idbRequest(transaction.objectStore(SNAPSHOT_STORE).get(SNAPSHOT_KEY));
+  }
+
+  async function writeSnapshotRecord(snapshot) {
+    const database = await openDatabase();
+    const transaction = database.transaction(SNAPSHOT_STORE, "readwrite");
+    return idbRequest(transaction.objectStore(SNAPSHOT_STORE).put(normalizeSnapshot(snapshot), SNAPSHOT_KEY));
+  }
+
+  async function loadSnapshot() {
+    const snapshot = await readSnapshotRecord();
+    if (snapshot) {
+      return normalizeSnapshot(snapshot);
+    }
+    const legacySnapshot = loadLegacySnapshot();
+    if (hasSnapshotData(legacySnapshot)) {
+      await saveSnapshot(legacySnapshot);
+      clearLegacySnapshot();
+      return legacySnapshot;
+    }
+    return createEmptySnapshot();
+  }
+
+  async function saveSnapshot(snapshot) {
+    await writeSnapshotRecord(snapshot);
+  }
+
+  function loadLegacySnapshot() {
     try {
-      return normalizeSnapshot(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
+      return normalizeSnapshot(JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || "null"));
     } catch {
       return createEmptySnapshot();
     }
   }
 
-  function saveSnapshot(snapshot) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeSnapshot(snapshot)));
+  function clearLegacySnapshot() {
+    try {
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      // IndexedDB migration should still succeed if legacy cleanup is blocked.
+    }
+  }
+
+  function hasSnapshotData(snapshot) {
+    return snapshot.studyDays.length > 0 ||
+      snapshot.dailyEntries.length > 0 ||
+      snapshot.tasks.length > 0 ||
+      snapshot.items.length > 0;
   }
 
   function normalizeSnapshot(snapshot) {
@@ -68,9 +143,9 @@
     return new Date().toISOString();
   }
 
-  function getState(studyDate = todayKey()) {
-    const snapshot = loadSnapshot();
-    promoteDueReviews(snapshot);
+  async function getState(studyDate = todayKey()) {
+    const snapshot = await loadSnapshot();
+    await promoteDueReviews(snapshot);
     const selectedDate = normalizeDate(studyDate);
     const dailyEntries = entriesForDate(snapshot, selectedDate);
     const studyDays = snapshot.studyDays
@@ -156,8 +231,8 @@
     });
   }
 
-  function saveStudyLog(studyLog) {
-    const snapshot = loadSnapshot();
+  async function saveStudyLog(studyLog) {
+    const snapshot = await loadSnapshot();
     const payload = normalizeStudyDay({
       studyDate: studyLog.studyDate,
       minutes: studyLog.minutes,
@@ -170,12 +245,12 @@
     } else {
       snapshot.studyDays.push({ ...payload, createdAt: nowIso(), updatedAt: nowIso() });
     }
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(payload.studyDate);
   }
 
-  function addDailyEntry(entry) {
-    const snapshot = loadSnapshot();
+  async function addDailyEntry(entry) {
+    const snapshot = await loadSnapshot();
     const parsed = parseDailyEntry(entry.kind, entry.rawText);
     const payload = normalizeDailyEntry({
       id: createId(),
@@ -202,12 +277,12 @@
       ].forEach(candidate => upsertDailyCandidate(snapshot, candidate));
     }
 
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(payload.studyDate);
   }
 
-  function deleteDailyEntry(id, studyDate) {
-    const snapshot = loadSnapshot();
+  async function deleteDailyEntry(id, studyDate) {
+    const snapshot = await loadSnapshot();
     const entry = snapshot.dailyEntries.find(candidate => candidate.id === id);
     if (!entry) {
       return getState(studyDate);
@@ -216,12 +291,12 @@
       ? new Set([id, ...snapshot.dailyEntries.filter(candidate => candidate.parentId === id).map(candidate => candidate.id)])
       : new Set([id]);
     snapshot.dailyEntries = snapshot.dailyEntries.filter(candidate => !deleteIds.has(candidate.id));
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(studyDate || entry.studyDate);
   }
 
-  function registerDailyEntries(ids, studyDate) {
-    const snapshot = loadSnapshot();
+  async function registerDailyEntries(ids, studyDate) {
+    const snapshot = await loadSnapshot();
     const registered = [];
     const duplicates = [];
     const linked = [];
@@ -258,38 +333,38 @@
       entry.updatedAt = nowIso();
     });
 
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return {
-      state: getState(studyDate),
+      state: await getState(studyDate),
       result: { registered, duplicates, linked, errors }
     };
   }
 
-  function addTask(task) {
-    const snapshot = loadSnapshot();
+  async function addTask(task) {
+    const snapshot = await loadSnapshot();
     snapshot.tasks.push(normalizeTask({
       ...task,
       id: task.id || createId(),
       createdAt: nowIso(),
       updatedAt: nowIso()
     }));
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(task.studyDate);
   }
 
-  function updateTaskDone(id, done, studyDate) {
-    const snapshot = loadSnapshot();
+  async function updateTaskDone(id, done, studyDate) {
+    const snapshot = await loadSnapshot();
     const task = snapshot.tasks.find(candidate => candidate.id === id);
     if (task) {
       task.done = Boolean(done);
       task.updatedAt = nowIso();
     }
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(studyDate);
   }
 
-  function upsertItem(item) {
-    const snapshot = loadSnapshot();
+  async function upsertItem(item) {
+    const snapshot = await loadSnapshot();
     const index = snapshot.items.findIndex(candidate => candidate.id === item.id);
     const previous = index >= 0 ? snapshot.items[index] : null;
     const payload = normalizeItem({
@@ -323,31 +398,31 @@
       });
     }
 
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(item.studyDate);
   }
 
-  function deleteItem(id, studyDate) {
-    const snapshot = loadSnapshot();
+  async function deleteItem(id, studyDate) {
+    const snapshot = await loadSnapshot();
     snapshot.items = snapshot.items.filter(item => item.id !== id);
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(studyDate);
   }
 
-  function updateItemReview(id, review, studyDate) {
-    const snapshot = loadSnapshot();
+  async function updateItemReview(id, review, studyDate) {
+    const snapshot = await loadSnapshot();
     const item = snapshot.items.find(candidate => candidate.id === id);
     if (item) {
       item.review = normalizeReview(review);
       item.reviewDueDate = reviewDueDateFor(item.review);
       item.updatedAt = nowIso();
     }
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(studyDate);
   }
 
-  function completeReview(targets, studyDate) {
-    const snapshot = loadSnapshot();
+  async function completeReview(targets, studyDate) {
+    const snapshot = await loadSnapshot();
     (Array.isArray(targets) ? targets : []).forEach(target => {
       const id = typeof target === "object" ? target.id : target;
       const nextReview = normalizeCompletionReview(typeof target === "object" ? target.review : "3일 후");
@@ -358,16 +433,16 @@
         item.updatedAt = nowIso();
       }
     });
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return getState(studyDate);
   }
 
-  function submitWordQuizAnswer(payload = {}) {
-    const snapshot = loadSnapshot();
+  async function submitWordQuizAnswer(payload = {}) {
+    const snapshot = await loadSnapshot();
     const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
     const item = snapshot.items.find(candidate => candidate.id === text(payload.itemId) && candidate.kind === quizKind);
     if (!item) {
-      return { state: getState(payload.studyDate), result: { correct: false, missing: true } };
+      return { state: await getState(payload.studyDate), result: { correct: false, missing: true } };
     }
 
     const answerType = text(payload.answerType) === "title" ? "title" : "meaning";
@@ -385,9 +460,9 @@
       reviewUpdated = true;
     }
 
-    saveSnapshot(snapshot);
+    await saveSnapshot(snapshot);
     return {
-      state: getState(payload.studyDate),
+      state: await getState(payload.studyDate),
       result: {
         correct,
         correctAnswer,
@@ -399,13 +474,13 @@
     };
   }
 
-  function resetSampleData() {
-    localStorage.removeItem(STORAGE_KEY);
+  async function resetSampleData() {
+    await saveSnapshot(createEmptySnapshot());
     return getState();
   }
 
-  function exportData() {
-    const snapshot = loadSnapshot();
+  async function exportData() {
+    const snapshot = await loadSnapshot();
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -421,24 +496,24 @@
     };
   }
 
-  function importCsv(studyDate) {
+  async function importCsv(studyDate) {
     return getState(studyDate);
   }
 
-  function importBackup() {
+  async function importBackup() {
     return getState();
   }
 
   function getPaths() {
     return {
-      appDataDir: "browser:localStorage",
-      dbPath: `localStorage:${STORAGE_KEY}`,
+      appDataDir: "browser:IndexedDB",
+      dbPath: `IndexedDB:${DB_NAME}/${SNAPSHOT_STORE}/${SNAPSHOT_KEY}`,
       exportsDir: "browser:download",
       backupsDir: "browser:manual-import-planned"
     };
   }
 
-  function promoteDueReviews(snapshot) {
+  async function promoteDueReviews(snapshot) {
     let changed = false;
     const today = todayKey();
     snapshot.items.forEach(item => {
@@ -450,7 +525,7 @@
       }
     });
     if (changed) {
-      saveSnapshot(snapshot);
+      await saveSnapshot(snapshot);
     }
   }
 

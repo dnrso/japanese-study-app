@@ -1,9 +1,4 @@
 node_modules/
-app-data/
-user-data/
-.portable-data-preserve/
-dist/
-out/
 *.log
 npm-debug.log*
 yarn-debug.log*

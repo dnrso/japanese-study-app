@@ -301,24 +301,24 @@ function bindEvents() {
   byId("resetDataBtn").addEventListener("click", async () => {
     clearReviewQueueDrafts();
     applyState(await dataApi.resetSampleData());
-    setStorageStatus(dataApi.platform === "web" ? "브라우저 localStorage 데이터를 초기화했습니다." : "SQLite 데이터를 초기화했습니다.");
+    setStorageStatus("브라우저 IndexedDB 데이터를 초기화했습니다.");
   });
 
   byId("exportDataBtn").addEventListener("click", async () => {
     const result = await dataApi.exportData();
-    setStorageStatus(dataApi.platform === "web" ? `브라우저 백업 JSON 생성: ${result.files?.join(", ") || result.exportsDir}` : `내보내기 완료: ${result.exportsDir}`);
+    setStorageStatus(`브라우저 백업 JSON 생성: ${result.files?.join(", ") || result.exportsDir}`);
   });
 
   byId("importCsvBtn").addEventListener("click", async () => {
     applyState(await dataApi.importCsv(selectedDate));
-    setStorageStatus(dataApi.platform === "web" ? "웹 버전 CSV 가져오기는 준비 중입니다." : "exports 폴더의 CSV를 SQLite로 가져왔습니다.");
+    setStorageStatus("웹 버전 CSV 가져오기는 준비 중입니다.");
   });
 
   byId("importBackupBtn").addEventListener("click", async () => {
     try {
       clearReviewQueueDrafts();
       applyState(await dataApi.importBackup());
-      setStorageStatus(dataApi.platform === "web" ? "웹 버전 백업 가져오기는 준비 중입니다." : "full-backup.yaml에서 전체 데이터를 복원했습니다.");
+      setStorageStatus("웹 버전 백업 가져오기는 준비 중입니다.");
     } catch (error) {
       setStorageStatus(error.message);
     }

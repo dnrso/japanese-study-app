@@ -1,40 +1,25 @@
 const TTS_STORAGE_KEY = "nihongo-tts-settings";
-const VOICEVOX_BASE_URL = "http://localhost:50021";
-const TTS_ENGINE_BROWSER = "browser";
-const TTS_ENGINE_VOICEVOX = "voicevox";
 
 const ttsDefaultSettings = {
-  engine: TTS_ENGINE_BROWSER,
   browserVoiceURI: "",
-  voicevoxSpeakerId: "",
   rate: 1
 };
 
 let ttsSettings = loadTtsSettings();
 let browserVoices = [];
 let browserVoicesLoading = null;
-let voicevoxSpeakers = [];
-let voicevoxLoading = null;
-let activeAudio = null;
-let activeAudioUrl = "";
 let activeUtterance = null;
 
 function loadTtsSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(TTS_STORAGE_KEY) || "{}");
     return {
-      engine: normalizeTtsEngine(saved.engine),
       browserVoiceURI: String(saved.browserVoiceURI || ttsDefaultSettings.browserVoiceURI),
-      voicevoxSpeakerId: String(saved.voicevoxSpeakerId || ttsDefaultSettings.voicevoxSpeakerId),
       rate: normalizeTtsRate(saved.rate)
     };
   } catch {
     return { ...ttsDefaultSettings };
   }
-}
-
-function normalizeTtsEngine(engine) {
-  return engine === TTS_ENGINE_VOICEVOX ? TTS_ENGINE_VOICEVOX : TTS_ENGINE_BROWSER;
 }
 
 function normalizeTtsRate(rate) {
@@ -53,24 +38,12 @@ function ttsElement(id) {
 function initJapaneseTts() {
   bindTtsControls();
   applyTtsSettingsToControls();
-  loadActiveTtsVoices().catch(error => showTtsError(error, { toast: false }));
+  loadBrowserVoices().catch(error => showTtsError(error, { toast: false }));
 }
 
 function bindTtsControls() {
-  ttsElement("ttsEngineSelect")?.addEventListener("change", event => {
-    ttsSettings.engine = normalizeTtsEngine(event.target.value);
-    saveTtsSettings();
-    applyTtsSettingsToControls();
-    loadActiveTtsVoices(true).catch(error => showTtsError(error, { toast: false }));
-  });
-
   ttsElement("ttsBrowserVoiceSelect")?.addEventListener("change", event => {
     ttsSettings.browserVoiceURI = event.target.value;
-    saveTtsSettings();
-  });
-
-  ttsElement("ttsVoicevoxSpeakerSelect")?.addEventListener("change", event => {
-    ttsSettings.voicevoxSpeakerId = event.target.value;
     saveTtsSettings();
   });
 
@@ -81,39 +54,17 @@ function bindTtsControls() {
   });
 
   ttsElement("ttsRefreshBtn")?.addEventListener("click", () => {
-    loadActiveTtsVoices(true).catch(error => showTtsError(error, { toast: false }));
+    loadBrowserVoices(true).catch(error => showTtsError(error, { toast: false }));
   });
 }
 
 function applyTtsSettingsToControls() {
-  const engineSelect = ttsElement("ttsEngineSelect");
   const browserVoiceSelect = ttsElement("ttsBrowserVoiceSelect");
-  const voicevoxSpeakerSelect = ttsElement("ttsVoicevoxSpeakerSelect");
   const rateRange = ttsElement("ttsRateRange");
 
-  if (engineSelect) engineSelect.value = ttsSettings.engine;
   if (browserVoiceSelect) browserVoiceSelect.value = ttsSettings.browserVoiceURI;
-  if (voicevoxSpeakerSelect) voicevoxSpeakerSelect.value = ttsSettings.voicevoxSpeakerId;
   if (rateRange) rateRange.value = ttsSettings.rate;
   ttsElement("ttsRateValue").textContent = ttsSettings.rate.toFixed(1);
-  updateTtsControlVisibility();
-}
-
-function updateTtsControlVisibility() {
-  const isVoicevox = ttsSettings.engine === TTS_ENGINE_VOICEVOX;
-  const browserField = ttsElement("ttsBrowserVoiceField");
-  const voicevoxField = ttsElement("ttsVoicevoxSpeakerField");
-  const refreshButton = ttsElement("ttsRefreshBtn");
-
-  if (browserField) browserField.hidden = isVoicevox;
-  if (voicevoxField) voicevoxField.hidden = !isVoicevox;
-  if (refreshButton) refreshButton.textContent = isVoicevox ? "VOICEVOX 목록 새로고침" : "음성 목록 새로고침";
-}
-
-function loadActiveTtsVoices(force = false) {
-  return ttsSettings.engine === TTS_ENGINE_VOICEVOX
-    ? loadVoicevoxSpeakers(force)
-    : loadBrowserVoices(force);
 }
 
 function hasBrowserTts() {
@@ -226,86 +177,6 @@ function browserVoiceLabel(voice) {
   return [voice.name, voice.lang].filter(Boolean).join(" / ");
 }
 
-async function loadVoicevoxSpeakers(force = false) {
-  const select = ttsElement("ttsVoicevoxSpeakerSelect");
-  if (!select) {
-    return;
-  }
-  if (voicevoxSpeakers.length && !force) {
-    renderVoicevoxSpeakers();
-    updateVoicevoxTtsStatus();
-    return voicevoxSpeakers;
-  }
-  if (voicevoxLoading && !force) {
-    return voicevoxLoading;
-  }
-
-  select.innerHTML = "";
-  select.appendChild(new Option("VOICEVOX 목록 불러오는 중", ""));
-  setTtsStatus("VOICEVOX speaker 목록을 불러오는 중입니다.");
-
-  voicevoxLoading = requestVoicevoxSpeakers()
-    .then(speakers => {
-      voicevoxSpeakers = Array.isArray(speakers) ? speakers : [];
-      renderVoicevoxSpeakers();
-      updateVoicevoxTtsStatus();
-      return voicevoxSpeakers;
-    })
-    .finally(() => {
-      voicevoxLoading = null;
-    });
-
-  return voicevoxLoading;
-}
-
-function renderVoicevoxSpeakers() {
-  const select = ttsElement("ttsVoicevoxSpeakerSelect");
-  if (!select) {
-    return;
-  }
-
-  select.innerHTML = "";
-  const options = voicevoxSpeakerOptions();
-
-  if (!options.length) {
-    select.appendChild(new Option("사용 가능한 speaker 없음", ""));
-    select.disabled = true;
-    return;
-  }
-
-  select.disabled = false;
-  options.forEach(option => select.appendChild(new Option(option.label, option.id)));
-
-  if (ttsSettings.voicevoxSpeakerId && options.some(option => option.id === ttsSettings.voicevoxSpeakerId)) {
-    select.value = ttsSettings.voicevoxSpeakerId;
-  } else {
-    select.value = options[0].id;
-    ttsSettings.voicevoxSpeakerId = select.value;
-    saveTtsSettings();
-  }
-}
-
-function updateVoicevoxTtsStatus() {
-  const options = voicevoxSpeakerOptions();
-  if (!options.length) {
-    setTtsStatus("오류: VOICEVOX 엔진 또는 사용 가능한 speaker를 찾을 수 없습니다. http://localhost:50021 실행 상태를 확인하세요.", "error");
-    return;
-  }
-  const selected = options.find(option => option.id === ttsSettings.voicevoxSpeakerId) || options[0];
-  setTtsStatus(`VOICEVOX 엔진 감지됨: ${selected.label}`, "ok");
-}
-
-function voicevoxSpeakerOptions() {
-  return voicevoxSpeakers.flatMap(speaker =>
-    (speaker.styles || [])
-      .filter(style => !style.type || style.type === "talk")
-      .map(style => ({
-        id: String(style.id),
-        label: `${speaker.name} / ${style.name} (#${style.id})`
-      }))
-  );
-}
-
 async function speakJapanese(text) {
   const targetText = String(text || "").trim();
   if (!targetText) {
@@ -315,10 +186,6 @@ async function speakJapanese(text) {
 
   try {
     stopCurrentTts();
-    if (ttsSettings.engine === TTS_ENGINE_VOICEVOX) {
-      await speakWithVoicevox(targetText);
-      return;
-    }
     await speakWithBrowserTts(targetText);
   } catch (error) {
     showTtsError(error);
@@ -368,100 +235,10 @@ function selectedBrowserVoice() {
     null;
 }
 
-async function speakWithVoicevox(text) {
-  await loadVoicevoxSpeakers();
-  const speakerId = ttsSettings.voicevoxSpeakerId;
-  if (!speakerId) {
-    throw new Error("VOICEVOX speaker를 선택할 수 없습니다.");
-  }
-
-  setTtsStatus("VOICEVOX 음성을 합성하는 중입니다.");
-  const { audioData, mimeType } = await synthesizeVoicevoxAudio(text, speakerId);
-  const audioBlob = new Blob([toAudioBlobPart(audioData)], { type: mimeType || "audio/wav" });
-  activeAudioUrl = URL.createObjectURL(audioBlob);
-  activeAudio = new Audio(activeAudioUrl);
-  activeAudio.onplay = () => setTtsStatus("VOICEVOX 음성을 재생 중입니다.");
-  activeAudio.onended = () => {
-    releaseActiveAudio();
-    setTtsStatus("음성 재생이 완료되었습니다.");
-  };
-  activeAudio.onerror = () => {
-    releaseActiveAudio();
-    showTtsError(new Error("VOICEVOX 오디오 재생에 실패했습니다."));
-  };
-  await activeAudio.play();
-}
-
-function toAudioBlobPart(audioData) {
-  if (audioData instanceof ArrayBuffer || ArrayBuffer.isView(audioData)) {
-    return audioData;
-  }
-  if (Array.isArray(audioData)) {
-    return new Uint8Array(audioData);
-  }
-  if (Array.isArray(audioData?.data)) {
-    return new Uint8Array(audioData.data);
-  }
-  return audioData;
-}
-
-async function requestVoicevoxSpeakers() {
-  if (window.ttsApi?.getVoicevoxSpeakers) {
-    return window.ttsApi.getVoicevoxSpeakers();
-  }
-
-  const response = await fetch(`${VOICEVOX_BASE_URL}/speakers`);
-  if (!response.ok) {
-    throw new Error(`VOICEVOX speakers 요청 실패 (${response.status})`);
-  }
-  return response.json();
-}
-
-async function synthesizeVoicevoxAudio(text, speakerId) {
-  if (window.ttsApi?.synthesizeVoicevox) {
-    return window.ttsApi.synthesizeVoicevox({ text, speakerId, rate: ttsSettings.rate });
-  }
-
-  const queryResponse = await fetch(`${VOICEVOX_BASE_URL}/audio_query?${new URLSearchParams({ text, speaker: speakerId })}`, {
-    method: "POST"
-  });
-  if (!queryResponse.ok) {
-    throw new Error(`VOICEVOX audio_query 실패 (${queryResponse.status})`);
-  }
-
-  const audioQuery = await queryResponse.json();
-  audioQuery.speedScale = ttsSettings.rate;
-  const synthesisResponse = await fetch(`${VOICEVOX_BASE_URL}/synthesis?${new URLSearchParams({ speaker: speakerId })}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(audioQuery)
-  });
-  if (!synthesisResponse.ok) {
-    throw new Error(`VOICEVOX synthesis 실패 (${synthesisResponse.status})`);
-  }
-
-  return {
-    audioData: await synthesisResponse.arrayBuffer(),
-    mimeType: synthesisResponse.headers.get("content-type") || "audio/wav"
-  };
-}
-
 function stopCurrentTts() {
-  if (activeAudio) {
-    activeAudio.pause();
-    releaseActiveAudio();
-  }
   if (activeUtterance && hasBrowserTts()) {
     activeUtterance = null;
     window.speechSynthesis.cancel();
-  }
-}
-
-function releaseActiveAudio() {
-  activeAudio = null;
-  if (activeAudioUrl) {
-    URL.revokeObjectURL(activeAudioUrl);
-    activeAudioUrl = "";
   }
 }
 
@@ -476,12 +253,9 @@ function setTtsStatus(message, tone = "info") {
 
 function showTtsError(error, options = {}) {
   const message = error?.message || String(error);
-  const friendly = message.includes("Failed to fetch") || message.includes("fetch failed") || message.includes("ECONNREFUSED")
-    ? "VOICEVOX 엔진 연결에 실패했습니다. http://localhost:50021 실행 상태를 확인하세요."
-    : message;
-  setTtsStatus(`오류: ${friendly}`, "error");
+  setTtsStatus(`오류: ${message}`, "error");
   if (options.toast !== false) {
-    showTtsToast(`음성 재생 오류: ${friendly}`);
+    showTtsToast(`음성 재생 오류: ${message}`);
   }
 }
 

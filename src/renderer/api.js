@@ -26,7 +26,7 @@ function createDataApi(adapter, platform) {
 }
 
 function createUnavailableDataApi() {
-  const message = "데이터 API를 찾을 수 없습니다. Electron preload 또는 browserDataStore를 먼저 로드하세요.";
+  const message = "데이터 API를 찾을 수 없습니다. browserDataStore를 먼저 로드하세요.";
   return dataApiMethods.reduce((api, methodName) => {
     api[methodName] = () => Promise.reject(new Error(message));
     return api;
@@ -34,9 +34,6 @@ function createUnavailableDataApi() {
 }
 
 const dataApi = (() => {
-  if (window.studyData) {
-    return createDataApi(window.studyData, "electron");
-  }
   if (window.browserDataStore) {
     return createDataApi(window.browserDataStore, "web");
   }

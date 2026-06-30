@@ -429,15 +429,15 @@
               <tbody>
                 <tr>
                   <th>저장 방식</th>
-                  <td id="storageModeLabel">SQLite 실제 데이터베이스</td>
+                  <td id="storageModeLabel">브라우저 IndexedDB</td>
                 </tr>
                 <tr>
                   <th>데이터 폴더</th>
                   <td id="appDataPath">확인 중</td>
                 </tr>
                 <tr>
-                  <th>SQLite</th>
-                  <td id="sqlitePath">확인 중</td>
+                  <th>IndexedDB</th>
+                  <td id="indexedDbPath">확인 중</td>
                 </tr>
                 <tr>
                   <th>Export</th>
@@ -511,23 +511,10 @@
               <button class="ghost-btn" id="ttsRefreshBtn" type="button">음성 목록 새로고침</button>
             </div>
             <div class="settings-grid">
-              <label>
-                TTS 엔진
-                <select id="ttsEngineSelect">
-                  <option value="browser" selected>브라우저 기본 TTS</option>
-                  <option value="voicevox">VOICEVOX</option>
-                </select>
-              </label>
               <label id="ttsBrowserVoiceField">
                 브라우저 음성
                 <select id="ttsBrowserVoiceSelect">
                   <option value="">자동 선택 (일본어)</option>
-                </select>
-              </label>
-              <label id="ttsVoicevoxSpeakerField" hidden>
-                VOICEVOX speaker
-                <select id="ttsVoicevoxSpeakerSelect">
-                  <option value="">VOICEVOX 목록 확인 중</option>
                 </select>
               </label>
               <label>
@@ -588,6 +575,7 @@
 
   <script src="./config.js"></script>
   <script src="./domUtils.js"></script>
+  <script src="./browserDataStore.js"></script>
   <script src="./api.js"></script>
   <script src="./state.js"></script>
   <script src="./render.js"></script>

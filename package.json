@@ -1,37 +1,9 @@
 {
   "name": "japanese-study-app",
   "version": "0.1.0",
-  "description": "Electron Japanese study app",
-  "main": "src/main.js",
+  "description": "GitHub Pages Japanese study web app",
   "scripts": {
-    "start": "electron .",
-    "build:web": "node scripts/build-web.js",
-    "build": "node scripts/build-windows.js"
-  },
-  "build": {
-    "appId": "com.nihongo.study",
-    "productName": "NihonGo Study",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "src/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
-    ],
-    "win": {
-      "target": "dir"
-    }
-  },
-  "devDependencies": {
-    "@electron/asar": "^3.4.1",
-    "electron": "^41.7.2",
-    "electron-builder": "^26.15.2"
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.10.0",
-    "yaml": "^2.9.0"
+    "build": "node scripts/build-web.js",
+    "build:web": "node scripts/build-web.js"
   }
 }
