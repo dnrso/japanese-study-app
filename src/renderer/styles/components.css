@@ -788,6 +788,16 @@ label {
   margin: 12px 0 0;
 }
 
+.tts-status.status-ok {
+  color: #166534;
+  font-weight: 800;
+}
+
+.tts-status.status-error {
+  color: #b42318;
+  font-weight: 800;
+}
+
 .tts-toast {
   position: fixed;
   right: 18px;

@@ -21,15 +21,23 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
-function configureDataPath() {
-  const appDataDir = app.isPackaged
-    ? path.resolve(path.dirname(app.getPath("exe")), "..", "app-data")
-    : path.resolve(__dirname, "..", "app-data");
-  process.env.NIHONGO_APP_DATA_DIR = appDataDir;
+function appBaseDir() {
+  return app.isPackaged
+    ? path.dirname(app.getPath("exe"))
+    : path.resolve(__dirname, "..");
 }
 
+function configurePortablePaths() {
+  const baseDir = appBaseDir();
+  const userDataDir = path.join(baseDir, "user-data");
+  app.setPath("userData", userDataDir);
+  app.setPath("sessionData", userDataDir);
+  process.env.NIHONGO_APP_DATA_DIR = path.join(baseDir, "app-data");
+}
+
+configurePortablePaths();
+
 app.whenReady().then(() => {
-  configureDataPath();
   const store = require("./dataStore");
   store.initDatabase();
   registerDataHandlers(ipcMain, store);

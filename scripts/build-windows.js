@@ -7,11 +7,15 @@ const asar = require("@electron/asar");
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
 const unpackedDir = path.join(distDir, "win-unpacked");
-const appDataDir = path.join(distDir, "app-data");
-const legacyAppDataDir = path.join(unpackedDir, "app-data");
+const appDataDir = path.join(unpackedDir, "app-data");
+const userDataDir = path.join(unpackedDir, "user-data");
+const legacyAppDataDir = path.join(distDir, "app-data");
 const schemaPath = path.join(rootDir, "src", "dataSchema.js");
 const schemaMarkerPath = path.join(appDataDir, ".data-schema-hash");
 const backupRootDir = path.join(distDir, "app-data-backup");
+const preserveDir = path.join(rootDir, ".portable-data-preserve");
+const preservedAppDataDir = path.join(preserveDir, "app-data");
+const preservedUserDataDir = path.join(preserveDir, "user-data");
 const builderCliPath = path.join(rootDir, "node_modules", "electron-builder", "cli.js");
 
 function hash(value) {
@@ -23,7 +27,7 @@ function readText(filePath) {
 }
 
 function previousSchemaHash() {
-  const markerHash = readText(schemaMarkerPath);
+  const markerHash = readText(schemaMarkerPath) || readText(path.join(preservedAppDataDir, ".data-schema-hash"));
   if (markerHash) {
     return markerHash;
   }
@@ -85,26 +89,13 @@ function assertDataFilesReadable(dataDir) {
   }
 }
 
-function migrateLegacyAppData() {
-  if (!fs.existsSync(legacyAppDataDir)) {
-    return;
-  }
-
-  assertDataFilesReadable(legacyAppDataDir);
-  if (!fs.existsSync(appDataDir)) {
-    fs.renameSync(legacyAppDataDir, appDataDir);
-    console.log(`Existing app data moved to the persistent location: ${appDataDir}`);
-    return;
-  }
-
-  const backupDir = path.join(backupRootDir, `legacy-${timestamp()}`);
-  fs.mkdirSync(backupDir, { recursive: true });
-  fs.renameSync(legacyAppDataDir, path.join(backupDir, "app-data"));
-  console.log(`Legacy app data was not merged because persistent data already exists. Backed up to ${backupDir}`);
-}
-
 function backupForSchemaChange(currentSchemaHash) {
-  if (!fs.existsSync(appDataDir)) {
+  const sourceDir = fs.existsSync(appDataDir)
+    ? appDataDir
+    : fs.existsSync(preservedAppDataDir)
+      ? preservedAppDataDir
+      : "";
+  if (!sourceDir) {
     return;
   }
 
@@ -113,17 +104,49 @@ function backupForSchemaChange(currentSchemaHash) {
     return;
   }
 
-  assertDataFilesReadable(appDataDir);
+  assertDataFilesReadable(sourceDir);
   const backupDir = path.join(backupRootDir, timestamp());
   fs.mkdirSync(backupDir, { recursive: true });
-  fs.cpSync(appDataDir, path.join(backupDir, "app-data"), { recursive: true });
+  fs.cpSync(sourceDir, path.join(backupDir, "app-data"), { recursive: true });
   console.log(`Data schema changed. Existing app data was preserved and backed up to ${backupDir}`);
+}
+
+function preservePortableData() {
+  fs.rmSync(preserveDir, { recursive: true, force: true });
+
+  const sourceAppDataDir = fs.existsSync(appDataDir)
+    ? appDataDir
+    : fs.existsSync(legacyAppDataDir)
+      ? legacyAppDataDir
+      : "";
+  if (sourceAppDataDir) {
+    assertDataFilesReadable(sourceAppDataDir);
+    fs.mkdirSync(preserveDir, { recursive: true });
+    fs.cpSync(sourceAppDataDir, preservedAppDataDir, { recursive: true });
+  }
+
+  if (fs.existsSync(userDataDir)) {
+    fs.mkdirSync(preserveDir, { recursive: true });
+    fs.cpSync(userDataDir, preservedUserDataDir, { recursive: true });
+  }
+}
+
+function restorePortableData() {
+  if (fs.existsSync(preservedAppDataDir)) {
+    fs.rmSync(appDataDir, { recursive: true, force: true });
+    fs.cpSync(preservedAppDataDir, appDataDir, { recursive: true });
+  }
+  if (fs.existsSync(preservedUserDataDir)) {
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+    fs.cpSync(preservedUserDataDir, userDataDir, { recursive: true });
+  }
+  fs.rmSync(preserveDir, { recursive: true, force: true });
 }
 
 function run() {
   const currentSchemaHash = hash(fs.readFileSync(schemaPath));
   removeRootBuildArtifacts();
-  migrateLegacyAppData();
+  preservePortableData();
   backupForSchemaChange(currentSchemaHash);
 
   const result = spawnSync(process.execPath, [builderCliPath, "--win", "--x64", "--dir"], {
@@ -139,11 +162,12 @@ function run() {
     process.exit(result.status || 1);
   }
 
+  restorePortableData();
   fs.mkdirSync(appDataDir, { recursive: true });
   fs.writeFileSync(schemaMarkerPath, `${currentSchemaHash}\n`, "utf8");
   removeRootBuildArtifacts();
   console.log(`Windows unpacked build created at ${unpackedDir}`);
-  console.log(`Persistent app data is stored outside the build output at ${appDataDir}`);
+  console.log(`Portable app data is stored inside the app folder at ${appDataDir}`);
 }
 
 run();
