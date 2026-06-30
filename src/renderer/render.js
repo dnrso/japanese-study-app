@@ -307,7 +307,12 @@ function renderWords() {
       <td><span class="badge green">${highlight(item.script || "-")}</span></td>
       <td>${renderSourceSentenceLinks(item.sourceSentences)}</td>
       <td><button class="badge ${item.review === "오늘" ? "red" : "yellow"}" data-cycle-review="${item.id}">${highlight(item.review || "대기")}</button></td>
-      <td><button class="danger-btn" data-delete-item="${item.id}">삭제</button></td>
+      <td>
+        <div class="word-row-actions">
+          <button class="ghost-btn" data-edit-item="${item.id}">수정</button>
+          <button class="danger-btn" data-delete-item="${item.id}">삭제</button>
+        </div>
+      </td>
     </tr>
   `).join("") : `<tr><td colspan="9">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`;
 }
@@ -501,10 +506,6 @@ function renderQuizPanel({ panelId, quiz, badge, promptText, promptHtml, choiceA
   `;
 }
 
-function renderWordQuizChoice(choice) {
-  return renderQuizChoice(choice, wordQuiz, "data-word-quiz-choice");
-}
-
 function renderQuizChoice(choice, quiz, choiceAttribute) {
   const isSelected = quiz.selectedAnswer === choice;
   const isCorrect = quiz.answered && choice === quiz.question.correctAnswer;
@@ -514,10 +515,6 @@ function renderQuizChoice(choice, quiz, choiceAttribute) {
       ${highlight(choice || "-")}
     </button>
   `;
-}
-
-function renderWordQuizFeedback() {
-  return renderQuizFeedback(wordQuiz, "data-next-word-quiz");
 }
 
 function renderQuizFeedback(quiz, nextAttribute) {

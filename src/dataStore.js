@@ -456,13 +456,20 @@ function updateTaskDone(id, done, studyDate) {
 
 function upsertItem(item) {
   const payload = normalizeItem({ ...item, id: item.id || createId() });
-  const existingQuizStats = item.id
-    ? db.prepare("SELECT quiz_correct_count AS quizCorrectCount, quiz_wrong_count AS quizWrongCount, last_quizzed_at AS lastQuizzedAt FROM items WHERE id = ?").get(item.id)
+  const existingItem = item.id
+    ? db.prepare(`
+      SELECT kind, title,
+        quiz_correct_count AS quizCorrectCount,
+        quiz_wrong_count AS quizWrongCount,
+        last_quizzed_at AS lastQuizzedAt
+      FROM items
+      WHERE id = ?
+    `).get(item.id)
     : null;
-  if (existingQuizStats && item.quizCorrectCount === undefined && item.quiz_correct_count === undefined) {
-    payload.quizCorrectCount = existingQuizStats.quizCorrectCount;
-    payload.quizWrongCount = existingQuizStats.quizWrongCount;
-    payload.lastQuizzedAt = existingQuizStats.lastQuizzedAt;
+  if (existingItem && item.quizCorrectCount === undefined && item.quiz_correct_count === undefined) {
+    payload.quizCorrectCount = existingItem.quizCorrectCount;
+    payload.quizWrongCount = existingItem.quizWrongCount;
+    payload.lastQuizzedAt = existingItem.lastQuizzedAt;
   }
   const insert = db.prepare(`
     INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
@@ -488,6 +495,9 @@ function upsertItem(item) {
 
   db.transaction(() => {
     insert.run(payload);
+    if (existingItem && (existingItem.kind !== payload.kind || existingItem.title !== payload.title)) {
+      updateLinkedDailyEntryTitles(existingItem.kind, existingItem.title, payload.kind, payload.title);
+    }
     const generatedItems = payload.kind === "word" ? withKanjiItems([payload]).slice(1) : [];
     generatedItems.forEach(kanjiItem => {
       if (!exists.get(kanjiItem.kind, kanjiItem.title)) {
@@ -497,6 +507,33 @@ function upsertItem(item) {
   })();
 
   return getState(item.studyDate);
+}
+
+function updateLinkedDailyEntryTitles(previousKind, previousTitle, nextKind, nextTitle) {
+  const linkedEntries = db.prepare(`
+    SELECT DISTINCT entry.id, entry.parsed_json AS parsedJson
+    FROM daily_entries entry
+    JOIN daily_entry_links link ON link.entry_id = entry.id
+    WHERE entry.kind = ? AND entry.title = ?
+  `).all(previousKind, previousTitle);
+  const update = db.prepare(`
+    UPDATE daily_entries SET
+      kind = @kind,
+      title = @title,
+      parsed_json = @parsedJson,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = @id
+  `);
+
+  linkedEntries.forEach(entry => {
+    const parsed = safeJson(entry.parsedJson);
+    update.run({
+      id: entry.id,
+      kind: nextKind,
+      title: nextTitle,
+      parsedJson: JSON.stringify({ ...parsed, kind: nextKind, title: nextTitle })
+    });
+  });
 }
 
 function deleteItem(id, studyDate) {
@@ -679,7 +716,6 @@ module.exports = {
   saveStudyLog,
   addDailyEntry,
   deleteDailyEntry,
-  registerDailyEntry,
   registerDailyEntries,
   addTask,
   updateTaskDone,

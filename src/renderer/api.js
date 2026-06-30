@@ -3,7 +3,6 @@ const dataApi = {
   saveStudyLog: studyLog => window.studyData.saveStudyLog(studyLog),
   addDailyEntry: entry => window.studyData.addDailyEntry(entry),
   deleteDailyEntry: (id, studyDate) => window.studyData.deleteDailyEntry(id, studyDate),
-  registerDailyEntry: id => window.studyData.registerDailyEntry(id),
   registerDailyEntries: (ids, studyDate) => window.studyData.registerDailyEntries(ids, studyDate),
   addTask: task => window.studyData.addTask(task),
   updateTaskDone: (id, done, studyDate) => window.studyData.updateTaskDone(id, done, studyDate),

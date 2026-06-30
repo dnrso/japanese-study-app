@@ -133,16 +133,6 @@ function bindEvents() {
       return;
     }
 
-    const registerDailyTarget = event.target.closest("[data-register-daily-entry]");
-    if (registerDailyTarget) {
-      const response = await dataApi.registerDailyEntry(registerDailyTarget.dataset.registerDailyEntry);
-      applyState(response.state);
-      const registered = response.result.registered.length ? `등록: ${response.result.registered.join(", ")}` : "";
-      const duplicates = response.result.duplicates.length ? `중복: ${response.result.duplicates.join(", ")}` : "";
-      window.alert([registered, duplicates].filter(Boolean).join("\n") || "등록할 항목이 없습니다.");
-      return;
-    }
-
     const jumpTarget = event.target.closest("[data-jump-sentence]");
     if (jumpTarget) {
       await jumpToSentence(jumpTarget.dataset.jumpSentence, jumpTarget.dataset.sourceDate || "");
@@ -280,9 +270,12 @@ function bindEvents() {
   byId("itemForm").addEventListener("submit", async event => {
     event.preventDefault();
     try {
+      const kind = byId("itemKind").value;
+      const isEditing = Boolean(byId("itemForm").dataset.editId);
       const saved = await saveItemFromDialog();
       if (saved) {
         byId("itemDialog").close();
+        window.alert(`${kindLabels[kind] || "항목"} ${isEditing ? "수정" : "저장"}이 완료되었습니다.`);
       }
     } catch (error) {
       window.alert(error.message || "저장에 실패했습니다.");

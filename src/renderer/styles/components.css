@@ -328,6 +328,19 @@ h1 {
   white-space: nowrap;
 }
 
+.word-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.word-row-actions .ghost-btn,
+.word-row-actions .danger-btn {
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
 .japanese,
 .study-card h3,
 .kanji-char,
@@ -458,15 +471,6 @@ h1 {
   color: var(--muted-strong);
   font-size: 12px;
   font-weight: 800;
-}
-
-.kanji-review {
-  display: flex;
-  justify-content: center;
-}
-
-.kanji-review .ghost-btn {
-  width: 100%;
 }
 
 .kanji-card .card-actions {

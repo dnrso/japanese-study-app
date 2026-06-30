@@ -5,7 +5,6 @@ function registerDataHandlers(ipcMain, store) {
   ipcMain.handle(dataChannels.saveStudyLog, (_event, studyLog) => store.saveStudyLog(studyLog));
   ipcMain.handle(dataChannels.addDailyEntry, (_event, entry) => store.addDailyEntry(entry));
   ipcMain.handle(dataChannels.deleteDailyEntry, (_event, id, studyDate) => store.deleteDailyEntry(id, studyDate));
-  ipcMain.handle(dataChannels.registerDailyEntry, (_event, id) => store.registerDailyEntry(id));
   ipcMain.handle(dataChannels.registerDailyEntries, (_event, ids, studyDate) => store.registerDailyEntries(ids, studyDate));
   ipcMain.handle(dataChannels.addTask, (_event, task) => store.addTask(task));
   ipcMain.handle(dataChannels.updateTaskDone, (_event, id, done, studyDate) => store.updateTaskDone(id, done, studyDate));

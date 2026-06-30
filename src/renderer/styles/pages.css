@@ -1,5 +1,4 @@
-.calendar-actions,
-.daily-entry-tools {
+.calendar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -60,11 +59,6 @@
   color: var(--muted-strong);
   font-size: 10px;
   line-height: 1.15;
-}
-
-.daily-entry-tools {
-  margin-bottom: 10px;
-  max-width: 360px;
 }
 
 .daily-entry-input {
@@ -298,14 +292,6 @@
   height: 20px;
   min-height: 20px;
   font-size: 10px;
-}
-
-.nested-list {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding-left: 18px;
-  color: var(--muted-strong);
 }
 
 .grammar-candidate-list {

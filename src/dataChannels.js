@@ -3,7 +3,6 @@ const dataChannels = {
   saveStudyLog: "data:save-study-log",
   addDailyEntry: "data:add-daily-entry",
   deleteDailyEntry: "data:delete-daily-entry",
-  registerDailyEntry: "data:register-daily-entry",
   registerDailyEntries: "data:register-daily-entries",
   addTask: "data:add-task",
   updateTaskDone: "data:update-task-done",
