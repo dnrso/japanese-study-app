@@ -123,17 +123,15 @@ async function saveItemFromDialog() {
 }
 
 async function cycleReview(id) {
-  const order = ["오늘", "내일", "3일 후", "대기"];
   const item = state.items.find(item => item.id === id);
   if (!item) {
     return;
   }
-  const index = order.indexOf(item.review);
-  applyState(await dataApi.updateItemReview(id, order[(index + 1) % order.length], selectedDate));
+  const index = reviewOptions.indexOf(item.review || "대기");
+  applyState(await dataApi.updateItemReview(id, reviewOptions[(index + 1) % reviewOptions.length], selectedDate));
 }
 
 async function deleteItem(id) {
-  reviewSelection.delete(id);
   applyState(await dataApi.deleteItem(id, selectedDate));
 }
 

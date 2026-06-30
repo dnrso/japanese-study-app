@@ -28,6 +28,8 @@ window.NihonGoConfig = {
     sentence: "purple",
     source: "green"
   },
+  reviewOptions: ["오늘", "내일", "3일 후", "일주일", "2주일", "한달", "대기"],
+  scheduledReviewOptions: ["내일", "3일 후", "일주일", "2주일", "한달"],
   partOptions: ["명사", "대명사", "동사", "い형용사", "な형용사", "부사", "조사", "조동사", "접속사", "감탄사", "표현", "동사표현", "형용사표현", "부사표현", "문법표현", "サ변동사"],
   scriptOptions: ["한자", "히라가나", "가타카나", "한자+히라가나", "한자+가타카나", "혼합"],
   manualEntryPlaceholders: {

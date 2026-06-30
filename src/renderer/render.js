@@ -306,7 +306,7 @@ function renderWords() {
       <td><span class="badge blue">${highlight(item.part || "-")}</span></td>
       <td><span class="badge green">${highlight(item.script || "-")}</span></td>
       <td>${renderSourceSentenceLinks(item.sourceSentences)}</td>
-      <td><button class="badge ${item.review === "오늘" ? "red" : "yellow"}" data-cycle-review="${item.id}">${highlight(item.review || "대기")}</button></td>
+      <td><button class="badge ${item.review === "오늘" ? "red" : "yellow"}" data-cycle-review="${item.id}">${highlight(reviewStatusText(item))}</button></td>
       <td>
         <div class="word-row-actions">
           <button class="ghost-btn" data-edit-item="${item.id}">수정</button>
@@ -320,6 +320,7 @@ function renderWords() {
 function renderWordFilters() {
   renderSelectOptions("wordPartFilter", "전체 품사", partOptions);
   renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
+  renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
 }
 
 function renderSelectOptions(selectId, allLabel, options) {
@@ -386,7 +387,7 @@ function renderStudyCard(item) {
       ${note ? `<p class="muted">${highlight(note)}</p>` : ""}
       ${item.kind === "grammar" ? `<div class="source-link-list">${renderSourceSentenceLinks(item.sourceSentences)}</div>` : ""}
       <div class="card-actions">
-        ${item.review ? `<button class="ghost-btn" data-cycle-review="${item.id}">복습: ${escapeHtml(item.review)}</button>` : ""}
+        ${item.review ? `<button class="ghost-btn" data-cycle-review="${item.id}">복습: ${escapeHtml(reviewStatusText(item))}</button>` : ""}
         <button class="ghost-btn" data-edit-item="${item.id}">수정</button>
         <button class="danger-btn" data-delete-item="${item.id}">삭제</button>
       </div>
@@ -409,7 +410,7 @@ function renderKanji() {
       </div>
       <div class="card-actions">
         <button class="ghost-btn" data-show-kanji-words="${escapeHtml(item.title)}">단어보기</button>
-        <button class="ghost-btn" data-cycle-review="${item.id}">복습: ${escapeHtml(item.review || "대기")}</button>
+        <button class="ghost-btn" data-cycle-review="${item.id}">복습: ${escapeHtml(reviewStatusText(item))}</button>
         <button class="danger-btn" data-delete-item="${item.id}">삭제</button>
       </div>
     </article>
@@ -420,13 +421,12 @@ function renderReview() {
   const list = reviewItems();
   byId("reviewCards").innerHTML = list.length ? list.map(item => `
     <article class="study-card" data-item-id="${item.id}">
-      <label class="review-check">
-        <input type="checkbox" data-review-select="${item.id}" ${reviewSelection.has(item.id) ? "checked" : ""} />
-        <span class="badge ${badgeClassByKind[item.kind] || "green"}">${kindLabels[item.kind]}</span>
-      </label>
+      <span class="badge ${badgeClassByKind[item.kind] || "green"}">${kindLabels[item.kind]}</span>
       <h3>${speakerButton(item.title)}<span>${highlight(item.title)}</span></h3>
       <p>${highlight([item.reading, item.meaning].filter(Boolean).join(" · "))}</p>
-      <p class="muted">복습 상태: ${highlight(item.review)}</p>
+      <div class="card-actions">
+        <button class="ghost-btn" data-cycle-review-queue="${item.id}">복습: ${escapeHtml(reviewQueueStatusText(item))}</button>
+      </div>
     </article>
   `).join("") : empty("오늘 복습할 항목이 없습니다.");
 }
@@ -557,10 +557,23 @@ function renderQuizSettings() {
   applyQuizQuestionFontSize();
   const range = byId("quizQuestionFontSizeRange");
   const value = byId("quizQuestionFontSizeValue");
+  const reviewCheckbox = byId("quizReviewOnCorrectCheckbox");
+  const reviewSelect = byId("quizCorrectReviewSelect");
   if (range) {
     range.value = String(quizQuestionFontSize);
   }
   if (value) {
     value.textContent = `${quizQuestionFontSize}px`;
+  }
+  if (reviewCheckbox) {
+    reviewCheckbox.checked = quizReviewOnCorrect;
+  }
+  if (reviewSelect) {
+    reviewSelect.innerHTML = [
+      `<option value="">변경 안 함</option>`,
+      ...scheduledReviewOptions.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)
+    ].join("");
+    reviewSelect.value = quizCorrectReview;
+    reviewSelect.disabled = !quizReviewOnCorrect;
   }
 }

@@ -112,6 +112,12 @@ function bindEvents() {
       return;
     }
 
+    const reviewQueueCycleTarget = event.target.closest("[data-cycle-review-queue]");
+    if (reviewQueueCycleTarget) {
+      cycleReviewQueueDraft(reviewQueueCycleTarget.dataset.cycleReviewQueue);
+      return;
+    }
+
     const cycleTarget = event.target.closest("[data-cycle-review]");
     if (cycleTarget) {
       await cycleReview(cycleTarget.dataset.cycleReview);
@@ -142,17 +148,6 @@ function bindEvents() {
     const deleteDailyTarget = event.target.closest("[data-delete-daily-entry]");
     if (deleteDailyTarget) {
       applyState(await dataApi.deleteDailyEntry(deleteDailyTarget.dataset.deleteDailyEntry, selectedDate));
-    }
-  });
-
-  document.body.addEventListener("change", event => {
-    const reviewTarget = event.target.closest("[data-review-select]");
-    if (reviewTarget) {
-      if (reviewTarget.checked) {
-        reviewSelection.add(reviewTarget.dataset.reviewSelect);
-      } else {
-        reviewSelection.delete(reviewTarget.dataset.reviewSelect);
-      }
     }
   });
 
@@ -234,6 +229,14 @@ function bindEvents() {
     byId("quizQuestionFontSizeValue").textContent = `${quizQuestionFontSize}px`;
   });
 
+  byId("quizReviewOnCorrectCheckbox").addEventListener("change", event => {
+    setQuizReviewOnCorrect(event.target.checked);
+  });
+
+  byId("quizCorrectReviewSelect").addEventListener("change", event => {
+    setQuizCorrectReview(event.target.value);
+  });
+
   byId("registerLearnedBtn").addEventListener("click", async () => {
     const targets = (state.dailyEntries || []).filter(entry =>
       ["word", "grammar", "expression"].includes(entry.kind)
@@ -286,16 +289,17 @@ function bindEvents() {
   byId("cancelDialogBtn").addEventListener("click", () => byId("itemDialog").close());
 
   byId("completeReviewBtn").addEventListener("click", async () => {
-    if (reviewSelection.size === 0) {
+    const targets = reviewCompletionTargets();
+    if (targets.length === 0) {
       return;
     }
-    const selectedIds = [...reviewSelection];
-    reviewSelection.clear();
-    applyState(await dataApi.completeReview(selectedIds, selectedDate));
+    const nextState = await dataApi.completeReview(targets, selectedDate);
+    clearReviewQueueDrafts();
+    applyState(nextState);
   });
 
   byId("resetDataBtn").addEventListener("click", async () => {
-    reviewSelection.clear();
+    clearReviewQueueDrafts();
     applyState(await dataApi.resetSampleData());
     setStorageStatus("SQLite 데이터를 초기화했습니다.");
   });
@@ -312,7 +316,7 @@ function bindEvents() {
 
   byId("importBackupBtn").addEventListener("click", async () => {
     try {
-      reviewSelection.clear();
+      clearReviewQueueDrafts();
       applyState(await dataApi.importBackup());
       setStorageStatus("full-backup.yaml에서 전체 데이터를 복원했습니다.");
     } catch (error) {
@@ -341,6 +345,8 @@ async function submitQuizChoice(kind, selectedAnswer) {
     itemId: quiz.question.item.id,
     selectedAnswer,
     answerType: quiz.question.answerType,
+    updateReviewOnCorrect: quizReviewOnCorrect,
+    correctReview: quizCorrectReview,
     studyDate: selectedDate
   });
   const updatedItem = response.state.items.find(item => item.id === quiz.question.item.id) || quiz.question.item;

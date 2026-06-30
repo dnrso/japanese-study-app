@@ -706,7 +706,7 @@ label {
   font-weight: 800;
 }
 
-.review-check {
+.settings-check {
   display: inline-flex;
   width: fit-content;
   grid-auto-flow: column;

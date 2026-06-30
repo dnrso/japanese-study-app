@@ -266,10 +266,6 @@
               </select>
               <select id="wordReviewFilter">
                 <option value="">전체 복습</option>
-                <option>오늘</option>
-                <option>내일</option>
-                <option>3일 후</option>
-                <option>대기</option>
               </select>
             </div>
             <table class="table">
@@ -453,7 +449,7 @@
                 </tr>
                 <tr>
                   <th>기본 복습 방식</th>
-                  <td>SRS 간격 반복 준비 구조</td>
+                  <td>상태별 예정일 계산 및 예정일 도래 시 오늘 복습 전환</td>
                 </tr>
                 <tr>
                   <th>CSV</th>
@@ -483,15 +479,30 @@
 
           <section class="panel section" id="settings-quiz">
             <div class="panel-header">
-              <h2 class="panel-title">퀴즈 표시</h2>
+              <h2 class="panel-title">퀴즈 표시 및 복습</h2>
             </div>
             <div class="settings-grid">
               <label>
                 문제 텍스트 크기 <span id="quizQuestionFontSizeValue">32px</span>
                 <input id="quizQuestionFontSizeRange" type="range" min="24" max="64" step="1" value="32" />
               </label>
+              <label class="settings-check">
+                <input id="quizReviewOnCorrectCheckbox" type="checkbox" checked />
+                <span>정답 시 복습 상태 변경</span>
+              </label>
+              <label>
+                정답 후 복습 상태
+                <select id="quizCorrectReviewSelect">
+                  <option value="">변경 안 함</option>
+                  <option selected>내일</option>
+                  <option>3일 후</option>
+                  <option>일주일</option>
+                  <option>2주일</option>
+                  <option>한달</option>
+                </select>
+              </label>
             </div>
-            <p class="muted">단어/한자 퀴즈의 문제 텍스트 크기에 적용됩니다.</p>
+            <p class="muted">단어/한자 퀴즈의 표시와 정답 후 복습 상태 변경 방식을 설정합니다.</p>
           </section>
 
           <section class="panel section" id="settings-tts">
@@ -534,7 +545,15 @@
         <label>레벨<input id="itemLevel" placeholder="N3, 회화, 뉴스" /></label>
         <label>품사<input id="itemPart" placeholder="명사, 동사, 표현" /></label>
         <label>문자<input id="itemScript" placeholder="한자, 히라가나, 혼합" /></label>
-        <label>복습<input id="itemReview" placeholder="오늘, 내일, 대기" /></label>
+        <label>복습<select id="itemReview">
+            <option>오늘</option>
+            <option>내일</option>
+            <option>3일 후</option>
+            <option>일주일</option>
+            <option>2주일</option>
+            <option>한달</option>
+            <option selected>대기</option>
+          </select></label>
         <label>한자/진행률<input id="itemDetail" placeholder="한자 정보 또는 자료 진행률 0-100" /></label>
         <label>연결 자료<input id="itemSource" placeholder="영상, 뉴스, 교재명" /></label>
       </div>

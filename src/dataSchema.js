@@ -60,6 +60,7 @@ const databaseSchema = `
       part TEXT NOT NULL DEFAULT '',
       script TEXT NOT NULL DEFAULT '',
       review TEXT NOT NULL DEFAULT '',
+      review_due_date TEXT NOT NULL DEFAULT '',
       kanji TEXT NOT NULL DEFAULT '',
       source TEXT NOT NULL DEFAULT '',
       note TEXT NOT NULL DEFAULT '',

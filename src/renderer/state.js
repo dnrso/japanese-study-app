@@ -2,6 +2,8 @@ const {
   tocByPage,
   kindLabels,
   badgeClassByKind,
+  reviewOptions,
+  scheduledReviewOptions,
   partOptions,
   scriptOptions,
   manualEntryPlaceholders
@@ -28,16 +30,41 @@ let wordQuiz = { question: null, answered: false, selectedAnswer: "", result: nu
 let kanjiQuizMode = "random";
 let kanjiQuiz = { question: null, answered: false, selectedAnswer: "", result: null };
 let quizQuestionFontSize = loadQuizQuestionFontSize();
-let reviewSelection = new Set();
+let quizReviewOnCorrect = loadQuizReviewOnCorrect();
+let quizCorrectReview = loadQuizCorrectReview();
+let reviewQueueDrafts = new Map();
 let storagePaths = null;
 let selectedDate = localTodayKey();
 let calendarMonth = selectedDate.slice(0, 7);
+const reviewQueueOptions = ["대기", ...scheduledReviewOptions];
+const reviewQueueIntervals = {
+  "내일": 1,
+  "3일 후": 3,
+  "일주일": 7,
+  "2주일": 14,
+  "한달": 30
+};
 
 function applyState(nextState) {
   state = nextState;
+  pruneReviewQueueDrafts();
   selectedDate = nextState.selectedDate || selectedDate;
   calendarMonth = selectedDate.slice(0, 7);
   renderAll();
+}
+
+function pruneReviewQueueDrafts() {
+  const queueIds = new Set(state.items
+    .filter(item => {
+      const review = item.review || "대기";
+      return item.kind !== "source" && ["오늘", "대기"].includes(review);
+    })
+    .map(item => item.id));
+  [...reviewQueueDrafts.keys()].forEach(id => {
+    if (!queueIds.has(id)) {
+      reviewQueueDrafts.delete(id);
+    }
+  });
 }
 
 function loadQuizQuestionFontSize() {
@@ -57,6 +84,85 @@ function setQuizQuestionFontSize(value) {
 
 function applyQuizQuestionFontSize() {
   document.documentElement.style.setProperty("--quiz-question-font-size", `${quizQuestionFontSize}px`);
+}
+
+function loadQuizReviewOnCorrect() {
+  const stored = localStorage.getItem("quizReviewOnCorrect");
+  return stored === null ? true : stored === "true";
+}
+
+function setQuizReviewOnCorrect(value) {
+  quizReviewOnCorrect = Boolean(value);
+  localStorage.setItem("quizReviewOnCorrect", String(quizReviewOnCorrect));
+  renderQuizSettings();
+}
+
+function loadQuizCorrectReview() {
+  const stored = localStorage.getItem("quizCorrectReview");
+  if (stored === "") {
+    return "";
+  }
+  return scheduledReviewOptions.includes(stored) ? stored : "내일";
+}
+
+function setQuizCorrectReview(value) {
+  quizCorrectReview = scheduledReviewOptions.includes(value) ? value : "";
+  localStorage.setItem("quizCorrectReview", quizCorrectReview);
+}
+
+function reviewStatusText(item) {
+  const review = item.review || "대기";
+  if (item.reviewDueDate && !["오늘", "대기"].includes(review)) {
+    return `${review} (${item.reviewDueDate})`;
+  }
+  return review;
+}
+
+function reviewQueueReview(item) {
+  return reviewQueueDrafts.get(item.id) || "대기";
+}
+
+function reviewQueueStatusText(item) {
+  const review = reviewQueueReview(item);
+  const dueDate = reviewQueueDueDate(review);
+  return dueDate ? `${review} (${dueDate})` : review;
+}
+
+function cycleReviewQueueDraft(id) {
+  const item = state.items.find(item => item.id === id);
+  if (!item) {
+    return;
+  }
+  const currentReview = reviewQueueReview(item);
+  const index = reviewQueueOptions.indexOf(currentReview);
+  const nextReview = reviewQueueOptions[(index + 1) % reviewQueueOptions.length];
+  if (nextReview === "대기") {
+    reviewQueueDrafts.delete(id);
+  } else {
+    reviewQueueDrafts.set(id, nextReview);
+  }
+  renderReview();
+}
+
+function reviewCompletionTargets() {
+  return reviewItems()
+    .map(item => ({ id: item.id, review: reviewQueueReview(item) }))
+    .filter(item => item.review !== "대기");
+}
+
+function clearReviewQueueDrafts() {
+  reviewQueueDrafts.clear();
+}
+
+function reviewQueueDueDate(review) {
+  const days = reviewQueueIntervals[review];
+  if (!days) {
+    return "";
+  }
+  const [year, month, day] = localTodayKey().split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return toDateKey(date);
 }
 
 function highlight(value) {
@@ -198,5 +304,8 @@ function shuffle(list) {
 }
 
 function reviewItems() {
-  return state.items.filter(item => ["오늘", "대기"].includes(item.review) && item.kind !== "source" && matchesSearch(item));
+  return state.items.filter(item => {
+    const review = item.review || "대기";
+    return ["오늘", "대기"].includes(review) && item.kind !== "source" && matchesSearch(item);
+  });
 }

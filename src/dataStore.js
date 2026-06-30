@@ -20,6 +20,16 @@ const csvFilesByKind = {
   sentence: "sentences.csv"
 };
 
+const reviewIntervals = {
+  "내일": 1,
+  "3일 후": 3,
+  "일주일": 7,
+  "2주일": 14,
+  "한달": 30
+};
+
+const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
+
 let db;
 
 function createId() {
@@ -27,7 +37,21 @@ function createId() {
 }
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return dateKey(new Date());
+}
+
+function dateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(dateValue, days) {
+  const [year, month, day] = normalizeDate(dateValue).split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return dateKey(date);
 }
 
 function ensureDirectories() {
@@ -48,7 +72,10 @@ function initDatabase() {
   ensureColumn("items", "quiz_correct_count", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("items", "quiz_wrong_count", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("items", "last_quizzed_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("items", "review_due_date", "TEXT NOT NULL DEFAULT ''");
   db.exec("CREATE INDEX IF NOT EXISTS idx_daily_entries_parent ON daily_entries(parent_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_items_review_due_date ON items(review_due_date);");
+  migrateReviewDueDates();
   migrateParentLinks();
   migrateLegacyStudyLog();
 }
@@ -88,13 +115,38 @@ function migrateParentLinks() {
   `).run();
 }
 
+function migrateReviewDueDates() {
+  const rows = db.prepare(`
+    SELECT id, review
+    FROM items
+    WHERE review_due_date = ''
+      AND review IN ('내일', '3일 후', '일주일', '2주일', '한달')
+  `).all();
+  const update = db.prepare("UPDATE items SET review_due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+  const baseDate = todayKey();
+  rows.forEach(row => update.run(reviewDueDateFor(row.review, baseDate), row.id));
+}
+
+function promoteDueReviews() {
+  db.prepare(`
+    UPDATE items SET
+      review = '오늘',
+      review_due_date = '',
+      updated_at = CURRENT_TIMESTAMP
+    WHERE review_due_date <> ''
+      AND review_due_date <= ?
+  `).run(todayKey());
+}
+
 function getState(studyDate = todayKey()) {
+  promoteDueReviews();
   const selectedDate = normalizeDate(studyDate);
   const studyLog = getStudyLog(selectedDate);
   const tasks = db.prepare("SELECT id, title, note, tag, done FROM tasks ORDER BY datetime(created_at) DESC, rowid DESC").all()
     .map(task => ({ ...task, done: Boolean(task.done) }));
   const items = db.prepare(`
-    SELECT id, kind, title, reading, meaning, level, part, script, review, kanji, source, note,
+    SELECT id, kind, title, reading, meaning, level, part, script, review,
+      review_due_date AS reviewDueDate, kanji, source, note,
       quiz_correct_count AS quizCorrectCount,
       quiz_wrong_count AS quizWrongCount,
       last_quizzed_at AS lastQuizzedAt
@@ -385,8 +437,8 @@ function registerDailyEntry(id) {
 
   const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? LIMIT 1");
   const insert = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
   `);
 
   db.transaction(() => {
@@ -459,6 +511,8 @@ function upsertItem(item) {
   const existingItem = item.id
     ? db.prepare(`
       SELECT kind, title,
+        review,
+        review_due_date AS reviewDueDate,
         quiz_correct_count AS quizCorrectCount,
         quiz_wrong_count AS quizWrongCount,
         last_quizzed_at AS lastQuizzedAt
@@ -471,9 +525,14 @@ function upsertItem(item) {
     payload.quizWrongCount = existingItem.quizWrongCount;
     payload.lastQuizzedAt = existingItem.lastQuizzedAt;
   }
+  if (existingItem && item.reviewDueDate === undefined && item.review_due_date === undefined) {
+    payload.reviewDueDate = existingItem.review === payload.review
+      ? existingItem.reviewDueDate
+      : reviewDueDateFor(payload.review);
+  }
   const insert = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
     ON CONFLICT(id) DO UPDATE SET
       kind = excluded.kind,
       title = excluded.title,
@@ -483,6 +542,7 @@ function upsertItem(item) {
       part = excluded.part,
       script = excluded.script,
       review = excluded.review,
+      review_due_date = excluded.review_due_date,
       kanji = excluded.kanji,
        source = excluded.source,
        note = excluded.note,
@@ -501,7 +561,7 @@ function upsertItem(item) {
     const generatedItems = payload.kind === "word" ? withKanjiItems([payload]).slice(1) : [];
     generatedItems.forEach(kanjiItem => {
       if (!exists.get(kanjiItem.kind, kanjiItem.title)) {
-        insert.run(normalizeItem({ ...kanjiItem, id: createId(), review: payload.review || "대기" }));
+        insert.run(normalizeItem({ ...kanjiItem, id: createId(), review: payload.review || "대기", reviewDueDate: payload.reviewDueDate }));
       }
     });
   })();
@@ -542,14 +602,62 @@ function deleteItem(id, studyDate) {
 }
 
 function updateItemReview(id, review, studyDate) {
-  db.prepare("UPDATE items SET review = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(review, id);
+  const nextReview = normalizeReview(review);
+  db.prepare(`
+    UPDATE items SET
+      review = ?,
+      review_due_date = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(nextReview, reviewDueDateFor(nextReview), id);
   return getState(studyDate);
 }
 
 function completeReview(ids, studyDate) {
-  const update = db.prepare("UPDATE items SET review = '3일 후', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-  db.transaction(itemIds => itemIds.forEach(id => update.run(id)))(ids);
+  const targets = normalizeReviewCompletionTargets(ids);
+  if (targets.length === 0) {
+    return getState(studyDate);
+  }
+  const update = db.prepare(`
+    UPDATE items SET
+      review = ?,
+      review_due_date = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND kind <> 'source'
+  `);
+  db.transaction(items => {
+    items.forEach(item => update.run(item.review, reviewDueDateFor(item.review), item.id));
+  })(targets);
   return getState(studyDate);
+}
+
+function normalizeReviewCompletionTargets(targets) {
+  if (!Array.isArray(targets)) {
+    return [];
+  }
+  return targets
+    .map(target => {
+      if (target && typeof target === "object") {
+        return {
+          id: text(target.id),
+          review: normalizeCompletionReview(target.review)
+        };
+      }
+      return {
+        id: text(target),
+        review: "3일 후"
+      };
+    })
+    .filter(target => target.id && target.review);
+}
+
+function normalizeCompletionReview(value) {
+  const review = normalizeReview(value);
+  if (review === "오늘") {
+    return "3일 후";
+  }
+  return reviewIntervals[review] ? review : "";
 }
 
 function submitWordQuizAnswer(payload = {}) {
@@ -563,17 +671,36 @@ function submitWordQuizAnswer(payload = {}) {
   const correctAnswer = answerType === "title" ? item.title : item.meaning;
   const correct = text(payload.selectedAnswer ?? payload.selectedMeaning) === text(correctAnswer);
   const column = correct ? "quiz_correct_count" : "quiz_wrong_count";
-  db.prepare(`
-    UPDATE items SET
-      ${column} = ${column} + 1,
-      last_quizzed_at = CURRENT_TIMESTAMP,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(item.id);
+  let reviewUpdated = false;
+  let nextReview = "";
+  let nextReviewDueDate = "";
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE items SET
+        ${column} = ${column} + 1,
+        last_quizzed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(item.id);
+
+    nextReview = normalizeReview(payload.correctReview || payload.reviewAfterCorrect);
+    if (correct && payload.updateReviewOnCorrect && nextReview) {
+      nextReviewDueDate = reviewDueDateFor(nextReview);
+      db.prepare(`
+        UPDATE items SET
+          review = ?,
+          review_due_date = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(nextReview, nextReviewDueDate, item.id);
+      reviewUpdated = true;
+    }
+  })();
 
   return {
     state: getState(payload.studyDate),
-    result: { correct, correctAnswer, correctMeaning: item.meaning }
+    result: { correct, correctAnswer, correctMeaning: item.meaning, reviewUpdated, nextReview, nextReviewDueDate }
   };
 }
 
@@ -636,16 +763,22 @@ function normalizeTask(task) {
 }
 
 function normalizeItem(item) {
+  const kind = text(item.kind || "word");
+  const review = kind === "source" ? "" : normalizeReview(item.review || "대기");
+  const explicitReviewDueDate = item.reviewDueDate ?? item.review_due_date;
   return {
     id: text(item.id || createId()),
-    kind: text(item.kind || "word"),
+    kind,
     title: text(item.title),
     reading: text(item.reading),
     meaning: text(item.meaning),
     level: text(item.level),
     part: text(item.part),
     script: text(item.script),
-    review: text(item.review),
+    review,
+    reviewDueDate: explicitReviewDueDate === undefined
+      ? reviewDueDateFor(review)
+      : normalizeOptionalDate(explicitReviewDueDate),
     kanji: text(item.kanji),
     source: text(item.source),
     note: text(item.note),
@@ -661,6 +794,20 @@ function normalizeDailyKind(kind) {
 
 function normalizeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : todayKey();
+}
+
+function normalizeOptionalDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : "";
+}
+
+function normalizeReview(value) {
+  const review = text(value);
+  return reviewStates.includes(review) ? review : review;
+}
+
+function reviewDueDateFor(review, baseDate = todayKey()) {
+  const days = reviewIntervals[review];
+  return days ? addDays(baseDate, days) : "";
 }
 
 function safeJson(value) {
