@@ -94,6 +94,7 @@ Node.js 내장 모듈
 
 - `src/ttsHandlers.js`
   VOICEVOX speaker 목록 조회와 음성 합성 IPC 핸들러를 담당합니다.
+  브라우저 기본 TTS는 렌더러의 Web Speech API를 직접 사용합니다.
 
 - `src/preload.js`
   렌더러에서 사용할 안전한 API를 `window.studyData`, `window.ttsApi`, `window.appInfo`로 노출합니다.
@@ -153,7 +154,7 @@ Node.js 내장 모듈
   DOM 조회, HTML escape, 빈 상태 마크업, 날짜 키 생성 같은 공통 유틸리티를 제공합니다.
 
 - `src/renderer/tts.js`
-  VOICEVOX speaker 목록 로드, TTS 설정 저장, 음성 합성 요청, 오디오 재생, 오류 표시를 담당합니다.
+  브라우저 기본 TTS와 VOICEVOX 엔진 선택, 음성 목록 로드, TTS 설정 저장, 음성 재생, 오류 표시를 담당합니다.
 
 
 스타일
@@ -231,7 +232,8 @@ Windows unpacked 빌드에서는 앱 실행 파일 폴더와 분리된 `dist/app
 - CSV/YAML 가져오기
 - 전체 YAML 백업 복원
 - 저장 데이터 초기화
-- VOICEVOX 기반 일본어 음성 재생
+- 브라우저 기본 TTS 기반 일본어 음성 재생
+- 선택형 VOICEVOX 기반 일본어 음성 재생
 - Windows unpacked 빌드
 - schema 변경 시 기존 앱 데이터 백업
 

@@ -508,10 +508,23 @@
           <section class="panel section" id="settings-tts">
             <div class="panel-header">
               <h2 class="panel-title">음성 재생</h2>
-              <button class="ghost-btn" id="ttsRefreshBtn" type="button">목록 새로고침</button>
+              <button class="ghost-btn" id="ttsRefreshBtn" type="button">음성 목록 새로고침</button>
             </div>
             <div class="settings-grid">
               <label>
+                TTS 엔진
+                <select id="ttsEngineSelect">
+                  <option value="browser" selected>브라우저 기본 TTS</option>
+                  <option value="voicevox">VOICEVOX</option>
+                </select>
+              </label>
+              <label id="ttsBrowserVoiceField">
+                브라우저 음성
+                <select id="ttsBrowserVoiceSelect">
+                  <option value="">자동 선택 (일본어)</option>
+                </select>
+              </label>
+              <label id="ttsVoicevoxSpeakerField" hidden>
                 VOICEVOX speaker
                 <select id="ttsVoicevoxSpeakerSelect">
                   <option value="">VOICEVOX 목록 확인 중</option>
@@ -522,7 +535,7 @@
                 <input id="ttsRateRange" type="range" min="0.5" max="2" step="0.1" value="1" />
               </label>
             </div>
-            <p class="muted tts-status" id="ttsStatus">스피커 버튼을 누르면 VOICEVOX 엔진 API로 일본어를 재생합니다.</p>
+            <p class="muted tts-status" id="ttsStatus">스피커 버튼을 누르면 브라우저 기본 TTS로 일본어를 재생합니다.</p>
           </section>
         </section>
       </main>
