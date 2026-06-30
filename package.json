@@ -5,6 +5,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "build:web": "node scripts/build-web.js",
     "build": "node scripts/build-windows.js"
   },
   "build": {

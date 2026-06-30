@@ -20,6 +20,12 @@ Windows용 unpacked 빌드는 아래 명령으로 생성합니다.
 npm run build
 ```
 
+GitHub Pages용 정적 웹 산출물 초안은 아래 명령으로 `docs/`에 생성합니다.
+
+```bash
+npm run build:web
+```
+
 현재 프로젝트는 `npm install`을 새로 실행하지 않는 것을 원칙으로 합니다.
 의존성을 의도적으로 바꾸는 경우에만 `package-lock.json`을 함께 변경합니다.
 
@@ -69,6 +75,10 @@ Node.js 내장 모듈
 - `README.md`
   프로젝트 구조, 실행 방법, 기능, 패키지 정보를 설명합니다.
 
+- `docs/`
+  GitHub Pages 배포 루트 초안입니다.
+  `npm run build:web` 실행 시 렌더러 공통 UI와 웹용 저장소 스캐폴딩을 복사해 생성합니다.
+
 - `app-data/`
   개발 실행 시 생성되는 SQLite, export, backup 데이터 폴더입니다. 운영 데이터로 취급합니다.
 
@@ -89,6 +99,10 @@ Node.js 내장 모듈
   Windows unpacked 빌드를 생성합니다.
   빌드 전 기존 앱 데이터 잠금 상태를 확인하고, schema 변경 시 `dist/app-data-backup`에 백업을 남깁니다.
   packaged 앱의 영구 데이터는 실행 파일 폴더의 `app-data`와 `user-data`를 사용합니다.
+
+- `scripts/build-web.js`
+  GitHub Pages용 `docs/` 정적 산출물을 생성합니다.
+  Electron preload 없이 실행되도록 `browserDataStore.js`를 `api.js`보다 먼저 로드하는 웹용 HTML을 만듭니다.
 
 
 메인 프로세스
@@ -137,7 +151,12 @@ Node.js 내장 모듈
   저장 경로와 초기 상태를 불러온 뒤 이벤트를 바인딩합니다.
 
 - `src/renderer/api.js`
-  `window.studyData` API를 렌더러 내부에서 쓰기 쉬운 `dataApi` 객체로 감쌉니다.
+  Electron의 `window.studyData` 또는 웹의 `window.browserDataStore`를 렌더러 내부에서 쓰기 쉬운 `dataApi` 객체로 감쌉니다.
+  렌더러 UI가 저장소 구현을 직접 알지 않도록 플랫폼 어댑터 경계를 담당합니다.
+
+- `src/renderer/browserDataStore.js`
+  웹 버전용 `localStorage` 기반 데이터 저장소 스캐폴딩입니다.
+  Electron IPC/SQLite 없이도 공통 렌더러 UI가 초기 실행, 항목 CRUD, 복습, 퀴즈 카운트 저장을 수행할 수 있게 합니다.
 
 - `src/renderer/state.js`
   렌더러 전역 상태, 선택 날짜, 검색어, 정렬 상태, 퀴즈 상태, 복습 큐 임시 상태, 공통 계산 함수를 관리합니다.
@@ -248,6 +267,31 @@ Windows unpacked 빌드에서는 실행 파일이 있는 폴더를 기준으로 
 - schema 변경 시 기존 앱 데이터 백업
 
 
+웹 버전 계획
+------------
+
+현재 웹 버전은 Electron 앱을 대체하는 완성본이 아니라 GitHub Pages 배포를 위한 구조 초안입니다.
+
+- 공통 UI
+  `src/renderer/index.html`, 스타일, 렌더러 스크립트는 Electron과 웹에서 함께 쓰는 방향으로 유지합니다.
+  플랫폼 차이는 `src/renderer/api.js`의 데이터 어댑터 선택으로 모읍니다.
+
+- Electron 전용 영역
+  `src/main.js`, `src/preload.js`, `src/dataStore.js`, `src/dataHandlers.js`, `src/ttsHandlers.js`는 Electron/Node/SQLite 전용으로 둡니다.
+  웹 빌드에서는 이 파일들을 직접 로드하지 않습니다.
+
+- 웹 데이터 저장소
+  `src/renderer/browserDataStore.js`는 `localStorage` 기반 임시 저장소입니다.
+  현재 목표는 UI 흐름 검증과 GitHub Pages 실행 가능성 확인이며, SQLite 데이터와의 정식 동기화는 이후 단계에서 결정합니다.
+
+- 배포 구조
+  `npm run build:web`은 `docs/`를 재생성하고 GitHub Pages Source를 `main` 브랜치의 `/docs`로 설정할 수 있는 형태를 만듭니다.
+  웹 산출물은 정적 파일만 사용하며 추가 npm 의존성을 요구하지 않습니다.
+
+- 남은 결정 사항
+  Electron SQLite 데이터와 웹 `localStorage` 데이터의 변환 규칙, 백업/복원 UX, GitHub Pages 공개 범위, 향후 서버 저장소 사용 여부를 확정해야 합니다.
+
+
 예정 또는 확장 후보
 -------------------
 
@@ -256,3 +300,4 @@ Windows unpacked 빌드에서는 실행 파일이 있는 폴더를 기준으로 
 - 데이터 편집 UX 개선
 - 중복 항목 처리 UI 개선
 - 테스트/검증 스크립트 추가
+- 웹 버전 데이터 가져오기/내보내기 UX 확정
