@@ -72,6 +72,10 @@ Node.js 내장 모듈
 - `app-data/`
   개발 실행 시 생성되는 SQLite, export, backup 데이터 폴더입니다. 운영 데이터로 취급합니다.
 
+- `user-data/`
+  개발 실행 시 생성되는 Electron userData/sessionData 폴더입니다.
+  localStorage, Preferences, cache 같은 Chromium 프로필 데이터를 저장합니다.
+
 - `dist/`
   빌드 산출물 폴더입니다.
 
@@ -84,13 +88,13 @@ Node.js 내장 모듈
 - `scripts/build-windows.js`
   Windows unpacked 빌드를 생성합니다.
   빌드 전 기존 앱 데이터 잠금 상태를 확인하고, schema 변경 시 `dist/app-data-backup`에 백업을 남깁니다.
-  packaged 앱의 영구 데이터는 `dist/app-data`에 보존되도록 구성합니다.
+  packaged 앱의 영구 데이터는 실행 파일 폴더의 `app-data`와 `user-data`를 사용합니다.
 
 
 메인 프로세스
 
 - `src/main.js`
-  Electron 앱 생명주기, BrowserWindow 생성, 데이터 저장 경로 설정, IPC 핸들러 등록을 담당합니다.
+  Electron 앱 생명주기, BrowserWindow 생성, 포터블 저장 경로 설정, IPC 핸들러 등록을 담당합니다.
 
 - `src/ttsHandlers.js`
   VOICEVOX speaker 목록 조회와 음성 합성 IPC 핸들러를 담당합니다.
@@ -178,7 +182,8 @@ Node.js 내장 모듈
 데이터 저장 위치
 ----------------
 
-개발 실행 시 데이터는 프로젝트 루트의 `app-data` 폴더에 저장됩니다.
+앱 데이터와 Electron 프로필 데이터는 실행 기준 폴더 안에 저장됩니다.
+개발 실행 시에는 프로젝트 루트를 기준으로 사용합니다.
 
 - `app-data/nihongo.sqlite`
   메인 SQLite 데이터베이스입니다.
@@ -189,7 +194,11 @@ Node.js 내장 모듈
 - `app-data/backups/full-backup.yaml`
   전체 백업 YAML 파일이 저장됩니다.
 
-Windows unpacked 빌드에서는 앱 실행 파일 폴더와 분리된 `dist/app-data`를 영구 데이터 위치로 사용합니다.
+- `user-data/`
+  Electron localStorage, Preferences, cache, session data가 저장됩니다.
+
+Windows unpacked 빌드에서는 실행 파일이 있는 폴더를 기준으로 `app-data`와 `user-data`를 사용합니다.
+이 폴더들을 앱과 함께 보관하면 무설치 앱처럼 사용할 수 있고, 제거할 때는 배포 폴더를 삭제하면 됩니다.
 
 
 현재 기능
@@ -234,6 +243,7 @@ Windows unpacked 빌드에서는 앱 실행 파일 폴더와 분리된 `dist/app
 - 저장 데이터 초기화
 - 브라우저 기본 TTS 기반 일본어 음성 재생
 - 선택형 VOICEVOX 기반 일본어 음성 재생
+- TTS 엔진 및 일본어 음성 감지 상태 표시
 - Windows unpacked 빌드
 - schema 변경 시 기존 앱 데이터 백업
 

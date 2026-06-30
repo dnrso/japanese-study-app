@@ -53,11 +53,7 @@ function ttsElement(id) {
 function initJapaneseTts() {
   bindTtsControls();
   applyTtsSettingsToControls();
-  if (ttsSettings.engine === TTS_ENGINE_BROWSER) {
-    loadBrowserVoices().catch(showTtsError);
-  } else {
-    setTtsStatus("VOICEVOX 엔진을 선택했습니다. 목록 새로고침 또는 스피커 버튼으로 연결을 확인하세요.");
-  }
+  loadActiveTtsVoices().catch(error => showTtsError(error, { toast: false }));
 }
 
 function bindTtsControls() {
@@ -65,7 +61,7 @@ function bindTtsControls() {
     ttsSettings.engine = normalizeTtsEngine(event.target.value);
     saveTtsSettings();
     applyTtsSettingsToControls();
-    loadActiveTtsVoices(true).catch(showTtsError);
+    loadActiveTtsVoices(true).catch(error => showTtsError(error, { toast: false }));
   });
 
   ttsElement("ttsBrowserVoiceSelect")?.addEventListener("change", event => {
@@ -85,7 +81,7 @@ function bindTtsControls() {
   });
 
   ttsElement("ttsRefreshBtn")?.addEventListener("click", () => {
-    loadActiveTtsVoices(true).catch(showTtsError);
+    loadActiveTtsVoices(true).catch(error => showTtsError(error, { toast: false }));
   });
 }
 
@@ -132,7 +128,7 @@ function loadBrowserVoices(force = false) {
   if (!hasBrowserTts()) {
     browserVoices = [];
     renderBrowserVoices();
-    setTtsStatus("이 브라우저는 기본 TTS를 지원하지 않습니다.");
+    setTtsStatus("오류: 이 브라우저는 기본 TTS를 지원하지 않습니다.", "error");
     return Promise.resolve([]);
   }
 
@@ -140,11 +136,12 @@ function loadBrowserVoices(force = false) {
   if (immediateVoices.length) {
     browserVoices = immediateVoices;
     renderBrowserVoices();
-    setTtsStatus("브라우저 기본 TTS를 사용할 수 있습니다.");
+    updateBrowserTtsStatus();
     return Promise.resolve(browserVoices);
   }
   if (browserVoices.length && !force) {
     renderBrowserVoices();
+    updateBrowserTtsStatus();
     return Promise.resolve(browserVoices);
   }
   if (browserVoicesLoading && !force) {
@@ -166,9 +163,7 @@ function loadBrowserVoices(force = false) {
       window.speechSynthesis.removeEventListener("voiceschanged", finish);
       browserVoices = window.speechSynthesis.getVoices();
       renderBrowserVoices();
-      setTtsStatus(browserVoices.length
-        ? "브라우저 기본 TTS를 사용할 수 있습니다."
-        : "브라우저 음성 목록이 비어 있습니다. 자동 일본어 설정으로 재생을 시도합니다.");
+      updateBrowserTtsStatus();
       resolve(browserVoices);
     };
     const timerId = window.setTimeout(finish, 1200);
@@ -193,15 +188,34 @@ function renderBrowserVoices() {
     return;
   }
 
-  select.disabled = false;
-  select.appendChild(new Option("자동 선택 (일본어)", ""));
   const japaneseVoices = browserVoices.filter(isJapaneseBrowserVoice);
-  const options = japaneseVoices.length ? japaneseVoices : browserVoices;
-  options.forEach(voice => select.appendChild(new Option(browserVoiceLabel(voice), voice.voiceURI)));
+  select.disabled = japaneseVoices.length === 0;
+  select.appendChild(new Option(japaneseVoices.length ? "자동 선택 (일본어)" : "일본어 음성 없음", ""));
+  japaneseVoices.forEach(voice => select.appendChild(new Option(browserVoiceLabel(voice), voice.voiceURI)));
 
-  select.value = options.some(voice => voice.voiceURI === ttsSettings.browserVoiceURI)
+  select.value = japaneseVoices.some(voice => voice.voiceURI === ttsSettings.browserVoiceURI)
     ? ttsSettings.browserVoiceURI
     : "";
+}
+
+function updateBrowserTtsStatus() {
+  if (!hasBrowserTts()) {
+    setTtsStatus("오류: 이 브라우저는 기본 TTS를 지원하지 않습니다.", "error");
+    return;
+  }
+
+  const japaneseVoices = browserVoices.filter(isJapaneseBrowserVoice);
+  if (!browserVoices.length) {
+    setTtsStatus("오류: 브라우저 TTS 음성 목록을 찾을 수 없습니다. Windows 음성 기능을 확인한 뒤 새로고침하세요.", "error");
+    return;
+  }
+  if (!japaneseVoices.length) {
+    setTtsStatus("오류: 일본어 TTS 음성을 찾을 수 없습니다. Windows 일본어 언어/음성 기능을 설치한 뒤 새로고침하세요.", "error");
+    return;
+  }
+
+  const voice = selectedBrowserVoice();
+  setTtsStatus(`브라우저 기본 TTS 감지됨: ${browserVoiceLabel(voice)}`, "ok");
 }
 
 function isJapaneseBrowserVoice(voice) {
@@ -219,7 +233,8 @@ async function loadVoicevoxSpeakers(force = false) {
   }
   if (voicevoxSpeakers.length && !force) {
     renderVoicevoxSpeakers();
-    return;
+    updateVoicevoxTtsStatus();
+    return voicevoxSpeakers;
   }
   if (voicevoxLoading && !force) {
     return voicevoxLoading;
@@ -231,9 +246,10 @@ async function loadVoicevoxSpeakers(force = false) {
 
   voicevoxLoading = requestVoicevoxSpeakers()
     .then(speakers => {
-      voicevoxSpeakers = speakers;
+      voicevoxSpeakers = Array.isArray(speakers) ? speakers : [];
       renderVoicevoxSpeakers();
-      setTtsStatus("VOICEVOX speaker 목록을 불러왔습니다.");
+      updateVoicevoxTtsStatus();
+      return voicevoxSpeakers;
     })
     .finally(() => {
       voicevoxLoading = null;
@@ -249,20 +265,15 @@ function renderVoicevoxSpeakers() {
   }
 
   select.innerHTML = "";
-  const options = voicevoxSpeakers.flatMap(speaker =>
-    (speaker.styles || [])
-      .filter(style => !style.type || style.type === "talk")
-      .map(style => ({
-        id: String(style.id),
-        label: `${speaker.name} / ${style.name} (#${style.id})`
-      }))
-  );
+  const options = voicevoxSpeakerOptions();
 
   if (!options.length) {
     select.appendChild(new Option("사용 가능한 speaker 없음", ""));
+    select.disabled = true;
     return;
   }
 
+  select.disabled = false;
   options.forEach(option => select.appendChild(new Option(option.label, option.id)));
 
   if (ttsSettings.voicevoxSpeakerId && options.some(option => option.id === ttsSettings.voicevoxSpeakerId)) {
@@ -272,6 +283,27 @@ function renderVoicevoxSpeakers() {
     ttsSettings.voicevoxSpeakerId = select.value;
     saveTtsSettings();
   }
+}
+
+function updateVoicevoxTtsStatus() {
+  const options = voicevoxSpeakerOptions();
+  if (!options.length) {
+    setTtsStatus("오류: VOICEVOX 엔진 또는 사용 가능한 speaker를 찾을 수 없습니다. http://localhost:50021 실행 상태를 확인하세요.", "error");
+    return;
+  }
+  const selected = options.find(option => option.id === ttsSettings.voicevoxSpeakerId) || options[0];
+  setTtsStatus(`VOICEVOX 엔진 감지됨: ${selected.label}`, "ok");
+}
+
+function voicevoxSpeakerOptions() {
+  return voicevoxSpeakers.flatMap(speaker =>
+    (speaker.styles || [])
+      .filter(style => !style.type || style.type === "talk")
+      .map(style => ({
+        id: String(style.id),
+        label: `${speaker.name} / ${style.name} (#${style.id})`
+      }))
+  );
 }
 
 async function speakJapanese(text) {
@@ -301,12 +333,11 @@ async function speakWithBrowserTts(text) {
   await loadBrowserVoices();
   const utterance = new SpeechSynthesisUtterance(text);
   const voice = selectedBrowserVoice();
-  if (voice) {
-    utterance.voice = voice;
-    utterance.lang = voice.lang || "ja-JP";
-  } else {
-    utterance.lang = "ja-JP";
+  if (!voice) {
+    throw new Error("일본어 TTS 음성을 찾을 수 없습니다. Windows 일본어 언어/음성 기능을 설치한 뒤 새로고침하세요.");
   }
+  utterance.voice = voice;
+  utterance.lang = voice.lang || "ja-JP";
   utterance.rate = ttsSettings.rate;
 
   return new Promise((resolve, reject) => {
@@ -328,7 +359,7 @@ async function speakWithBrowserTts(text) {
 function selectedBrowserVoice() {
   if (ttsSettings.browserVoiceURI) {
     const selected = browserVoices.find(voice => voice.voiceURI === ttsSettings.browserVoiceURI);
-    if (selected) {
+    if (selected && isJapaneseBrowserVoice(selected)) {
       return selected;
     }
   }
@@ -434,20 +465,24 @@ function releaseActiveAudio() {
   }
 }
 
-function setTtsStatus(message) {
+function setTtsStatus(message, tone = "info") {
   const status = ttsElement("ttsStatus");
   if (status) {
     status.textContent = message;
+    status.classList.toggle("status-error", tone === "error");
+    status.classList.toggle("status-ok", tone === "ok");
   }
 }
 
-function showTtsError(error) {
+function showTtsError(error, options = {}) {
   const message = error?.message || String(error);
   const friendly = message.includes("Failed to fetch") || message.includes("fetch failed") || message.includes("ECONNREFUSED")
     ? "VOICEVOX 엔진 연결에 실패했습니다. http://localhost:50021 실행 상태를 확인하세요."
     : message;
-  setTtsStatus(`오류: ${friendly}`);
-  showTtsToast(`음성 재생 오류: ${friendly}`);
+  setTtsStatus(`오류: ${friendly}`, "error");
+  if (options.toast !== false) {
+    showTtsToast(`음성 재생 오류: ${friendly}`);
+  }
 }
 
 function showTtsToast(message) {

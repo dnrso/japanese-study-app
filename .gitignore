@@ -1,5 +1,7 @@
 node_modules/
 app-data/
+user-data/
+.portable-data-preserve/
 dist/
 out/
 *.log
