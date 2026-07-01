@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NihonGo Study</title>
+  <meta name="description" content="NihonGo Study web entry for GitHub Pages." />
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ee;
+      --surface: #fffdfa;
+      --surface-soft: #edf5f0;
+      --line: #ded8cd;
+      --text: #20211f;
+      --muted: #746d63;
+      --accent: #3f8162;
+      --accent-deep: #2f684d;
+      --red: #df6f68;
+      --blue: #5f8fc7;
+      --yellow: #d59a32;
+      font-family: "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0;
+    }
+
+    .hero {
+      display: grid;
+      gap: 20px;
+      padding: 28px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .badge {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: var(--surface-soft);
+      color: var(--accent-deep);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 64px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .hero p {
+      max-width: 680px;
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .card {
+      min-height: 148px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 17px;
+    }
+
+    .card span {
+      display: inline-flex;
+      align-items: center;
+      margin-bottom: 14px;
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .green {
+      background: var(--accent);
+    }
+
+    .red {
+      background: var(--red);
+    }
+
+    .blue {
+      background: var(--blue);
+    }
+
+    .yellow {
+      background: var(--yellow);
+    }
+
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 720px) {
+      main {
+        width: min(100% - 24px, 960px);
+        padding: 24px 0;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <section class="hero">
+      <span class="badge">GitHub Pages</span>
+      <h1>NihonGo Study</h1>
+      <p>
+        일본어 단어, 문장, 복습, 퀴즈 로직을 공통 패키지로 분리하는 중입니다.
+        이 페이지는 `apps/web` 정적 배포 경로가 정상적으로 연결되었는지 확인하는 웹 entry입니다.
+      </p>
+    </section>
+
+    <section class="grid" aria-label="분리된 패키지">
+      <article class="card">
+        <span class="green">core</span>
+        <strong>학습 로직</strong>
+        <p>검색, 필터링, 복습 큐, 퀴즈 문제 생성 같은 렌더링 전 공통 계산을 담당합니다.</p>
+      </article>
+      <article class="card">
+        <span class="blue">ui</span>
+        <strong>공통 화면</strong>
+        <p>페이지 렌더러, 컴포넌트, 스타일, DOM patch 적용 유틸리티를 제공합니다.</p>
+      </article>
+      <article class="card">
+        <span class="red">storage</span>
+        <strong>저장소 경계</strong>
+        <p>desktop SQLite 구현은 분리됐고, 웹 IndexedDB 저장소는 다음 단계에서 추가할 수 있습니다.</p>
+      </article>
+      <article class="card">
+        <span class="yellow">tts</span>
+        <strong>음성 재생</strong>
+        <p>브라우저 TTS와 VOICEVOX 공통 로직을 앱별 shell에서 재사용할 수 있도록 분리했습니다.</p>
+      </article>
+      <article class="card">
+        <span class="green">desktop</span>
+        <strong>Electron 앱</strong>
+        <p>현재 동작하는 데스크톱 앱은 `apps/desktop`에 유지하고 adapter만 얇게 남겼습니다.</p>
+      </article>
+      <article class="card">
+        <span class="blue">web</span>
+        <strong>웹 앱 준비</strong>
+        <p>GitHub Pages는 이 `apps/web` 폴더를 그대로 배포합니다.</p>
+      </article>
+    </section>
+
+    <footer>
+      Static content is deployed from <code>apps/web</code>.
+    </footer>
+  </main>
+</body>
+
+</html>
