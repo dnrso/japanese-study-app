@@ -1,0 +1,8 @@
+{
+  "name": "@nihongo-study/storage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Storage adapter contract for NihonGo Study",
+  "main": "src/index.js",
+  "type": "commonjs"
+}

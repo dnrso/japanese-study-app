@@ -58,7 +58,7 @@ Node.js 내장 모듈
 루트
 
 - `package.json`
-  앱 메타데이터, 실행/빌드 스크립트, 의존성, Electron Builder 설정을 관리합니다.
+  npm workspaces, 루트 실행/빌드 스크립트, 공통 의존성, Electron Builder 설정을 관리합니다.
 
 - `package-lock.json`
   npm 의존성 버전을 고정합니다.
@@ -83,99 +83,156 @@ Node.js 내장 모듈
   설치된 npm 패키지 폴더입니다.
 
 
-빌드 스크립트
+앱
 
-- `scripts/build-windows.js`
+- `apps/desktop/package.json`
+  Electron 데스크톱 앱의 workspace 패키지 메타데이터와 앱 기준 실행/빌드 스크립트를 관리합니다.
+
+- `apps/desktop/src/`
+  Electron 메인 프로세스, preload, 데이터 계층, 렌더러 코드를 포함합니다.
+
+- `apps/desktop/scripts/build-windows.js`
   Windows unpacked 빌드를 생성합니다.
   빌드 전 기존 앱 데이터 잠금 상태를 확인하고, schema 변경 시 `dist/app-data-backup`에 백업을 남깁니다.
   packaged 앱의 영구 데이터는 실행 파일 폴더의 `app-data`와 `user-data`를 사용합니다.
 
+패키지
+
+- `packages/core/package.json`
+  DOM이나 Electron에 의존하지 않는 공통 로직 패키지를 ES module로 정의합니다.
+
+- `packages/core/src/index.js`
+  페이지 렌더링 전에 필요한 데이터 가공, 검색/필터링, 단어 정렬, 복습 큐 계산, 퀴즈 문제 생성, 통계 계산을 담당합니다.
+
+- `packages/ui/package.json`
+  DOM에 직접 접근하지 않는 UI 렌더링 패키지를 ES module로 정의합니다.
+
+- `packages/ui/render.js`
+  페이지 렌더러, 공통 config, DOM patch 적용 유틸리티, 재사용 HTML 컴포넌트를 모아 export하는 UI 렌더링 entry입니다.
+
+- `packages/ui/config.js`
+  페이지 목차, 항목 라벨, 배지 색상, 품사/문자 옵션, 수동 입력 placeholder 같은 공통 UI 설정값을 제공합니다.
+
+- `packages/ui/dom/applyPagePatch.js`
+  페이지 렌더러가 반환한 HTML/text/style/value/hidden/disabled patch를 DOM에 적용합니다.
+
+- `packages/ui/pages/index.js`
+  홈, 오늘 공부, 자료, 단어, 문법/표현 카드, 한자, 퀴즈, 복습, 통계, 설정의 페이지 렌더러를 모아 export합니다.
+
+- `packages/ui/components/index.js`
+  페이지 렌더러에서 재사용하는 빈 상태, 음성 버튼, 출처 링크, 카드, taxonomy chip, 퀴즈 패널 HTML helper를 모아 export합니다.
+
+- `packages/ui/styles/index.css`
+  공용 UI 스타일 entry입니다. 기본 변수, 레이아웃, 컴포넌트, 페이지 스타일을 순서대로 불러옵니다.
+
+- `packages/ui/pages/shared.js`
+  페이지 patch 병합 같은 페이지 렌더러 전용 유틸리티를 제공합니다.
+  실제 DOM 적용은 데스크톱 렌더러가 담당하고, 이 패키지는 HTML/text/style/value patch만 생성합니다.
+
+- `packages/tts/package.json`
+  브라우저 기본 TTS와 VOICEVOX 공통 로직 패키지를 ES module로 정의합니다.
+
+- `packages/tts/src/index.js`
+  TTS 설정 정규화, 브라우저 일본어 음성 판별/선택, VOICEVOX speaker option 생성, VOICEVOX client를 export합니다.
+
+- `packages/storage/package.json`
+  저장소 adapter가 제공해야 하는 런타임 계약 패키지를 정의합니다.
+
+- `packages/storage/src/index.js`
+  저장소 필수 메서드 목록과 adapter 검증 함수를 제공합니다.
+
+- `packages/storage-sqlite/package.json`
+  데스크톱 앱에서 사용하는 SQLite 저장소 구현 패키지를 정의합니다.
+
+- `packages/storage-sqlite/src/index.js`
+  SQLite 초기화, schema 보정, 마이그레이션, 앱 상태 조회, 학습일/할 일/일일 기록/학습 항목/복습/퀴즈 결과 저장을 담당합니다.
+
+- `packages/storage-sqlite/src/dataSchema.js`
+  SQLite 테이블과 인덱스 schema를 정의합니다.
+
+- `packages/storage-sqlite/src/dataImportExport.js`
+  CSV/YAML 내보내기, CSV 가져오기, 전체 YAML 백업 복원을 담당합니다.
+
+- `packages/storage-sqlite/src/dailyEntryParser.js`
+  사용자가 붙여넣은 문장/단어/문법/표현 텍스트를 앱 내부 데이터 구조로 파싱합니다.
+  단어의 한자 정보를 별도 한자 항목으로 확장하는 기능도 포함합니다.
+
 
 메인 프로세스
 
-- `src/main.js`
+- `apps/desktop/src/main.js`
   Electron 앱 생명주기, BrowserWindow 생성, 포터블 저장 경로 설정, IPC 핸들러 등록을 담당합니다.
 
-- `src/ttsHandlers.js`
-  VOICEVOX speaker 목록 조회와 음성 합성 IPC 핸들러를 담당합니다.
+- `apps/desktop/src/ttsHandlers.js`
+  `packages/tts`의 VOICEVOX client를 Electron IPC로 감싸 speaker 목록 조회와 음성 합성을 제공합니다.
   브라우저 기본 TTS는 렌더러의 Web Speech API를 직접 사용합니다.
 
-- `src/preload.js`
+- `apps/desktop/src/preload.js`
   렌더러에서 사용할 안전한 API를 `window.studyData`, `window.ttsApi`, `window.appInfo`로 노출합니다.
   렌더러가 직접 Node.js나 SQLite에 접근하지 않도록 경계를 만듭니다.
   Electron preload 제약 때문에 로컬 모듈 import 대신 IPC 채널 이름을 파일 안에 직접 둡니다.
 
-- `src/dataChannels.js`
+- `apps/desktop/src/dataChannels.js`
   메인 프로세스에서 사용하는 데이터 IPC 채널 이름을 모아둡니다.
 
-- `src/dataHandlers.js`
+- `apps/desktop/src/dataHandlers.js`
   메인 프로세스의 IPC 요청을 `dataStore` 함수로 연결합니다.
 
 
 데이터 계층
 
-- `src/dataStore.js`
-  SQLite 초기화, schema 보정, 마이그레이션, 앱 상태 조회, 학습일/할 일/일일 기록/학습 항목/복습/퀴즈 결과 저장을 담당합니다.
-
-- `src/dataSchema.js`
-  SQLite 테이블과 인덱스 schema를 정의합니다.
-
-- `src/dataImportExport.js`
-  CSV/YAML 내보내기, CSV 가져오기, 전체 YAML 백업 복원을 담당합니다.
-
-- `src/dailyEntryParser.js`
-  사용자가 붙여넣은 문장/단어/문법/표현 텍스트를 앱 내부 데이터 구조로 파싱합니다.
-  단어의 한자 정보를 별도 한자 항목으로 확장하는 기능도 포함합니다.
+- `apps/desktop/src/dataStore.js`
+  `packages/storage-sqlite` 저장소를 생성하고 `packages/storage` 계약 검증을 거쳐 desktop IPC에 연결하는 얇은 adapter입니다.
 
 렌더러
 
-- `src/renderer/index.html`
+- `apps/desktop/src/renderer/index.html`
   전체 화면 구조, 페이지 섹션, 모달, 설정 UI, 스크립트 로딩 순서를 정의합니다.
 
-- `src/renderer/app.js`
+- `apps/desktop/src/renderer/app.js`
   렌더러 앱 시작점입니다.
   저장 경로와 초기 상태를 불러온 뒤 이벤트를 바인딩합니다.
 
-- `src/renderer/api.js`
+- `apps/desktop/src/renderer/api.js`
   `window.studyData` API를 렌더러 내부에서 쓰기 쉬운 `dataApi` 객체로 감쌉니다.
 
-- `src/renderer/state.js`
-  렌더러 전역 상태, 선택 날짜, 검색어, 정렬 상태, 퀴즈 상태, 복습 큐 임시 상태, 공통 계산 함수를 관리합니다.
+- `apps/desktop/src/renderer/state.js`
+  렌더러 전역 상태, 선택 날짜, 검색어, 정렬 상태, 퀴즈 상태, 복습 큐 임시 상태를 관리하고 `packages/core`의 공통 계산 함수를 연결합니다.
 
-- `src/renderer/render.js`
-  홈, 오늘 공부, 자료, 단어, 문법, 표현, 한자, 퀴즈, 복습, 통계, 설정 화면을 렌더링합니다.
+- `apps/desktop/src/renderer/render.js`
+  `packages/core`에서 계산된 데이터를 `packages/ui/render.js`의 페이지 렌더러에 전달하고, 공통 patch 적용 유틸리티로 실제 DOM을 갱신합니다.
 
-- `src/renderer/actions.js`
+- `apps/desktop/src/renderer/actions.js`
   페이지 이동, 문장 이동, 다이얼로그 열기/저장, 항목 삭제, 복습 상태 변경, 한자 연결 단어 검색 같은 사용자 동작을 처리합니다.
 
-- `src/renderer/events.js`
+- `apps/desktop/src/renderer/events.js`
   탭, 검색, 캘린더, 항목 CRUD, 퀴즈, 복습, import/export, 단축키 등 DOM 이벤트를 바인딩합니다.
 
-- `src/renderer/config.js`
-  페이지 목차, 항목 라벨, 배지 색상, 품사/문자 옵션, 수동 입력 placeholder 같은 UI 설정값을 관리합니다.
+- `apps/desktop/src/renderer/config.js`
+  `packages/ui/config.js`를 불러와 desktop renderer 전역 config로 연결하는 adapter입니다.
 
-- `src/renderer/domUtils.js`
-  DOM 조회, HTML escape, 빈 상태 마크업, 날짜 키 생성 같은 공통 유틸리티를 제공합니다.
+- `apps/desktop/src/renderer/domUtils.js`
+  DOM 조회, HTML escape, 날짜 키 생성 같은 desktop renderer 유틸리티를 제공합니다.
 
-- `src/renderer/tts.js`
-  브라우저 기본 TTS와 VOICEVOX 엔진 선택, 음성 목록 로드, TTS 설정 저장, 음성 재생, 오류 표시를 담당합니다.
+- `apps/desktop/src/renderer/tts.js`
+  TTS 설정 UI, 음성 목록 렌더링, 음성 재생, 상태/오류 표시를 담당하고 공통 계산과 VOICEVOX 호출은 `packages/tts`를 사용합니다.
 
 
 스타일
 
-- `src/renderer/styles.css`
-  CSS entry 파일입니다. 아래 스타일 파일들을 import합니다.
+- `apps/desktop/src/renderer/styles.css`
+  데스크톱 렌더러의 CSS entry 파일입니다. `packages/ui/styles/index.css`를 import합니다.
 
-- `src/renderer/styles/base.css`
+- `packages/ui/styles/base.css`
   CSS 변수, 기본 태그, 입력 요소, 전역 포커스 스타일을 담당합니다.
 
-- `src/renderer/styles/layout.css`
+- `packages/ui/styles/layout.css`
   topbar, tabbar, sidebar, main layout, hero layout 등 앱 전체 배치를 담당합니다.
 
-- `src/renderer/styles/components.css`
+- `packages/ui/styles/components.css`
   버튼, 패널, 카드, 테이블, 배지, 모달, 퀴즈 패널 등 재사용 UI 컴포넌트 스타일을 담당합니다.
 
-- `src/renderer/styles/pages.css`
+- `packages/ui/styles/pages.css`
   오늘 공부, 캘린더, 문장 카드, 후보 항목, 학습 항목, 반응형 규칙 등 페이지 전용 스타일을 담당합니다.
 
 

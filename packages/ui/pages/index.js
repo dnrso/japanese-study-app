@@ -1,0 +1,10 @@
+export { renderHomePage, renderQuickFiltersPage, renderTasksPage } from "./home.js";
+export { renderCalendarPage, renderLearnedSectionsPage, renderTodayPage } from "./today.js";
+export { renderSourcesPage } from "./sources.js";
+export { renderTaxonomyPage, renderWordsPage } from "./words.js";
+export { renderStudyCardsPage } from "./studyCards.js";
+export { renderKanjiPage } from "./kanji.js";
+export { renderKanjiQuizPage, renderWordQuizPage } from "./quiz.js";
+export { renderReviewPage } from "./review.js";
+export { renderStatsPage } from "./stats.js";
+export { renderQuizSettingsPage, renderStoragePathsPage } from "./settings.js";

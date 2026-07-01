@@ -1,0 +1,302 @@
+const REVIEW_QUEUE_INTERVALS = {
+  "내일": 1,
+  "3일 후": 3,
+  "일주일": 7,
+  "2주일": 14,
+  "한달": 30
+};
+
+const SEARCH_FIELDS = [
+  "title",
+  "reading",
+  "meaning",
+  "level",
+  "part",
+  "script",
+  "review",
+  "kanji",
+  "source",
+  "note"
+];
+
+export function clampQuizQuestionFontSize(value) {
+  return Math.min(64, Math.max(24, Number(value) || 32));
+}
+
+export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
+  if (value === "") {
+    return "";
+  }
+  return scheduledReviewOptions.includes(value) ? value : "내일";
+}
+
+export function normalizeQuizCorrectReview(value, scheduledReviewOptions) {
+  return scheduledReviewOptions.includes(value) ? value : "";
+}
+
+export function reviewStatusText(item) {
+  const review = item.review || "대기";
+  if (item.reviewDueDate && !["오늘", "대기"].includes(review)) {
+    return `${review} (${item.reviewDueDate})`;
+  }
+  return review;
+}
+
+export function reviewQueueReview(item, drafts = new Map()) {
+  return drafts.get(item.id) || "대기";
+}
+
+export function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
+  const days = REVIEW_QUEUE_INTERVALS[review];
+  if (!days) {
+    return "";
+  }
+  return addDays(todayKey, days);
+}
+
+export function reviewQueueStatusText({ item, drafts = new Map(), todayKey = dateKey(new Date()) }) {
+  const review = reviewQueueReview(item, drafts);
+  const dueDate = reviewQueueDueDate(review, todayKey);
+  return dueDate ? `${review} (${dueDate})` : review;
+}
+
+export function pruneReviewQueueDrafts({ items = [], drafts = new Map() }) {
+  const queueIds = new Set(items.filter(isReviewQueueItem).map(item => item.id));
+  return new Map([...drafts.entries()].filter(([id]) => queueIds.has(id)));
+}
+
+export function cycleReviewQueueDraft({ items = [], drafts = new Map(), id, options = [] }) {
+  const item = items.find(candidate => candidate.id === id);
+  if (!item) {
+    return new Map(drafts);
+  }
+
+  const nextDrafts = new Map(drafts);
+  const currentReview = reviewQueueReview(item, drafts);
+  const currentIndex = options.indexOf(currentReview);
+  const nextReview = options[((currentIndex >= 0 ? currentIndex : 0) + 1) % options.length] || "대기";
+
+  if (nextReview === "대기") {
+    nextDrafts.delete(id);
+  } else {
+    nextDrafts.set(id, nextReview);
+  }
+  return nextDrafts;
+}
+
+export function reviewCompletionTargets({ items = [], drafts = new Map(), searchTerm = "" }) {
+  return reviewItems(items, searchTerm)
+    .map(item => ({ id: item.id, review: reviewQueueReview(item, drafts) }))
+    .filter(item => item.review !== "대기");
+}
+
+export function matchesSearch(item, searchTerm = "") {
+  const needle = String(searchTerm || "").trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+  return SEARCH_FIELDS
+    .map(field => item[field] || "")
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+export function itemsByKind(items = [], kind, searchTerm = "") {
+  return items.filter(item => item.kind === kind && matchesSearch(item, searchTerm));
+}
+
+export function sortWords(list = [], wordSort = { key: "", direction: "" }) {
+  if (!wordSort.key || !wordSort.direction) {
+    return list;
+  }
+
+  const direction = wordSort.direction === "desc" ? -1 : 1;
+  return [...list].sort((left, right) => {
+    const result = String(wordSortValue(left, wordSort.key))
+      .localeCompare(String(wordSortValue(right, wordSort.key)), undefined, {
+        numeric: true,
+        sensitivity: "base"
+      });
+    if (result !== 0) {
+      return result * direction;
+    }
+    return String(left.title || "").localeCompare(String(right.title || ""), undefined, {
+      numeric: true,
+      sensitivity: "base"
+    });
+  });
+}
+
+export function nextWordSort(currentSort = { key: "", direction: "" }, key) {
+  if (currentSort.key !== key) {
+    return { key, direction: "asc" };
+  }
+  if (currentSort.direction === "asc") {
+    return { key, direction: "desc" };
+  }
+  return { key: "", direction: "" };
+}
+
+export function buildQuizQuestion({
+  items = [],
+  kind,
+  mode = "random",
+  forwardMode,
+  reverseMode,
+  random = Math.random
+}) {
+  const candidates = items.filter(item => item.kind === kind && item.title && item.meaning);
+  const resolvedMode = mode === "random" ? randomItem([forwardMode, reverseMode], random) : mode;
+  const answerType = resolvedMode === reverseMode ? "title" : "meaning";
+  const uniqueAnswers = [...new Set(candidates.map(item => item[answerType]))];
+  if (candidates.length < 4 || uniqueAnswers.length < 4) {
+    return null;
+  }
+
+  const minCorrect = Math.min(...candidates.map(item => Number(item.quizCorrectCount || 0)));
+  const weakestItems = candidates.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
+  const item = randomItem(weakestItems, random);
+  const correctAnswer = item[answerType];
+  const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
+    .map(candidate => candidate[answerType])
+    .filter((answer, index, list) => answer && list.indexOf(answer) === index)
+    .slice(0, 3);
+
+  if (distractors.length < 3) {
+    return null;
+  }
+
+  return {
+    item,
+    kind,
+    mode: resolvedMode,
+    answerType,
+    correctAnswer,
+    choices: shuffle([correctAnswer, ...distractors], random)
+  };
+}
+
+export function reviewItems(items = [], searchTerm = "") {
+  return items.filter(item => isReviewQueueItem(item) && matchesSearch(item, searchTerm));
+}
+
+export function dailyEntriesByKind(dailyEntries = [], kind) {
+  return (dailyEntries || []).filter(entry => entry.kind === kind);
+}
+
+export function rootSentenceEntries(dailyEntries = []) {
+  return dailyEntriesByKind(dailyEntries, "sentence").filter(entry => !entry.parentId);
+}
+
+export function linkedEntriesForSentence(dailyEntries = [], kind, sentenceId) {
+  return dailyEntriesByKind(dailyEntries, kind).filter(item =>
+    (item.sourceSentences || []).some(sentence => sentence.id === sentenceId) || item.parentId === sentenceId
+  );
+}
+
+export function dailyEntryToCandidate(entry) {
+  return {
+    title: entry.title,
+    reading: entry.reading,
+    meaning: entry.meaning,
+    kanji: entry.parsed?.kanji || "",
+    part: entry.parsed?.part || "",
+    script: entry.parsed?.script || ""
+  };
+}
+
+export function uniqueSourceSentences(sourceSentences = []) {
+  return (sourceSentences || []).filter((sentence, index, list) =>
+    list.findIndex(item => sourceSentenceKey(item) === sourceSentenceKey(sentence)) === index
+  );
+}
+
+export function studyStats(state = {}) {
+  const items = state.items || [];
+  return {
+    totalMinutes: Number(state.studyLog?.totalMinutes || 0),
+    totalWords: items.filter(item => item.kind === "word").length,
+    totalGrammarExpression: items.filter(item => ["grammar", "expression"].includes(item.kind)).length,
+    completedSources: items.filter(item => item.kind === "source" && Number(item.source) >= 100).length
+  };
+}
+
+export function quickFilterCounts(state = {}, searchTerm = "") {
+  const items = state.items || [];
+  const tasks = state.tasks || [];
+  return {
+    review: reviewItems(items, searchTerm).length,
+    n3: items.filter(item => item.level === "N3").length,
+    source: items.filter(item => item.source && item.kind !== "source").length,
+    pending: tasks.filter(task => !task.done).length
+  };
+}
+
+export function homeOverview(state = {}, searchTerm = "") {
+  const items = state.items || [];
+  const minutes = Number(state.studyLog?.minutes || 0);
+  const progress = Math.min(100, Math.round((minutes / 90) * 100));
+  return {
+    progress,
+    remainingMinutes: Math.max(0, 90 - minutes),
+    minutes,
+    focusText: state.studyLog?.summary || "새 항목을 추가하고 복습 큐를 정리하세요.",
+    todayEntryCount: state.dailyEntries?.length || 0,
+    newItemCount: items.filter(item => item.kind !== "source").length,
+    reviewItemCount: reviewItems(items, searchTerm).length,
+    recentItems: items.filter(item => item.kind !== "source").slice(0, 3),
+    reviewSummary: ["word", "grammar", "expression", "kanji"].map(kind => ({
+      kind,
+      count: items.filter(item => item.kind === kind && ["오늘", "대기"].includes(item.review)).length
+    }))
+  };
+}
+
+function isReviewQueueItem(item) {
+  const review = item.review || "대기";
+  return ["오늘", "대기"].includes(review) && item.kind !== "source";
+}
+
+function wordSortValue(item, key) {
+  if (key === "sourceSentence") {
+    return (item.sourceSentences || [])
+      .map(sentence => sentence.title || "")
+      .join(" ");
+  }
+  return item[key] || "";
+}
+
+function sourceSentenceKey(sentence) {
+  return [
+    sentence.studyDate || "",
+    String(sentence.title || "").trim().replace(/\s+/g, " ")
+  ].join("::");
+}
+
+function addDays(dateValue, days) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return dateKey(date);
+}
+
+function dateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function randomItem(list, random) {
+  return list[Math.floor(random() * list.length)];
+}
+
+function shuffle(list, random) {
+  const result = [...list];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@nihongo-study/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./render.js",
+  "exports": {
+    ".": "./render.js",
+    "./render": "./render.js",
+    "./config": "./config.js",
+    "./pages": "./pages/index.js",
+    "./components": "./components/index.js",
+    "./dom/applyPagePatch": "./dom/applyPagePatch.js",
+    "./styles": "./styles/index.css"
+  }
+}
