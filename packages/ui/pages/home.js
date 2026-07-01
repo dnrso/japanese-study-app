@@ -1,5 +1,20 @@
 import { empty, studyCard } from "../components/index.js";
 
+export function homeWelcomePanel() {
+  return `
+    <div class="panel welcome">
+      <div class="eyebrow">공부 노트 사용 방법</div>
+      <h1>오늘 공부에서 공부할 문장이나 단어를 입력하세요.</h1>
+      <p class="lead">입력한 내용은 단어장, 복습 큐, 퀴즈에서 이어서 활용할 수 있습니다.</p>
+      <div class="hero-actions">
+        <button class="primary-btn" type="button" data-open-page="today">오늘 공부 기록하기</button>
+        <button class="ghost-btn" type="button" data-open-page="review">복습 시작</button>
+        <button class="ghost-btn" type="button" data-open-page="sources">자료 이어서 보기</button>
+      </div>
+    </div>
+  `;
+}
+
 export function renderHomePage({ overview, helpers }) {
   const groups = overview.reviewSummary.map(({ kind, count }) =>
     `<tr><td>${helpers.kindLabels[kind]}</td><td>${count}</td><td><span class="badge ${count ? "red" : "green"}">${count ? "복습 필요" : "정리됨"}</span></td></tr>`

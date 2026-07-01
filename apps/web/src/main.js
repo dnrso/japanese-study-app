@@ -4,6 +4,7 @@ import { createIdbStorage } from "@nihongo-study/storage-idb";
 import {
   applyPagePatch as applySharedPagePatch,
   badgeClassByKind,
+  homeWelcomePanel,
   kindLabels,
   manualEntryPlaceholders,
   partOptions,
@@ -137,16 +138,7 @@ function homePageTemplate() {
   return `
     <section class="page" id="home">
       <div class="hero" id="home-overview">
-        <div class="panel welcome">
-          <div class="eyebrow">웹 미리보기</div>
-          <h1>오늘도 일본어 감각을<br />조금 더 선명하게.</h1>
-          <p class="lead">공통 core/ui 패키지로 렌더링하고 IndexedDB에 학습 데이터를 저장합니다.</p>
-          <div class="hero-actions">
-            <button class="primary-btn" type="button" data-open-page="today">오늘 공부 기록하기</button>
-            <button class="ghost-btn" type="button" data-open-page="review">복습 시작</button>
-            <button class="ghost-btn" type="button" data-open-page="sources">자료 이어서 보기</button>
-          </div>
-        </div>
+        ${homeWelcomePanel()}
 
         <div class="panel today-panel" id="home-progress">
           <div class="panel-header">
