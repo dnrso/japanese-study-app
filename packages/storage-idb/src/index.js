@@ -1,4 +1,4 @@
-const databaseVersion = 1;
+const databaseVersion = 2;
 
 const reviewIntervals = {
   "내일": 1,
@@ -9,7 +9,38 @@ const reviewIntervals = {
 };
 
 const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
-const stores = ["meta", "studyDays", "dailyEntries", "dailyEntryLinks", "tasks", "items"];
+const storeDefinitions = [
+  { name: "meta", options: { keyPath: "key" }, indexes: [] },
+  { name: "studyDays", options: { keyPath: "studyDate" }, indexes: [] },
+  {
+    name: "dailyEntries",
+    options: { keyPath: "id" },
+    indexes: [
+      { name: "studyDate", keyPath: "studyDate" },
+      { name: "kind", keyPath: "kind" },
+      { name: "parentId", keyPath: "parentId" }
+    ]
+  },
+  {
+    name: "dailyEntryLinks",
+    options: { keyPath: "id" },
+    indexes: [
+      { name: "entryId", keyPath: "entryId" },
+      { name: "sentenceId", keyPath: "sentenceId" }
+    ]
+  },
+  {
+    name: "tasks",
+    options: { keyPath: "id" },
+    indexes: [{ name: "studyDate", keyPath: "studyDate" }]
+  },
+  {
+    name: "items",
+    options: { keyPath: "id" },
+    indexes: [{ name: "kind", keyPath: "kind" }]
+  }
+];
+const stores = storeDefinitions.map(store => store.name);
 
 export function createIdbStorage(options = {}) {
   const dbName = options.dbName || "nihongo-study";
@@ -448,33 +479,56 @@ function openDatabase(dbName) {
   if (!globalThis.indexedDB) {
     return Promise.reject(new Error("IndexedDB is not available in this browser."));
   }
+  return openDatabaseWithVersion(dbName, databaseVersion, true);
+}
+
+function openDatabaseWithVersion(dbName, version, allowRepair) {
   return new Promise((resolve, reject) => {
-    const request = globalThis.indexedDB.open(dbName, databaseVersion);
+    const request = version
+      ? globalThis.indexedDB.open(dbName, version)
+      : globalThis.indexedDB.open(dbName);
     request.onupgradeneeded = () => {
       const db = request.result;
       const transaction = request.transaction;
-      createStore(db, transaction, "meta", { keyPath: "key" });
-      createStore(db, transaction, "studyDays", { keyPath: "studyDate" });
-      const dailyEntries = createStore(db, transaction, "dailyEntries", { keyPath: "id" });
-      createIndex(dailyEntries, "studyDate", "studyDate");
-      createIndex(dailyEntries, "kind", "kind");
-      createIndex(dailyEntries, "parentId", "parentId");
-      const links = createStore(db, transaction, "dailyEntryLinks", { keyPath: "id" });
-      createIndex(links, "entryId", "entryId");
-      createIndex(links, "sentenceId", "sentenceId");
-      const tasks = createStore(db, transaction, "tasks", { keyPath: "id" });
-      createIndex(tasks, "studyDate", "studyDate");
-      const items = createStore(db, transaction, "items", { keyPath: "id" });
-      createIndex(items, "kind", "kind");
+      ensureDatabaseSchema(db, transaction);
     };
     request.onsuccess = () => {
       const db = request.result;
       db.onversionchange = () => db.close();
+      const missingStores = missingObjectStores(db);
+      if (missingStores.length) {
+        if (allowRepair) {
+          const repairVersion = db.version + 1;
+          db.close();
+          openDatabaseWithVersion(dbName, repairVersion, false).then(resolve, reject);
+          return;
+        }
+        db.close();
+        reject(new Error(`IndexedDB schema is incomplete. Missing object stores: ${missingStores.join(", ")}`));
+        return;
+      }
       resolve(db);
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => {
+      if (allowRepair && version && request.error?.name === "VersionError") {
+        openDatabaseWithVersion(dbName, undefined, true).then(resolve, reject);
+        return;
+      }
+      reject(request.error);
+    };
     request.onblocked = () => reject(new Error("IndexedDB upgrade is blocked by another open tab."));
   });
+}
+
+function ensureDatabaseSchema(db, transaction) {
+  storeDefinitions.forEach(definition => {
+    const store = createStore(db, transaction, definition.name, definition.options);
+    definition.indexes.forEach(index => createIndex(store, index.name, index.keyPath));
+  });
+}
+
+function missingObjectStores(db) {
+  return stores.filter(name => !db.objectStoreNames.contains(name));
 }
 
 function createStore(db, transaction, name, options) {
