@@ -16,6 +16,7 @@ import {
   renderQuickFiltersPage,
   renderQuizSettingsPage,
   renderReviewPage,
+  renderSentencesPage,
   renderSourcesPage,
   renderStatsPage,
   renderStudyCardsPage,
@@ -71,6 +72,7 @@ function renderAppShell() {
           <button class="tab active" type="button" data-page="home">홈</button>
           <button class="tab" type="button" data-page="today">오늘 공부</button>
           <button class="tab" type="button" data-page="sources">자료</button>
+          <button class="tab" type="button" data-page="sentences">문장</button>
           <button class="tab" type="button" data-page="words">단어</button>
           <button class="tab" type="button" data-page="grammar">문법</button>
           <button class="tab" type="button" data-page="expressions">표현</button>
@@ -120,6 +122,7 @@ function renderAppShell() {
           ${homePageTemplate()}
           ${todayPageTemplate()}
           ${sourcesPageTemplate()}
+          ${sentencesPageTemplate()}
           ${wordsPageTemplate()}
           ${cardPageTemplate("grammar", "grammar-detail", "문법 노트", "grammarCards", "+ 문법 추가")}
           ${cardPageTemplate("expression", "expressions-list", "표현 · 관용구", "expressionCards", "+ 표현 추가", "expressions")}
@@ -274,6 +277,23 @@ function sourcesPageTemplate() {
           <button class="primary-btn" type="button" data-kind="source" data-add-item>+ 자료 추가</button>
         </div>
         <div class="cards" id="sourceCards"></div>
+      </section>
+    </section>
+  `;
+}
+
+function sentencesPageTemplate() {
+  return `
+    <section class="page hidden-page" id="sentences">
+      <section class="panel section" id="sentences-list">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">문장 노트</h2>
+            <p class="muted" id="sentencePageDate"></p>
+          </div>
+          <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
+        </div>
+        <div class="cards daily-entry-list" id="sentenceCards"></div>
       </section>
     </section>
   `;
@@ -682,6 +702,7 @@ function renderAll() {
   renderToday();
   renderLearnedSections();
   renderSources();
+  renderSentences();
   renderWordFilters();
   renderWords();
   renderCards("grammar", "grammarCards");
@@ -756,6 +777,18 @@ function renderSources() {
   applyPagePatch(renderSourcesPage({
     sources: items("source"),
     helpers: renderHelpers()
+  }));
+}
+
+function renderSentences() {
+  const sentenceEntries = core.rootSentenceEntries(allDailyEntriesForSentences());
+  applyPagePatch(renderSentencesPage({
+    caption: searchTerm ? `검색 결과 ${sentenceEntries.length}개` : `오늘 공부에서 저장한 문장 ${sentenceEntries.length}개`,
+    sentences: sentenceEntries,
+    helpers: {
+      ...renderHelpers(),
+      linkedEntriesForSentence: linkedEntriesForAnySentence
+    }
   }));
 }
 
@@ -1088,7 +1121,7 @@ async function deleteItem(id) {
 }
 
 async function deleteDailyEntry(id) {
-  const entry = state.dailyEntries.find(candidate => candidate.id === id);
+  const entry = (state.allDailyEntries || state.dailyEntries).find(candidate => candidate.id === id);
   if (!entry || !window.confirm(`${entry.title} 기록을 삭제할까요?`)) {
     return;
   }
@@ -1256,12 +1289,30 @@ function dailyEntriesForSelectedDate() {
   return state.dailyEntries.filter(entry => !entry.studyDate || entry.studyDate === selectedDate);
 }
 
+function allDailyEntriesForSentences() {
+  const entries = state.allDailyEntries || state.dailyEntries;
+  if (!searchTerm) {
+    return entries;
+  }
+  const normalizedSearch = searchTerm.toLowerCase();
+  return entries.filter(entry => [
+    entry.title,
+    entry.reading,
+    entry.meaning,
+    entry.studyDate
+  ].some(value => String(value || "").toLowerCase().includes(normalizedSearch)));
+}
+
 function dailyEntriesByKind(kind) {
   return core.dailyEntriesByKind(dailyEntriesForSelectedDate(), kind);
 }
 
 function linkedEntriesForSentence(kind, sentenceId) {
   return core.linkedEntriesForSentence(dailyEntriesForSelectedDate(), kind, sentenceId);
+}
+
+function linkedEntriesForAnySentence(kind, sentenceId) {
+  return core.linkedEntriesForSentence(state.allDailyEntries || state.dailyEntries, kind, sentenceId);
 }
 
 function reviewQueueStatusText(item) {

@@ -2,6 +2,7 @@ export const tocByPage = {
   home: [["home-overview", "오늘 개요", ""], ["home-progress", "진행률", ""], ["home-stats", "요약 지표", "4"], ["home-today", "오늘 할 일", ""], ["home-recent", "최근 추가", ""], ["home-queue", "복습 큐", ""]],
   today: [["today-log", "문장 추가", ""], ["today-calendar", "학습 캘린더", ""], ["today-sentences", "문장 카드", ""], ["today-learned", "오늘 배운 항목", ""]],
   sources: [["sources-library", "자료 라이브러리", ""]],
+  sentences: [["sentences-list", "문장 목록", ""]],
   words: [["words-list", "단어 목록", ""], ["words-taxonomy", "품사·문자 분류", ""]],
   grammar: [["grammar-detail", "문법 상세", ""]],
   expressions: [["expressions-list", "표현 목록", ""]],

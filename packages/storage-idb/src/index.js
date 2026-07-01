@@ -74,10 +74,13 @@ export function createIdbStorage(options = {}) {
       getAll("dailyEntryLinks")
     ]);
 
-    const dailyEntries = allDailyEntries
-      .filter(entry => entry.studyDate === selectedDate)
+    const allDailyEntriesWithLinks = allDailyEntries
       .sort(sortNewest)
       .map(entry => ({ ...entry, sourceSentences: sourceSentencesForEntry(entry, allDailyEntries, links) }));
+
+    const dailyEntries = allDailyEntriesWithLinks
+      .filter(entry => entry.studyDate === selectedDate)
+      .sort(sortNewest);
 
     const itemsWithLinks = items
       .sort(sortNewest)
@@ -95,6 +98,7 @@ export function createIdbStorage(options = {}) {
       studyLog: studyLogForDate(studyDays, selectedDate),
       studyDays: studyDaysWithCounts,
       dailyEntries,
+      allDailyEntries: allDailyEntriesWithLinks,
       tasks: tasks.sort(sortNewest),
       items: itemsWithLinks
     };
