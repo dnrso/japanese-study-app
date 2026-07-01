@@ -1,5 +1,6 @@
 import "@nihongo-study/ui/styles";
 import * as core from "@nihongo-study/core";
+import { createIdbStorage } from "@nihongo-study/storage-idb";
 import {
   applyPagePatch as applySharedPagePatch,
   badgeClassByKind,
@@ -29,7 +30,10 @@ import {
 } from "@nihongo-study/ui";
 import { createSampleState } from "./sampleState.js";
 
-const storageNotice = "샘플 데이터는 브라우저 메모리에서만 동작합니다. IndexedDB 저장소는 다음 단계에서 연결합니다.";
+const store = createIdbStorage({
+  seedState: () => createSampleState(todayKey)
+});
+const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 
 let state = createSampleState(todayKey);
 let currentPage = "home";
@@ -136,7 +140,7 @@ function homePageTemplate() {
         <div class="panel welcome">
           <div class="eyebrow">웹 미리보기</div>
           <h1>오늘도 일본어 감각을<br />조금 더 선명하게.</h1>
-          <p class="lead">공통 core/ui 패키지로 렌더링한 Home 화면입니다. IndexedDB 저장소는 다음 단계에서 연결합니다.</p>
+          <p class="lead">공통 core/ui 패키지로 렌더링하고 IndexedDB에 학습 데이터를 저장합니다.</p>
           <div class="hero-actions">
             <button class="primary-btn" type="button" data-open-page="today">오늘 공부 기록하기</button>
             <button class="ghost-btn" type="button" data-open-page="review">복습 시작</button>
@@ -428,12 +432,12 @@ function settingsPageTemplate() {
         </div>
         <table class="table">
           <tbody>
-            <tr><th>저장 방식</th><td>브라우저 메모리 샘플</td></tr>
+            <tr><th>저장 방식</th><td>브라우저 IndexedDB</td></tr>
             <tr><th>데이터 폴더</th><td id="appDataPath">-</td></tr>
             <tr><th>SQLite</th><td id="sqlitePath">-</td></tr>
             <tr><th>Export</th><td id="exportPath">-</td></tr>
             <tr><th>Backup</th><td id="backupPath">-</td></tr>
-            <tr><th>다음 단계</th><td>storage-idb 연결</td></tr>
+            <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
           </tbody>
         </table>
         <p class="muted" id="storageStatus"></p>
@@ -446,7 +450,7 @@ function settingsPageTemplate() {
           <label class="settings-check"><input id="quizReviewOnCorrectCheckbox" type="checkbox" checked /><span>정답 시 복습 상태 변경</span></label>
           <label>정답 후 복습 상태<select id="quizCorrectReviewSelect"></select></label>
         </div>
-        <p class="muted">설정값은 현재 세션의 메모리 state에만 반영됩니다.</p>
+        <p class="muted">퀴즈 설정은 현재 브라우저 세션에 반영됩니다.</p>
       </section>
 
       <section class="panel section" id="settings-tts">
@@ -462,7 +466,7 @@ function bindEvents() {
     tab.addEventListener("click", () => openPage(tab.dataset.page));
   });
 
-  document.body.addEventListener("click", event => {
+  document.body.addEventListener("click", async event => {
     const speakTarget = event.target.closest("[data-speak-text]");
     if (speakTarget) {
       speak(speakTarget.dataset.speakText);
@@ -485,13 +489,13 @@ function bindEvents() {
     if (calendarTarget) {
       selectedDate = calendarTarget.dataset.calendarDate;
       calendarMonth = selectedDate.slice(0, 7);
-      renderAll();
+      await refreshState();
       return;
     }
 
     const taskTarget = event.target.closest("[data-toggle-task]");
     if (taskTarget) {
-      toggleTask(taskTarget.dataset.toggleTask);
+      await toggleTask(taskTarget.dataset.toggleTask);
       return;
     }
 
@@ -514,25 +518,25 @@ function bindEvents() {
 
     const addTarget = event.target.closest("[data-add-item]");
     if (addTarget) {
-      promptAddItem(addTarget.dataset.kind);
+      await promptAddItem(addTarget.dataset.kind);
       return;
     }
 
     const editTarget = event.target.closest("[data-edit-item]");
     if (editTarget) {
-      promptEditItem(editTarget.dataset.editItem);
+      await promptEditItem(editTarget.dataset.editItem);
       return;
     }
 
     const deleteTarget = event.target.closest("[data-delete-item]");
     if (deleteTarget) {
-      deleteItem(deleteTarget.dataset.deleteItem);
+      await deleteItem(deleteTarget.dataset.deleteItem);
       return;
     }
 
     const cycleTarget = event.target.closest("[data-cycle-review]");
     if (cycleTarget) {
-      cycleReview(cycleTarget.dataset.cycleReview);
+      await cycleReview(cycleTarget.dataset.cycleReview);
       return;
     }
 
@@ -563,7 +567,7 @@ function bindEvents() {
 
     const deleteDailyTarget = event.target.closest("[data-delete-daily-entry]");
     if (deleteDailyTarget) {
-      deleteDailyEntry(deleteDailyTarget.dataset.deleteDailyEntry);
+      await deleteDailyEntry(deleteDailyTarget.dataset.deleteDailyEntry);
       return;
     }
 
@@ -575,13 +579,13 @@ function bindEvents() {
 
     const wordChoice = event.target.closest("[data-word-quiz-choice]");
     if (wordChoice && wordQuiz.question && !wordQuiz.answered) {
-      submitQuizChoice("word", wordChoice.dataset.wordQuizChoice);
+      await submitQuizChoice("word", wordChoice.dataset.wordQuizChoice);
       return;
     }
 
     const kanjiChoice = event.target.closest("[data-kanji-quiz-choice]");
     if (kanjiChoice && kanjiQuiz.question && !kanjiQuiz.answered) {
-      submitQuizChoice("kanji", kanjiChoice.dataset.kanjiQuizChoice);
+      await submitQuizChoice("kanji", kanjiChoice.dataset.kanjiQuizChoice);
       return;
     }
 
@@ -614,10 +618,10 @@ function bindEvents() {
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
   byId("nextMonthBtn").addEventListener("click", () => moveCalendarMonth(1));
-  byId("todayBtn").addEventListener("click", () => {
+  byId("todayBtn").addEventListener("click", async () => {
     selectedDate = todayKey();
     calendarMonth = selectedDate.slice(0, 7);
-    renderAll();
+    await refreshState();
   });
 
   byId("addDailyEntryBtn").addEventListener("click", addDailyEntryFromInput);
@@ -677,7 +681,6 @@ function bindEvents() {
 }
 
 function renderAll() {
-  state.studyDays = buildStudyDays();
   updatePageVisibility();
   renderDate();
   renderToc(currentPage);
@@ -699,7 +702,14 @@ function renderAll() {
   renderTaxonomy();
   renderQuickFilters();
   renderQuizSettings();
-  renderMemoryStorageStatus();
+  renderStorageStatus();
+}
+
+async function refreshState(studyDate = selectedDate) {
+  state = await store.getState(studyDate);
+  selectedDate = state.selectedDate;
+  calendarMonth = selectedDate.slice(0, 7);
+  renderAll();
 }
 
 function renderHome() {
@@ -851,13 +861,13 @@ function renderQuizSettings() {
   byId("quizReviewOnCorrectCheckbox").checked = quizReviewOnCorrect;
 }
 
-function renderMemoryStorageStatus() {
+function renderStorageStatus() {
   applyPagePatch({
     text: {
-      appDataPath: "브라우저 메모리",
+      appDataPath: store.paths.appDataDir,
       sqlitePath: "사용 안 함",
-      exportPath: "다음 단계",
-      backupPath: "다음 단계",
+      exportPath: store.paths.exportsDir,
+      backupPath: store.paths.backupsDir,
       storageStatus: storageNotice
     }
   });
@@ -952,12 +962,12 @@ function applyQuickFilter(filter) {
   }
 }
 
-function addTask() {
+async function addTask() {
   const title = window.prompt("할 일 제목을 입력하세요.");
   if (!title) {
     return;
   }
-  state.tasks.unshift({
+  state = await store.addTask({
     id: nextId("task"),
     title,
     note: "웹 미리보기에서 추가한 할 일",
@@ -968,54 +978,53 @@ function addTask() {
   renderAll();
 }
 
-function toggleTask(id) {
+async function toggleTask(id) {
   const task = state.tasks.find(candidate => candidate.id === id);
   if (!task) {
     return;
   }
-  task.done = !task.done;
+  state = await store.updateTaskDone(task.id, !task.done, selectedDate);
   renderAll();
 }
 
-function addDailyEntryFromInput() {
+async function addDailyEntryFromInput() {
   const input = byId("dailyEntryInput");
   const rawText = input.value.trim();
   if (!rawText) {
     return;
   }
-  addParsedDailyBlock(rawText);
+  state = await store.addDailyEntry({
+    studyDate: selectedDate,
+    kind: "sentence",
+    rawText
+  });
+  state = await store.saveStudyLog({
+    studyDate: selectedDate,
+    minutes: Math.min(90, Number(state.studyLog.minutes || 0) + 10),
+    summary: state.studyLog.summary || "오늘 추가한 문장을 복습하세요.",
+    note: state.studyLog.note || ""
+  });
   input.value = "";
-  state.studyLog.minutes = Math.min(90, Number(state.studyLog.minutes || 0) + 10);
   renderAll();
 }
 
-function addManualEntryFromInput() {
+async function addManualEntryFromInput() {
   const input = byId("manualEntryInput");
   const rawText = input.value.trim();
   const kind = document.querySelector("input[name='dailyManualKind']:checked")?.value || "word";
   if (!rawText) {
     return;
   }
-  state.dailyEntries.unshift(createDailyEntry(kind, rawText, null));
+  state = await store.addDailyEntry({
+    studyDate: selectedDate,
+    kind,
+    rawText
+  });
   input.value = "";
   renderAll();
 }
 
-function addParsedDailyBlock(rawText) {
-  const sentence = parseSentenceEntry(rawText);
-  state.dailyEntries.unshift(sentence);
-  parseSectionEntries(rawText, "단어장", "문법").forEach(line => {
-    state.dailyEntries.unshift(createDailyEntry("word", line, sentence));
-  });
-  parseSectionEntries(rawText, "문법", "표현").forEach(line => {
-    state.dailyEntries.unshift(createDailyEntry("grammar", line, sentence));
-  });
-  parseSectionEntries(rawText, "표현", "").forEach(line => {
-    state.dailyEntries.unshift(createDailyEntry("expression", line, sentence));
-  });
-}
-
-function registerLearnedEntries() {
+async function registerLearnedEntries() {
   const targets = dailyEntriesForSelectedDate().filter(entry =>
     ["word", "grammar", "expression"].includes(entry.kind) && !entry.registered
   );
@@ -1024,27 +1033,22 @@ function registerLearnedEntries() {
     return;
   }
 
-  let registeredCount = 0;
-  targets.forEach(entry => {
-    const exists = state.items.some(item => item.kind === entry.kind && item.title === entry.title);
-    if (!exists) {
-      state.items.unshift(itemFromDailyEntry(entry));
-      registeredCount += 1;
-    }
-    entry.registered = true;
-  });
-  window.alert(`${registeredCount}개 항목을 샘플 단어장에 등록했습니다.`);
+  const response = await store.registerDailyEntries(targets.map(entry => entry.id), selectedDate);
+  state = response.state;
+  const registeredCount = response.result.registered.length;
+  const duplicateCount = response.result.duplicates.length;
+  window.alert(`등록 ${registeredCount}개${duplicateCount ? `, 중복 ${duplicateCount}개` : ""}`);
   renderAll();
 }
 
-function promptAddItem(kind) {
+async function promptAddItem(kind) {
   const title = window.prompt(`${kindLabels[kind] || "항목"} 제목을 입력하세요.`);
   if (!title) {
     return;
   }
   const reading = kind === "source" ? "자료" : window.prompt("읽기/분류를 입력하세요.", "") || "";
   const meaning = window.prompt("뜻/요약을 입력하세요.", "") || "";
-  state.items.unshift({
+  state = await store.upsertItem({
     id: nextId(kind),
     kind,
     title,
@@ -1055,13 +1059,14 @@ function promptAddItem(kind) {
     script: kind === "word" ? "한자+히라가나" : "",
     review: kind === "source" ? "" : "대기",
     source: kind === "source" ? window.prompt("자료 링크를 입력하세요.", "") || "" : "웹 미리보기",
-    note: ""
+    note: "",
+    studyDate: selectedDate
   });
   renderAll();
   openPage(pageForKind(kind));
 }
 
-function promptEditItem(id) {
+async function promptEditItem(id) {
   const item = state.items.find(candidate => candidate.id === id);
   if (!item) {
     return;
@@ -1071,47 +1076,42 @@ function promptEditItem(id) {
     return;
   }
   const meaning = window.prompt("뜻/요약을 수정하세요.", item.meaning || "") || "";
-  item.title = title;
-  item.meaning = meaning;
+  state = await store.upsertItem({
+    ...item,
+    title,
+    meaning,
+    studyDate: selectedDate
+  });
   renderAll();
 }
 
-function deleteItem(id) {
+async function deleteItem(id) {
   const item = state.items.find(candidate => candidate.id === id);
   if (!item || !window.confirm(`${item.title} 항목을 삭제할까요?`)) {
     return;
   }
-  state.items = state.items.filter(candidate => candidate.id !== id);
+  state = await store.deleteItem(id, selectedDate);
   reviewQueueDrafts.delete(id);
   renderAll();
 }
 
-function deleteDailyEntry(id) {
+async function deleteDailyEntry(id) {
   const entry = state.dailyEntries.find(candidate => candidate.id === id);
   if (!entry || !window.confirm(`${entry.title} 기록을 삭제할까요?`)) {
     return;
   }
-  const removeIds = new Set([id]);
-  if (entry.kind === "sentence") {
-    state.dailyEntries
-      .filter(candidate => candidate.parentId === id)
-      .forEach(candidate => removeIds.add(candidate.id));
-  }
-  state.dailyEntries = state.dailyEntries.filter(candidate => !removeIds.has(candidate.id));
+  state = await store.deleteDailyEntry(id, selectedDate);
   renderAll();
 }
 
-function cycleReview(id) {
+async function cycleReview(id) {
   const item = state.items.find(candidate => candidate.id === id);
   if (!item) {
     return;
   }
   const currentIndex = reviewOptions.indexOf(item.review || "대기");
   const nextReview = reviewOptions[((currentIndex >= 0 ? currentIndex : reviewOptions.length - 1) + 1) % reviewOptions.length];
-  item.review = nextReview;
-  item.reviewDueDate = scheduledReviewOptions.includes(nextReview)
-    ? core.reviewQueueDueDate(nextReview, selectedDate)
-    : "";
+  state = await store.updateItemReview(id, nextReview, selectedDate);
   renderAll();
 }
 
@@ -1143,24 +1143,25 @@ function startQuiz(kind) {
   renderKanjiQuiz();
 }
 
-function submitQuizChoice(kind, selectedAnswer) {
+async function submitQuizChoice(kind, selectedAnswer) {
   const quiz = kind === "kanji" ? kanjiQuiz : wordQuiz;
+  const response = await store.submitWordQuizAnswer({
+    quizKind: kind,
+    itemId: quiz.question.item.id,
+    selectedAnswer,
+    answerType: quiz.question.answerType,
+    updateReviewOnCorrect: quizReviewOnCorrect,
+    correctReview: quizCorrectReview,
+    studyDate: selectedDate
+  });
+  state = response.state;
   const item = state.items.find(candidate => candidate.id === quiz.question.item.id);
-  const correct = selectedAnswer === quiz.question.correctAnswer;
-  if (item) {
-    item.quizCorrectCount = Number(item.quizCorrectCount || 0) + (correct ? 1 : 0);
-    item.quizWrongCount = Number(item.quizWrongCount || 0) + (correct ? 0 : 1);
-    if (correct && quizReviewOnCorrect && quizCorrectReview) {
-      item.review = quizCorrectReview;
-      item.reviewDueDate = core.reviewQueueDueDate(quizCorrectReview, selectedDate);
-    }
-  }
   const nextQuiz = {
     ...quiz,
     question: { ...quiz.question, item: item || quiz.question.item },
     answered: true,
     selectedAnswer,
-    result: { correct, correctAnswer: quiz.question.correctAnswer }
+    result: response.result
   };
   if (kind === "kanji") {
     kanjiQuiz = nextQuiz;
@@ -1173,7 +1174,7 @@ function submitQuizChoice(kind, selectedAnswer) {
   renderQuickFilters();
 }
 
-function completeSelectedReview() {
+async function completeSelectedReview() {
   const targets = core.reviewCompletionTargets({
     items: state.items,
     drafts: reviewQueueDrafts,
@@ -1183,22 +1184,16 @@ function completeSelectedReview() {
     window.alert("복습 완료로 변경할 항목을 먼저 선택하세요.");
     return;
   }
-  targets.forEach(target => {
-    const item = state.items.find(candidate => candidate.id === target.id);
-    if (item) {
-      item.review = target.review;
-      item.reviewDueDate = core.reviewQueueDueDate(target.review, selectedDate);
-    }
-  });
+  state = await store.completeReview(targets, selectedDate);
   reviewQueueDrafts = new Map();
   renderAll();
 }
 
-function resetSampleData() {
+async function resetSampleData() {
   if (!window.confirm("샘플 데이터를 초기 상태로 되돌릴까요?")) {
     return;
   }
-  state = createSampleState(todayKey);
+  state = await store.resetSampleData();
   selectedDate = state.selectedDate;
   calendarMonth = selectedDate.slice(0, 7);
   searchTerm = "";
@@ -1285,109 +1280,6 @@ function reviewQueueStatusText(item) {
   });
 }
 
-function parseSentenceEntry(rawText) {
-  const lines = rawText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const title = cleanHeading(lines.find(line => !line.startsWith("읽기") && !line.startsWith("해석") && !["단어장", "문법", "표현"].includes(line)) || "새 문장");
-  return {
-    id: nextId("sentence"),
-    kind: "sentence",
-    title,
-    reading: cleanLabelLine(lines.find(line => line.startsWith("읽기")) || ""),
-    meaning: cleanLabelLine(lines.find(line => line.startsWith("해석")) || ""),
-    studyDate: selectedDate
-  };
-}
-
-function parseSectionEntries(rawText, sectionName, nextSectionName) {
-  const lines = rawText.split(/\r?\n/).map(line => line.trim());
-  const startIndex = lines.findIndex(line => line === sectionName);
-  if (startIndex < 0) {
-    return [];
-  }
-  const nextIndex = nextSectionName
-    ? lines.findIndex((line, index) => index > startIndex && line === nextSectionName)
-    : -1;
-  return lines
-    .slice(startIndex + 1, nextIndex > startIndex ? nextIndex : undefined)
-    .filter(line => line && !["단어장", "문법", "표현"].includes(line));
-}
-
-function createDailyEntry(kind, rawText, sentence) {
-  const parsed = parseInlineEntry(rawText);
-  const sourceSentences = sentence ? [{ id: sentence.id, title: sentence.title, studyDate: sentence.studyDate }] : [];
-  return {
-    id: nextId(`daily-${kind}`),
-    kind,
-    title: parsed.title,
-    reading: parsed.reading,
-    meaning: parsed.meaning,
-    studyDate: selectedDate,
-    parentId: sentence?.id || "",
-    parentTitle: sentence?.title || "",
-    parsed: {
-      kanji: parsed.meta["한자"] || "",
-      part: parsed.meta["품사"] || "",
-      script: parsed.meta["문자"] || ""
-    },
-    sourceSentences
-  };
-}
-
-function itemFromDailyEntry(entry) {
-  return {
-    id: nextId(entry.kind),
-    kind: entry.kind,
-    title: entry.title,
-    reading: entry.reading,
-    meaning: entry.meaning,
-    level: "웹",
-    kanji: entry.parsed?.kanji || "",
-    part: entry.parsed?.part || "",
-    script: entry.parsed?.script || "",
-    review: "대기",
-    source: entry.parentTitle || "오늘 공부",
-    note: "",
-    sourceSentences: entry.sourceSentences || []
-  };
-}
-
-function parseInlineEntry(rawText) {
-  const meta = {};
-  const [mainPart, ...metaParts] = rawText.split("|").map(part => part.trim());
-  metaParts.forEach(part => {
-    const [key, ...valueParts] = part.split("=");
-    if (key && valueParts.length) {
-      meta[key.trim()] = valueParts.join("=").trim();
-    }
-  });
-
-  const titleMatch = mainPart.match(/`([^`]+)`/) || mainPart.match(/^([^\s(]+)/);
-  const readingMatch = mainPart.match(/\(([^)]+)\)/);
-  const title = titleMatch?.[1] || "새 항목";
-  const reading = readingMatch?.[1] || "";
-  const meaning = mainPart
-    .replace(/`[^`]+`/, "")
-    .replace(/\([^)]+\)/, "")
-    .trim() || title;
-
-  return { title, reading, meaning, meta };
-}
-
-function buildStudyDays() {
-  const days = new Map();
-  state.dailyEntries.forEach(entry => {
-    const key = entry.studyDate || selectedDate;
-    const current = days.get(key) || { studyDate: key, minutes: 0, entryCount: 0 };
-    current.entryCount += 1;
-    days.set(key, current);
-  });
-  const today = todayKey();
-  const todayStats = days.get(today) || { studyDate: today, minutes: 0, entryCount: 0 };
-  todayStats.minutes = Number(state.studyLog.minutes || 0);
-  days.set(today, todayStats);
-  return [...days.values()];
-}
-
 function pageForKind(kind) {
   if (kind === "source") {
     return "sources";
@@ -1420,14 +1312,6 @@ function todayKey() {
   return toDateKey(new Date());
 }
 
-function cleanHeading(value) {
-  return String(value || "").replace(/^#+\s*/, "").trim();
-}
-
-function cleanLabelLine(value) {
-  return String(value || "").replace(/^(읽기|해석)\s*/, "").trim();
-}
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1441,6 +1325,25 @@ function highlight(value) {
   return escapeHtml(value);
 }
 
-renderAppShell();
-bindEvents();
-renderAll();
+async function start() {
+  renderAppShell();
+  bindEvents();
+  try {
+    await store.initDatabase();
+    state = await store.getState(selectedDate);
+    selectedDate = state.selectedDate;
+    calendarMonth = selectedDate.slice(0, 7);
+    renderAll();
+  } catch (error) {
+    byId("app").innerHTML = `
+      <main class="main">
+        <section class="panel section">
+          <h1>IndexedDB 초기화 실패</h1>
+          <p class="muted">${escapeHtml(error.message || String(error))}</p>
+        </section>
+      </main>
+    `;
+  }
+}
+
+start();
