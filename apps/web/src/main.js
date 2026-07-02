@@ -36,6 +36,8 @@ const store = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
+const backupFormat = "nihongo-study-web-backup";
+const backupVersion = 1;
 
 let state = createSampleState(todayKey);
 let currentPage = "home";
@@ -51,6 +53,7 @@ let reviewQueueDrafts = new Map();
 let quizQuestionFontSize = 32;
 let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
+let storageStatus = storageNotice;
 
 function byId(id) {
   return document.getElementById(id);
@@ -449,9 +452,15 @@ function settingsPageTemplate() {
             <tr><th>SQLite</th><td id="sqlitePath">-</td></tr>
             <tr><th>Export</th><td id="exportPath">-</td></tr>
             <tr><th>Backup</th><td id="backupPath">-</td></tr>
+            <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
             <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
           </tbody>
         </table>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button>
+          <button class="ghost-btn" id="loadBackupBtn" type="button">백업 불러오기</button>
+          <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
+        </div>
         <p class="muted" id="storageStatus"></p>
       </section>
 
@@ -641,6 +650,9 @@ function bindEvents() {
   byId("registerLearnedBtn").addEventListener("click", registerLearnedEntries);
   byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
+  byId("downloadBackupBtn").addEventListener("click", downloadBackup);
+  byId("loadBackupBtn").addEventListener("click", () => byId("backupFileInput").click());
+  byId("backupFileInput").addEventListener("change", loadBackupFromFile);
 
   document.querySelectorAll("input[name='dailyManualKind']").forEach(input => {
     input.addEventListener("change", updateManualEntryPlaceholder);
@@ -893,7 +905,7 @@ function renderStorageStatus() {
       sqlitePath: "사용 안 함",
       exportPath: store.paths.exportsDir,
       backupPath: store.paths.backupsDir,
-      storageStatus: storageNotice
+      storageStatus
     }
   });
 }
@@ -1219,6 +1231,64 @@ async function resetSampleData() {
     return;
   }
   state = await store.resetSampleData();
+  resetTransientUiState();
+  storageStatus = "샘플 데이터로 초기화했습니다.";
+  renderAll();
+}
+
+async function downloadBackup() {
+  try {
+    const exported = await store.exportData();
+    const payload = {
+      format: backupFormat,
+      version: backupVersion,
+      exportedAt: new Date().toISOString(),
+      data: exported.data
+    };
+    const fileName = backupFileName();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setStorageStatus(`백업 다운로드를 시작했습니다: ${fileName}`);
+  } catch (error) {
+    const message = error.message || String(error);
+    setStorageStatus(`백업 다운로드 실패: ${message}`);
+    window.alert(`백업 다운로드 실패\n${message}`);
+  }
+}
+
+async function loadBackupFromFile(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    if (!window.confirm("현재 브라우저에 저장된 일본어 공부 데이터를 선택한 백업으로 교체할까요?")) {
+      return;
+    }
+    const backup = parseBackupFile(await file.text());
+    state = await store.importFullBackup(backup);
+    resetTransientUiState();
+    storageStatus = `백업 로드 완료: ${file.name}`;
+    renderAll();
+  } catch (error) {
+    const message = error.message || String(error);
+    setStorageStatus(`백업 로드 실패: ${message}`);
+    window.alert(`백업 로드 실패\n${message}`);
+  } finally {
+    input.value = "";
+  }
+}
+
+function resetTransientUiState() {
   selectedDate = state.selectedDate;
   calendarMonth = selectedDate.slice(0, 7);
   searchTerm = "";
@@ -1227,7 +1297,44 @@ async function resetSampleData() {
   kanjiQuiz = emptyQuiz();
   reviewQueueDrafts = new Map();
   byId("globalSearch").value = "";
-  renderAll();
+}
+
+function parseBackupFile(text) {
+  let backup;
+  try {
+    backup = JSON.parse(text);
+  } catch {
+    throw new Error("JSON 백업 파일을 읽을 수 없습니다.");
+  }
+
+  const data = backup?.data && typeof backup.data === "object" ? backup.data : backup;
+  if (!isBackupData(data)) {
+    throw new Error("일본어 공부노트 백업 파일 형식이 아닙니다.");
+  }
+  return backup;
+}
+
+function isBackupData(data) {
+  return Boolean(data && typeof data === "object" && [
+    "studyDays",
+    "dailyEntries",
+    "dailyEntryLinks",
+    "tasks",
+    "items"
+  ].some(name => Array.isArray(data[name])));
+}
+
+function backupFileName() {
+  const stamp = new Date().toISOString().slice(0, 19).replace("T", "-").replaceAll(":", "");
+  return `nihongo-study-backup-${stamp}.json`;
+}
+
+function setStorageStatus(message) {
+  storageStatus = message;
+  const element = byId("storageStatus");
+  if (element) {
+    element.textContent = message;
+  }
 }
 
 function moveCalendarMonth(offset) {
