@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@nihongo-study/ai": "0.1.0",
     "@nihongo-study/core": "0.1.0",
     "@nihongo-study/storage-idb": "0.1.0",
     "@nihongo-study/ui": "0.1.0"

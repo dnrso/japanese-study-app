@@ -1,5 +1,33 @@
 import { empty, speakerButton } from "../components/index.js";
 
+export function sentenceEntryPanel() {
+  return `
+    <section class="panel section" id="today-log">
+      <div class="panel-header">
+        <h2 class="panel-title" id="selectedDateTitle">문장 추가</h2>
+        <button class="primary-btn" id="addDailyEntryBtn" type="button">문장 추가</button>
+      </div>
+      <label class="settings-check ai-sentence-analysis-toggle">
+        <input id="aiSentenceAnalysisCheckbox" type="checkbox" />
+        <span>AI 문장 분석</span>
+      </label>
+      <div class="ai-sentence-fields" id="aiSentenceFields" hidden>
+        <label>일본어 문장
+          <input id="aiSentenceInput" lang="ja" autocomplete="off" placeholder="日本語の文を入力" />
+        </label>
+      </div>
+      <p class="muted ai-sentence-analysis-status" id="aiSentenceAnalysisStatus"></p>
+      <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな
+읽기 わたし なんか きにさわる こと したかな
+해석 나 따위가 기분 상할 만한 일을 한 걸까
+단어장
+\`気に障る\` (きにさわる) 기분에 거슬리다 | 한자=気, 障 | 품사=동사표현 | 문자=한자+히라가나
+문법
+\`なんか\` 자신을 낮추거나 가볍게 말할 때 쓰는 표현"></textarea>
+    </section>
+  `;
+}
+
 export function renderTodayPage({ selectedDate, sentenceEntries, helpers }) {
   return {
     text: {

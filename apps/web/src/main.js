@@ -1,4 +1,5 @@
 import "@nihongo-study/ui/styles";
+import { analyzeJapaneseSentenceForStudy, defaultGeminiModel } from "@nihongo-study/ai";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import {
@@ -20,6 +21,7 @@ import {
   renderSourcesPage,
   renderStatsPage,
   renderStudyCardsPage,
+  sentenceEntryPanel,
   renderTasksPage,
   renderTaxonomyPage,
   renderTodayPage,
@@ -38,6 +40,8 @@ const store = createIdbStorage({
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
+const geminiApiKeyStorageKey = "nihongo-study.geminiApiKey";
+const geminiModelStorageKey = "nihongo-study.geminiModel";
 
 let state = createSampleState(todayKey);
 let currentPage = "home";
@@ -54,6 +58,10 @@ let quizQuestionFontSize = 32;
 let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
 let storageStatus = storageNotice;
+let aiSentenceAnalysisEnabled = false;
+let aiSentenceAnalysisInProgress = false;
+let geminiApiKey = readLocalSetting(geminiApiKeyStorageKey);
+let geminiModel = readLocalSetting(geminiModelStorageKey) || defaultGeminiModel;
 
 function byId(id) {
   return document.getElementById(id);
@@ -210,19 +218,7 @@ function todayPageTemplate() {
   return `
     <section class="page hidden-page" id="today">
       <div class="today-top-grid">
-        <section class="panel section" id="today-log">
-          <div class="panel-header">
-            <h2 class="panel-title" id="selectedDateTitle">문장 추가</h2>
-            <button class="primary-btn" id="addDailyEntryBtn" type="button">문장 추가</button>
-          </div>
-          <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな
-읽기 わたし なんか きにさわる こと したかな
-해석 나 따위가 기분 상할 만한 일을 한 걸까
-단어장
-\`気に障る\` (きにさわる) 기분에 거슬리다 | 한자=気, 障 | 품사=동사표현 | 문자=한자+히라가나
-문법
-\`なんか\` 자신을 낮추거나 가볍게 말할 때 쓰는 표현"></textarea>
-        </section>
+        ${sentenceEntryPanel()}
 
         <section class="panel section" id="today-manual-entry">
           <div class="panel-header">
@@ -459,7 +455,9 @@ function settingsPageTemplate() {
         <div class="settings-actions">
           <button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button>
           <button class="ghost-btn" id="loadBackupBtn" type="button">백업 불러오기</button>
+          <button class="ghost-btn" id="mergeBackupBtn" type="button">백업 추가하기</button>
           <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
+          <input id="mergeBackupFileInput" type="file" accept="application/json,.json" hidden />
         </div>
         <p class="muted" id="storageStatus"></p>
       </section>
@@ -477,6 +475,23 @@ function settingsPageTemplate() {
       <section class="panel section" id="settings-tts">
         <div class="panel-header"><h2 class="panel-title">음성 재생</h2></div>
         <p class="muted">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
+      </section>
+
+      <section class="panel section" id="settings-ai">
+        <div class="panel-header"><h2 class="panel-title">AI 문장 분석</h2></div>
+        <div class="settings-grid">
+          <label>Gemini API 키
+            <input id="geminiApiKeyInput" type="password" autocomplete="off" placeholder="AIza..." />
+          </label>
+          <label>Gemini 모델
+            <input id="geminiModelInput" type="text" autocomplete="off" placeholder="${defaultGeminiModel}" />
+          </label>
+        </div>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="saveGeminiApiKeyBtn" type="button">AI 설정 저장</button>
+          <button class="ghost-btn" id="clearGeminiApiKeyBtn" type="button">API 키 삭제</button>
+        </div>
+        <p class="muted" id="geminiApiKeyStatus"></p>
       </section>
     </section>
   `;
@@ -646,13 +661,19 @@ function bindEvents() {
   });
 
   byId("addDailyEntryBtn").addEventListener("click", addDailyEntryFromInput);
+  byId("aiSentenceAnalysisCheckbox").addEventListener("change", event => {
+    aiSentenceAnalysisEnabled = event.target.checked;
+    updateAiSentenceAnalysisFields();
+  });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
   byId("registerLearnedBtn").addEventListener("click", registerLearnedEntries);
   byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
   byId("downloadBackupBtn").addEventListener("click", downloadBackup);
   byId("loadBackupBtn").addEventListener("click", () => byId("backupFileInput").click());
+  byId("mergeBackupBtn").addEventListener("click", () => byId("mergeBackupFileInput").click());
   byId("backupFileInput").addEventListener("change", loadBackupFromFile);
+  byId("mergeBackupFileInput").addEventListener("change", mergeBackupFromFile);
 
   document.querySelectorAll("input[name='dailyManualKind']").forEach(input => {
     input.addEventListener("change", updateManualEntryPlaceholder);
@@ -691,6 +712,11 @@ function bindEvents() {
     quizCorrectReview = core.resolveQuizCorrectReview(event.target.value, scheduledReviewOptions);
     renderQuizSettings();
   });
+
+  byId("saveGeminiApiKeyBtn").addEventListener("click", saveGeminiApiKey);
+  byId("clearGeminiApiKeyBtn").addEventListener("click", clearGeminiApiKey);
+  renderGeminiApiKeySetting();
+  updateAiSentenceAnalysisFields();
 
   document.addEventListener("keydown", event => {
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
@@ -1026,7 +1052,10 @@ async function toggleTask(id) {
 
 async function addDailyEntryFromInput() {
   const input = byId("dailyEntryInput");
-  const rawText = input.value.trim();
+  const aiSentenceInput = byId("aiSentenceInput");
+  const rawText = aiSentenceAnalysisEnabled
+    ? await analyzeSentenceFromInput(aiSentenceInput)
+    : input.value.trim();
   if (!rawText) {
     return;
   }
@@ -1042,7 +1071,50 @@ async function addDailyEntryFromInput() {
     note: state.studyLog.note || ""
   });
   input.value = "";
+  if (aiSentenceInput) {
+    aiSentenceInput.value = "";
+  }
   renderAll();
+}
+
+async function analyzeSentenceFromInput(aiSentenceInput) {
+  if (aiSentenceAnalysisInProgress) {
+    return "";
+  }
+  const sentence = aiSentenceInput?.value.trim() || "";
+  if (!sentence) {
+    setAiSentenceAnalysisStatus("분석할 일본어 문장을 입력하세요.");
+    aiSentenceInput?.focus();
+    return "";
+  }
+  setAiSentenceAnalysisBusy(true);
+  setAiSentenceAnalysisStatus("AI 문장 분석 중입니다.");
+  try {
+    const result = await analyzeJapaneseSentenceForStudy({
+      sentence,
+      apiKey: geminiApiKey,
+      model: geminiModel
+    });
+    if (!result.ok) {
+      setAiSentenceAnalysisStatus(result.message);
+      if (result.reason === "missingApiKey") {
+        window.alert("설정에서 Gemini API 키를 먼저 저장하세요.");
+        openPage("settings");
+        byId("geminiApiKeyInput")?.focus();
+      }
+      return "";
+    }
+    byId("dailyEntryInput").value = result.rawText;
+    setAiSentenceAnalysisStatus("AI 분석 결과로 문장을 추가했습니다.");
+    return result.rawText;
+  } catch (error) {
+    const message = error.message || String(error);
+    setAiSentenceAnalysisStatus(`AI 문장 분석 실패: ${message}`);
+    window.alert(`AI 문장 분석 실패\n${message}`);
+    return "";
+  } finally {
+    setAiSentenceAnalysisBusy(false);
+  }
 }
 
 async function addManualEntryFromInput() {
@@ -1288,6 +1360,33 @@ async function loadBackupFromFile(event) {
   }
 }
 
+async function mergeBackupFromFile(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 추가할까요? 중복 데이터는 제외됩니다.")) {
+      return;
+    }
+    const backup = parseBackupFile(await file.text());
+    const current = await store.exportData();
+    const result = mergeBackupData(backupData(current), backupData(backup));
+    state = await store.importFullBackup({ data: result.data });
+    resetTransientUiState();
+    storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 중복 제외 ${result.summary.skipped}개`;
+    renderAll();
+  } catch (error) {
+    const message = error.message || String(error);
+    setStorageStatus(`백업 추가 실패: ${message}`);
+    window.alert(`백업 추가 실패\n${message}`);
+  } finally {
+    input.value = "";
+  }
+}
+
 function resetTransientUiState() {
   selectedDate = state.selectedDate;
   calendarMonth = selectedDate.slice(0, 7);
@@ -1307,21 +1406,216 @@ function parseBackupFile(text) {
     throw new Error("JSON 백업 파일을 읽을 수 없습니다.");
   }
 
-  const data = backup?.data && typeof backup.data === "object" ? backup.data : backup;
+  const data = backupData(backup);
   if (!isBackupData(data)) {
     throw new Error("일본어 공부노트 백업 파일 형식이 아닙니다.");
   }
   return backup;
 }
 
+function backupData(backup) {
+  return backup?.data && typeof backup.data === "object" ? backup.data : backup;
+}
+
 function isBackupData(data) {
   return Boolean(data && typeof data === "object" && [
     "studyDays",
     "dailyEntries",
+    "allDailyEntries",
     "dailyEntryLinks",
     "tasks",
     "items"
   ].some(name => Array.isArray(data[name])));
+}
+
+function mergeBackupData(currentData, importedData) {
+  const idMap = new Map();
+  const studyDays = mergeUniqueRows(
+    rows(currentData.studyDays),
+    rows(importedData.studyDays),
+    studyDayKeys
+  );
+  const dailyEntries = mergeDailyEntries(
+    rows(currentData.allDailyEntries || currentData.dailyEntries),
+    rows(importedData.allDailyEntries || importedData.dailyEntries),
+    idMap
+  );
+  const tasks = mergeUniqueRows(
+    rows(currentData.tasks),
+    rows(importedData.tasks),
+    taskKeys
+  );
+  const items = mergeUniqueRows(
+    rows(currentData.items),
+    rows(importedData.items),
+    itemKeys
+  );
+  const dailyEntryLinks = mergeUniqueRows(
+    rows(currentData.dailyEntryLinks),
+    rows(importedData.dailyEntryLinks)
+      .map(link => remapDailyEntryLink(link, idMap))
+      .filter(link => link.entryId && link.sentenceId),
+    dailyEntryLinkKeys
+  );
+
+  return {
+    data: {
+      selectedDate: currentData.selectedDate || selectedDate || importedData.selectedDate || todayKey(),
+      studyDays: studyDays.rows,
+      dailyEntries: dailyEntries.rows,
+      dailyEntryLinks: dailyEntryLinks.rows,
+      tasks: tasks.rows,
+      items: items.rows
+    },
+    summary: sumMergeSummaries([studyDays, dailyEntries, dailyEntryLinks, tasks, items])
+  };
+}
+
+function mergeDailyEntries(currentRows, importedRows, idMap) {
+  const existing = new Map();
+  currentRows.forEach(row => {
+    dailyEntryKeys(row).forEach(key => existing.set(key, row.id));
+  });
+
+  importedRows.forEach(row => {
+    const matchedId = dailyEntryKeys(row).map(key => existing.get(key)).find(Boolean);
+    if (matchedId && row.id) {
+      idMap.set(String(row.id), matchedId);
+    }
+  });
+
+  const mergedRows = [...currentRows];
+  let added = 0;
+  let skipped = 0;
+
+  importedRows.forEach(rawRow => {
+    const row = remapDailyEntry(rawRow, idMap);
+    const keys = dailyEntryKeys(row);
+    const matchedId = keys.map(key => existing.get(key)).find(Boolean);
+    if (matchedId) {
+      if (rawRow.id) {
+        idMap.set(String(rawRow.id), matchedId);
+      }
+      skipped += 1;
+      return;
+    }
+
+    mergedRows.push(row);
+    if (rawRow.id) {
+      idMap.set(String(rawRow.id), row.id);
+    }
+    keys.forEach(key => existing.set(key, row.id));
+    added += 1;
+  });
+
+  return { rows: mergedRows, added, skipped };
+}
+
+function mergeUniqueRows(currentRows, importedRows, keyFactory) {
+  const existing = new Set(currentRows.flatMap(keyFactory));
+  const mergedRows = [...currentRows];
+  let added = 0;
+  let skipped = 0;
+
+  importedRows.forEach(row => {
+    const keys = keyFactory(row);
+    if (keys.some(key => existing.has(key))) {
+      skipped += 1;
+      return;
+    }
+    mergedRows.push(row);
+    keys.forEach(key => existing.add(key));
+    added += 1;
+  });
+
+  return { rows: mergedRows, added, skipped };
+}
+
+function remapDailyEntry(entry, idMap) {
+  const parentId = remappedId(entry.parentId, idMap);
+  return {
+    ...entry,
+    parentId,
+    sourceSentences: rows(entry.sourceSentences).map(sentence => ({
+      ...sentence,
+      id: remappedId(sentence.id, idMap)
+    }))
+  };
+}
+
+function remapDailyEntryLink(link, idMap) {
+  const entryId = remappedId(link.entryId || link.entry_id, idMap);
+  const sentenceId = remappedId(link.sentenceId || link.sentence_id, idMap);
+  return {
+    ...link,
+    id: link.id || `${entryId}::${sentenceId}`,
+    entryId,
+    sentenceId
+  };
+}
+
+function remappedId(id, idMap) {
+  const key = String(id || "");
+  return key ? idMap.get(key) || key : "";
+}
+
+function studyDayKeys(row) {
+  return compactKeys([key("studyDay", row.studyDate)]);
+}
+
+function dailyEntryKeys(row) {
+  return compactKeys([
+    key("dailyEntryId", row.id),
+    key("dailyEntry", row.studyDate, row.kind, row.title, row.reading, row.meaning, row.parentTitle || row.parentId)
+  ]);
+}
+
+function dailyEntryLinkKeys(row) {
+  return compactKeys([
+    key("dailyEntryLinkId", row.id),
+    key("dailyEntryLink", row.entryId || row.entry_id, row.sentenceId || row.sentence_id)
+  ]);
+}
+
+function taskKeys(row) {
+  return compactKeys([
+    key("taskId", row.id),
+    key("task", row.studyDate, row.title, row.note, row.tag)
+  ]);
+}
+
+function itemKeys(row) {
+  return compactKeys([
+    key("itemId", row.id),
+    key("item", row.kind, row.title, row.reading, row.meaning)
+  ]);
+}
+
+function compactKeys(keys) {
+  return keys.filter(Boolean);
+}
+
+function key(scope, ...parts) {
+  const normalized = parts.map(keyPart);
+  if (!normalized.some(Boolean)) {
+    return "";
+  }
+  return `${scope}:${normalized.join("|")}`;
+}
+
+function keyPart(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function rows(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function sumMergeSummaries(results) {
+  return results.reduce((summary, result) => ({
+    added: summary.added + result.added,
+    skipped: summary.skipped + result.skipped
+  }), { added: 0, skipped: 0 });
 }
 
 function backupFileName() {
@@ -1370,6 +1664,89 @@ function applyQuizQuestionFontSize() {
 function setSearch(value) {
   searchTerm = String(value || "").trim();
   byId("globalSearch").value = searchTerm;
+}
+
+function updateAiSentenceAnalysisFields() {
+  const checkbox = byId("aiSentenceAnalysisCheckbox");
+  const fields = byId("aiSentenceFields");
+  if (!checkbox || !fields) {
+    return;
+  }
+  checkbox.checked = aiSentenceAnalysisEnabled;
+  fields.hidden = !aiSentenceAnalysisEnabled;
+  setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled ? "일본어 문장을 입력하면 AI 분석 결과로 문장 카드를 추가합니다." : "");
+  if (aiSentenceAnalysisEnabled) {
+    byId("aiSentenceInput")?.focus();
+  }
+}
+
+function setAiSentenceAnalysisBusy(busy) {
+  aiSentenceAnalysisInProgress = busy;
+  const button = byId("addDailyEntryBtn");
+  const checkbox = byId("aiSentenceAnalysisCheckbox");
+  if (button) {
+    button.disabled = busy;
+    button.textContent = busy ? "분석 중" : "문장 추가";
+  }
+  if (checkbox) {
+    checkbox.disabled = busy;
+  }
+}
+
+function setAiSentenceAnalysisStatus(message) {
+  const element = byId("aiSentenceAnalysisStatus");
+  if (element) {
+    element.textContent = message;
+  }
+}
+
+function renderGeminiApiKeySetting() {
+  const input = byId("geminiApiKeyInput");
+  if (input && document.activeElement !== input) {
+    input.value = geminiApiKey;
+  }
+  const modelInput = byId("geminiModelInput");
+  if (modelInput && document.activeElement !== modelInput) {
+    modelInput.value = geminiModel;
+  }
+  const status = byId("geminiApiKeyStatus");
+  if (status) {
+    status.textContent = geminiApiKey
+      ? `Gemini API 키가 저장되어 있습니다. 모델: ${geminiModel}`
+      : `Gemini API 키가 없습니다. 모델: ${geminiModel}`;
+  }
+}
+
+function saveGeminiApiKey() {
+  const input = byId("geminiApiKeyInput");
+  const modelInput = byId("geminiModelInput");
+  const nextKey = input.value.trim();
+  const nextModel = normalizeGeminiModel(modelInput?.value);
+  if (!writeLocalSetting(geminiModelStorageKey, nextModel)) {
+    byId("geminiApiKeyStatus").textContent = "Gemini 모델 설정을 브라우저에 저장하지 못했습니다.";
+    return;
+  }
+  geminiModel = nextModel;
+  if (!nextKey) {
+    clearGeminiApiKey();
+    return;
+  }
+  if (!writeLocalSetting(geminiApiKeyStorageKey, nextKey)) {
+    byId("geminiApiKeyStatus").textContent = "Gemini API 키를 브라우저에 저장하지 못했습니다.";
+    return;
+  }
+  geminiApiKey = nextKey;
+  renderGeminiApiKeySetting();
+}
+
+function clearGeminiApiKey() {
+  removeLocalSetting(geminiApiKeyStorageKey);
+  geminiApiKey = "";
+  renderGeminiApiKeySetting();
+}
+
+function normalizeGeminiModel(value) {
+  return String(value || "").trim() || defaultGeminiModel;
 }
 
 function applyPagePatch(patch) {
@@ -1473,6 +1850,31 @@ function escapeHtml(value) {
 
 function highlight(value) {
   return escapeHtml(value);
+}
+
+function readLocalSetting(keyName) {
+  try {
+    return globalThis.localStorage?.getItem(keyName) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLocalSetting(keyName, value) {
+  try {
+    globalThis.localStorage?.setItem(keyName, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeLocalSetting(keyName) {
+  try {
+    globalThis.localStorage?.removeItem(keyName);
+  } catch {
+    // Local browser storage can be unavailable in restricted modes.
+  }
 }
 
 async function start() {
