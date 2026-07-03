@@ -13,11 +13,11 @@ export function sentenceEntryPanel() {
       </label>
       <div class="ai-sentence-fields" id="aiSentenceFields" hidden>
         <label>일본어 문장
-          <input id="aiSentenceInput" lang="ja" autocomplete="off" placeholder="日本語の文を入力" />
+          <span class="ai-sentence-input-row">
+            <input id="aiSentenceInput" lang="ja" autocomplete="off" placeholder="日本語の文を入力" />
+            <button class="ghost-btn compact-action-btn" id="analyzeAiSentenceBtn" type="button">AI 분석</button>
+          </span>
         </label>
-        <div class="ai-sentence-action-row">
-          <button class="ghost-btn compact-action-btn" id="analyzeAiSentenceBtn" type="button">AI 분석</button>
-        </div>
       </div>
       <p class="muted ai-sentence-analysis-status" id="aiSentenceAnalysisStatus"></p>
       <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな

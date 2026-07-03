@@ -81,9 +81,19 @@
   display: none;
 }
 
-.ai-sentence-action-row {
+.ai-sentence-input-row {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-sentence-input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-sentence-input-row button {
+  flex: 0 0 auto;
 }
 
 .ai-sentence-analysis-status {
