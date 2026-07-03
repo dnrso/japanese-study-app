@@ -9,6 +9,8 @@ on:
       - "apps/web/**"
       - "packages/core/**"
       - "packages/ui/**"
+      - "packages/ai/**"
+      - "packages/storage-idb/**"
       - ".github/workflows/static.yml"
       - "package*.json"
 
