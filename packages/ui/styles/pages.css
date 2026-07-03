@@ -81,6 +81,11 @@
   display: none;
 }
 
+.ai-sentence-action-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .ai-sentence-analysis-status {
   margin: -2px 0 10px;
 }
