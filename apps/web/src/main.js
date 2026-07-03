@@ -60,6 +60,7 @@ let quizCorrectReview = "내일";
 let storageStatus = storageNotice;
 let aiSentenceAnalysisEnabled = false;
 let aiSentenceAnalysisInProgress = false;
+let aiSentenceAnalysisResultReady = false;
 let geminiApiKey = readLocalSetting(geminiApiKeyStorageKey);
 let geminiModel = readLocalSetting(geminiModelStorageKey) || defaultGeminiModel;
 
@@ -664,6 +665,7 @@ function bindEvents() {
   byId("analyzeAiSentenceBtn").addEventListener("click", analyzeSentenceFromInput);
   byId("aiSentenceAnalysisCheckbox").addEventListener("change", event => {
     aiSentenceAnalysisEnabled = event.target.checked;
+    aiSentenceAnalysisResultReady = false;
     updateAiSentenceAnalysisFields();
   });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
@@ -1077,8 +1079,10 @@ async function addDailyEntryFromInput() {
   if (aiSentenceInput) {
     aiSentenceInput.value = "";
   }
+  aiSentenceAnalysisResultReady = false;
   if (aiSentenceAnalysisEnabled) {
     setAiSentenceAnalysisStatus("문장 카드에 추가했습니다.");
+    updateAddDailyEntryButtonLabel();
   }
   renderAll();
 }
@@ -1110,18 +1114,19 @@ async function analyzeSentenceFromInput() {
         openPage("settings");
         byId("geminiApiKeyInput")?.focus();
       }
-      return;
+    } else {
+      dailyEntryInput.value = result.rawText;
+      aiSentenceAnalysisResultReady = true;
+      updateAddDailyEntryButtonLabel();
+      dailyEntryInput.focus();
+      setAiSentenceAnalysisStatus("AI 분석 결과를 입력칸에 넣었습니다. 내용을 확인한 뒤 문장 추가를 누르세요.");
     }
-    dailyEntryInput.value = result.rawText;
-    dailyEntryInput.focus();
-    setAiSentenceAnalysisStatus("AI 분석 결과를 입력칸에 넣었습니다. 내용을 확인한 뒤 문장 추가를 누르세요.");
   } catch (error) {
     const message = error.message || String(error);
     setAiSentenceAnalysisStatus(`AI 문장 분석 실패: ${message}`);
     window.alert(`AI 문장 분석 실패\n${message}`);
-  } finally {
-    setAiSentenceAnalysisBusy(false);
   }
+  setAiSentenceAnalysisBusy(false);
 }
 
 async function addManualEntryFromInput() {
@@ -1682,6 +1687,7 @@ function updateAiSentenceAnalysisFields() {
   checkbox.checked = aiSentenceAnalysisEnabled;
   fields.hidden = !aiSentenceAnalysisEnabled;
   setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled ? "일본어 문장을 입력하고 AI 분석을 누르면 결과가 아래 입력칸에 표시됩니다." : "");
+  updateAddDailyEntryButtonLabel();
   if (aiSentenceAnalysisEnabled) {
     byId("aiSentenceInput")?.focus();
   }
@@ -1694,6 +1700,7 @@ function setAiSentenceAnalysisBusy(busy) {
   const checkbox = byId("aiSentenceAnalysisCheckbox");
   if (addButton) {
     addButton.disabled = busy;
+    updateAddDailyEntryButtonLabel();
   }
   if (analyzeButton) {
     analyzeButton.disabled = busy;
@@ -1709,6 +1716,16 @@ function setAiSentenceAnalysisStatus(message) {
   if (element) {
     element.textContent = message;
   }
+}
+
+function updateAddDailyEntryButtonLabel() {
+  const button = byId("addDailyEntryBtn");
+  if (!button) {
+    return;
+  }
+  button.textContent = aiSentenceAnalysisEnabled && aiSentenceAnalysisResultReady
+    ? "확인 후 문장 추가"
+    : "문장 추가";
 }
 
 function renderGeminiApiKeySetting() {
