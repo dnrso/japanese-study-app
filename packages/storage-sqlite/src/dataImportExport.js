@@ -13,6 +13,7 @@ function createDataImportExport(deps) {
     upsertItem,
     normalizeDailyEntry,
     normalizeItem,
+    normalizeTask,
     normalizeDate,
     toNumber,
     text,
@@ -97,6 +98,10 @@ function replaceBackup(backup) {
     INSERT OR IGNORE INTO daily_entry_links (entry_id, sentence_id)
     VALUES (@entryId, @sentenceId)
   `);
+  const insertTask = getDb().prepare(`
+    INSERT INTO tasks (id, title, note, tag, done)
+    VALUES (@id, @title, @note, @tag, @done)
+  `);
   const insertItem = getDb().prepare(`
     INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
     VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
@@ -116,6 +121,7 @@ function replaceBackup(backup) {
       sentenceId: text(link.sentenceId || link.sentence_id)
     }));
     migrateParentLinks();
+    (backup.tasks || []).forEach(task => insertTask.run(normalizeTask(task)));
     (backup.items || []).forEach(item => insertItem.run(normalizeItem(item)));
   })();
 

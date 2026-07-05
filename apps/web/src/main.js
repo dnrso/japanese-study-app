@@ -1,5 +1,4 @@
 import "@nihongo-study/ui/styles";
-import { analyzeJapaneseSentenceForStudy, defaultGeminiModel } from "@nihongo-study/ai";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import {
@@ -18,6 +17,7 @@ import {
   renderQuizSettingsPage,
   renderReviewPage,
   renderSentencesPage,
+  safeSourceUrl,
   renderSourcesPage,
   renderStatsPage,
   renderStudyCardsPage,
@@ -40,8 +40,6 @@ const store = createIdbStorage({
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
-const geminiApiKeyStorageKey = "nihongo-study.geminiApiKey";
-const geminiModelStorageKey = "nihongo-study.geminiModel";
 
 let state = createSampleState(todayKey);
 let currentPage = "home";
@@ -58,10 +56,6 @@ let quizQuestionFontSize = 32;
 let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
 let storageStatus = storageNotice;
-let aiSentenceAnalysisEnabled = false;
-let aiSentenceAnalysisInProgress = false;
-let geminiApiKey = readLocalSetting(geminiApiKeyStorageKey);
-let geminiModel = readLocalSetting(geminiModelStorageKey) || defaultGeminiModel;
 
 function byId(id) {
   return document.getElementById(id);
@@ -477,22 +471,6 @@ function settingsPageTemplate() {
         <p class="muted">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
       </section>
 
-      <section class="panel section" id="settings-ai">
-        <div class="panel-header"><h2 class="panel-title">AI 문장 분석</h2></div>
-        <div class="settings-grid">
-          <label>Gemini API 키
-            <input id="geminiApiKeyInput" type="password" autocomplete="off" placeholder="AIza..." />
-          </label>
-          <label>Gemini 모델
-            <input id="geminiModelInput" type="text" autocomplete="off" placeholder="${defaultGeminiModel}" />
-          </label>
-        </div>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="saveGeminiApiKeyBtn" type="button">AI 설정 저장</button>
-          <button class="ghost-btn" id="clearGeminiApiKeyBtn" type="button">API 키 삭제</button>
-        </div>
-        <p class="muted" id="geminiApiKeyStatus"></p>
-      </section>
     </section>
   `;
 }
@@ -661,11 +639,6 @@ function bindEvents() {
   });
 
   byId("addDailyEntryBtn").addEventListener("click", addDailyEntryFromInput);
-  byId("analyzeAiSentenceBtn").addEventListener("click", analyzeSentenceFromInput);
-  byId("aiSentenceAnalysisCheckbox").addEventListener("change", event => {
-    aiSentenceAnalysisEnabled = event.target.checked;
-    updateAiSentenceAnalysisFields();
-  });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
   byId("registerLearnedBtn").addEventListener("click", registerLearnedEntries);
   byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
@@ -713,11 +686,6 @@ function bindEvents() {
     quizCorrectReview = core.resolveQuizCorrectReview(event.target.value, scheduledReviewOptions);
     renderQuizSettings();
   });
-
-  byId("saveGeminiApiKeyBtn").addEventListener("click", saveGeminiApiKey);
-  byId("clearGeminiApiKeyBtn").addEventListener("click", clearGeminiApiKey);
-  renderGeminiApiKeySetting();
-  updateAiSentenceAnalysisFields();
 
   document.addEventListener("keydown", event => {
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
@@ -1053,12 +1021,8 @@ async function toggleTask(id) {
 
 async function addDailyEntryFromInput() {
   const input = byId("dailyEntryInput");
-  const aiSentenceInput = byId("aiSentenceInput");
   const rawText = input.value.trim();
   if (!rawText) {
-    if (aiSentenceAnalysisEnabled && aiSentenceInput?.value.trim()) {
-      setAiSentenceAnalysisStatus("먼저 AI 분석 결과를 만든 뒤 내용을 확인하고 문장 추가를 누르세요.");
-    }
     input.focus();
     return;
   }
@@ -1074,53 +1038,7 @@ async function addDailyEntryFromInput() {
     note: state.studyLog.note || ""
   });
   input.value = "";
-  if (aiSentenceInput) {
-    aiSentenceInput.value = "";
-  }
-  if (aiSentenceAnalysisEnabled) {
-    setAiSentenceAnalysisStatus("문장 카드에 추가했습니다.");
-  }
   renderAll();
-}
-
-async function analyzeSentenceFromInput() {
-  if (aiSentenceAnalysisInProgress) {
-    return;
-  }
-  const aiSentenceInput = byId("aiSentenceInput");
-  const dailyEntryInput = byId("dailyEntryInput");
-  const sentence = aiSentenceInput?.value.trim() || "";
-  if (!sentence) {
-    setAiSentenceAnalysisStatus("분석할 일본어 문장을 입력하세요.");
-    aiSentenceInput?.focus();
-    return;
-  }
-  setAiSentenceAnalysisBusy(true);
-  setAiSentenceAnalysisStatus("AI 문장 분석 중입니다.");
-  try {
-    const result = await analyzeJapaneseSentenceForStudy({
-      sentence,
-      apiKey: geminiApiKey,
-      model: geminiModel
-    });
-    if (!result.ok) {
-      setAiSentenceAnalysisStatus(result.message);
-      if (result.reason === "missingApiKey") {
-        window.alert("설정에서 Gemini API 키를 먼저 저장하세요.");
-        openPage("settings");
-        byId("geminiApiKeyInput")?.focus();
-      }
-    } else {
-      dailyEntryInput.value = result.rawText;
-      dailyEntryInput.focus();
-      setAiSentenceAnalysisStatus("AI 분석 결과를 입력칸에 넣었습니다. 내용을 확인한 뒤 문장 추가를 누르세요.");
-    }
-  } catch (error) {
-    const message = error.message || String(error);
-    setAiSentenceAnalysisStatus(`AI 문장 분석 실패: ${message}`);
-    window.alert(`AI 문장 분석 실패\n${message}`);
-  }
-  setAiSentenceAnalysisBusy(false);
 }
 
 async function addManualEntryFromInput() {
@@ -1163,6 +1081,11 @@ async function promptAddItem(kind) {
   }
   const reading = kind === "source" ? "자료" : window.prompt("읽기/분류를 입력하세요.", "") || "";
   const meaning = window.prompt("뜻/요약을 입력하세요.", "") || "";
+  const sourceLink = kind === "source" ? normalizeSourceLinkInput(window.prompt("자료 링크를 입력하세요.", "") || "") : "웹 미리보기";
+  if (sourceLink === null) {
+    return;
+  }
+  const sourceProgress = kind === "source" ? normalizeSourceProgressInput(window.prompt("자료 진행률을 입력하세요. (0-100)", "")) : "";
   state = await store.upsertItem({
     id: nextId(kind),
     kind,
@@ -1173,12 +1096,26 @@ async function promptAddItem(kind) {
     part: kind === "word" ? "명사" : "",
     script: kind === "word" ? "한자+히라가나" : "",
     review: kind === "source" ? "" : "대기",
-    source: kind === "source" ? window.prompt("자료 링크를 입력하세요.", "") || "" : "웹 미리보기",
+    source: sourceLink,
     note: "",
+    kanji: sourceProgress,
     studyDate: selectedDate
   });
   renderAll();
   openPage(pageForKind(kind));
+}
+
+function normalizeSourceLinkInput(value) {
+  const rawUrl = String(value || "").trim();
+  if (!rawUrl) {
+    return "";
+  }
+  const url = safeSourceUrl(rawUrl);
+  if (!url) {
+    window.alert("자료 링크는 http:// 또는 https:// URL만 사용할 수 있습니다.");
+    return null;
+  }
+  return url;
 }
 
 async function promptEditItem(id) {
@@ -1191,13 +1128,45 @@ async function promptEditItem(id) {
     return;
   }
   const meaning = window.prompt("뜻/요약을 수정하세요.", item.meaning || "") || "";
-  state = await store.upsertItem({
+  const payload = {
     ...item,
     title,
     meaning,
     studyDate: selectedDate
-  });
+  };
+  if (item.kind === "source") {
+    const sourceLinkInput = window.prompt("자료 링크를 수정하세요.", safeSourceUrl(item.source) || "");
+    const sourceProgress = window.prompt("자료 진행률을 수정하세요. (0-100)", sourceProgressInputValue(item));
+    if (sourceLinkInput !== null) {
+      const sourceLink = normalizeSourceLinkInput(sourceLinkInput);
+      if (sourceLink === null) {
+        return;
+      }
+      payload.source = sourceLink;
+    }
+    if (sourceProgress !== null) {
+      payload.kanji = normalizeSourceProgressInput(sourceProgress);
+    }
+  }
+  state = await store.upsertItem(payload);
   renderAll();
+}
+
+function sourceProgressInputValue(item) {
+  const progress = core.sourceProgress(item);
+  return progress > 0 ? String(progress) : "";
+}
+
+function normalizeSourceProgressInput(value) {
+  const textValue = String(value ?? "").trim();
+  if (!textValue) {
+    return "";
+  }
+  const progress = Number(textValue);
+  if (!Number.isFinite(progress)) {
+    return "";
+  }
+  return String(Math.min(100, Math.max(0, Math.round(progress))));
 }
 
 async function deleteItem(id) {
@@ -1672,93 +1641,6 @@ function setSearch(value) {
   byId("globalSearch").value = searchTerm;
 }
 
-function updateAiSentenceAnalysisFields() {
-  const checkbox = byId("aiSentenceAnalysisCheckbox");
-  const fields = byId("aiSentenceFields");
-  if (!checkbox || !fields) {
-    return;
-  }
-  checkbox.checked = aiSentenceAnalysisEnabled;
-  fields.hidden = !aiSentenceAnalysisEnabled;
-  setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled ? "일본어 문장을 입력하고 AI 분석을 누르면 결과가 아래 입력칸에 표시됩니다." : "");
-  if (aiSentenceAnalysisEnabled) {
-    byId("aiSentenceInput")?.focus();
-  }
-}
-
-function setAiSentenceAnalysisBusy(busy) {
-  aiSentenceAnalysisInProgress = busy;
-  const addButton = byId("addDailyEntryBtn");
-  const analyzeButton = byId("analyzeAiSentenceBtn");
-  const checkbox = byId("aiSentenceAnalysisCheckbox");
-  if (addButton) {
-    addButton.disabled = busy;
-  }
-  if (analyzeButton) {
-    analyzeButton.disabled = busy;
-    analyzeButton.textContent = busy ? "분석 중" : "AI 분석";
-  }
-  if (checkbox) {
-    checkbox.disabled = busy;
-  }
-}
-
-function setAiSentenceAnalysisStatus(message) {
-  const element = byId("aiSentenceAnalysisStatus");
-  if (element) {
-    element.textContent = message;
-  }
-}
-
-function renderGeminiApiKeySetting() {
-  const input = byId("geminiApiKeyInput");
-  if (input && document.activeElement !== input) {
-    input.value = geminiApiKey;
-  }
-  const modelInput = byId("geminiModelInput");
-  if (modelInput && document.activeElement !== modelInput) {
-    modelInput.value = geminiModel;
-  }
-  const status = byId("geminiApiKeyStatus");
-  if (status) {
-    status.textContent = geminiApiKey
-      ? `Gemini API 키가 저장되어 있습니다. 모델: ${geminiModel}`
-      : `Gemini API 키가 없습니다. 모델: ${geminiModel}`;
-  }
-}
-
-function saveGeminiApiKey() {
-  const input = byId("geminiApiKeyInput");
-  const modelInput = byId("geminiModelInput");
-  const nextKey = input.value.trim();
-  const nextModel = normalizeGeminiModel(modelInput?.value);
-  if (!writeLocalSetting(geminiModelStorageKey, nextModel)) {
-    byId("geminiApiKeyStatus").textContent = "Gemini 모델 설정을 브라우저에 저장하지 못했습니다.";
-    return;
-  }
-  geminiModel = nextModel;
-  if (!nextKey) {
-    clearGeminiApiKey();
-    return;
-  }
-  if (!writeLocalSetting(geminiApiKeyStorageKey, nextKey)) {
-    byId("geminiApiKeyStatus").textContent = "Gemini API 키를 브라우저에 저장하지 못했습니다.";
-    return;
-  }
-  geminiApiKey = nextKey;
-  renderGeminiApiKeySetting();
-}
-
-function clearGeminiApiKey() {
-  removeLocalSetting(geminiApiKeyStorageKey);
-  geminiApiKey = "";
-  renderGeminiApiKeySetting();
-}
-
-function normalizeGeminiModel(value) {
-  return String(value || "").trim() || defaultGeminiModel;
-}
-
 function applyPagePatch(patch) {
   applySharedPagePatch(patch, { document });
 }
@@ -1860,31 +1742,6 @@ function escapeHtml(value) {
 
 function highlight(value) {
   return escapeHtml(value);
-}
-
-function readLocalSetting(keyName) {
-  try {
-    return globalThis.localStorage?.getItem(keyName) || "";
-  } catch {
-    return "";
-  }
-}
-
-function writeLocalSetting(keyName, value) {
-  try {
-    globalThis.localStorage?.setItem(keyName, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function removeLocalSetting(keyName) {
-  try {
-    globalThis.localStorage?.removeItem(keyName);
-  } catch {
-    // Local browser storage can be unavailable in restricted modes.
-  }
 }
 
 async function start() {

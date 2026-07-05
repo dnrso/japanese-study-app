@@ -218,8 +218,17 @@ export function studyStats(state = {}) {
     totalMinutes: Number(state.studyLog?.totalMinutes || 0),
     totalWords: items.filter(item => item.kind === "word").length,
     totalGrammarExpression: items.filter(item => ["grammar", "expression"].includes(item.kind)).length,
-    completedSources: items.filter(item => item.kind === "source" && Number(item.source) >= 100).length
+    completedSources: items.filter(item => item.kind === "source" && sourceProgress(item) >= 100).length
   };
+}
+
+export function sourceProgress(item = {}) {
+  const progress = [item.kanji, item.source]
+    .map(value => String(value ?? "").trim())
+    .filter(Boolean)
+    .map(value => Number(value))
+    .find(value => Number.isFinite(value));
+  return progress === undefined ? 0 : Math.min(100, Math.max(0, progress));
 }
 
 export function quickFilterCounts(state = {}, searchTerm = "") {

@@ -1,6 +1,6 @@
 export { homeWelcomePanel, renderHomePage, renderQuickFiltersPage, renderTasksPage } from "./home.js";
 export { renderCalendarPage, renderLearnedSectionsPage, renderTodayPage, sentenceEntryPanel } from "./today.js";
-export { renderSourcesPage } from "./sources.js";
+export { renderSourcesPage, safeSourceUrl } from "./sources.js";
 export { renderSentencesPage } from "./sentences.js";
 export { renderTaxonomyPage, renderWordsPage } from "./words.js";
 export { renderStudyCardsPage } from "./studyCards.js";

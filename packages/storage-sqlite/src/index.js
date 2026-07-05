@@ -853,6 +853,7 @@ const importExport = createDataImportExport({
   upsertItem,
   normalizeDailyEntry,
   normalizeItem,
+  normalizeTask,
   normalizeDate,
   toNumber,
   text,

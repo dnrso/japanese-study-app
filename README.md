@@ -4,7 +4,7 @@ NihonGo Study
 문장 중심의 개인 일본어 공부 앱입니다.
 오늘 공부한 일본어 문장을 저장하고, 문장에서 단어, 문법, 표현, 한자를 정리해 단어장과 복습 큐로 관리합니다.
 
-현재 프로젝트는 npm workspaces 기반 monorepo입니다. Electron 데스크톱 앱과 Vite 웹 앱을 `apps/`에 두고, 공통 로직과 UI, 저장소, TTS, AI 문장 분석 기능은 `packages/`로 분리하고 있습니다.
+현재 프로젝트는 npm workspaces 기반 monorepo입니다. Electron 데스크톱 앱과 Vite 웹 앱을 `apps/`에 두고, 공통 로직과 UI, 저장소, TTS는 `packages/`로 분리하고 있습니다.
 
 
 실행 및 빌드
@@ -175,7 +175,7 @@ AI 문장 분석 공통 패키지입니다.
 - `analyzeJapaneseSentenceForStudy()` 공통 분석 흐름
 - 빈 문장, API 키 누락, API 응답 오류 처리
 
-웹 앱에서는 설정 탭에서 Gemini API 키와 모델명을 저장하고, 오늘 공부 탭의 `AI 문장 분석` 체크 옵션으로 분석 결과를 문장 추가 데이터로 저장합니다.
+현재 웹 앱은 브라우저에 Gemini API 키나 모델명을 저장하지 않으며, 설정 화면에도 Gemini API 설정을 노출하지 않습니다.
 
 ### `packages/tts`
 
@@ -207,7 +207,6 @@ Windows unpacked 빌드에서는 실행 파일이 있는 폴더 기준으로 `ap
 
 - 브라우저 사이트 데이터를 삭제하면 앱 데이터도 삭제됩니다.
 - 설정 탭에서 JSON 백업 다운로드, 전체 로드, 병합 추가 로드를 사용할 수 있습니다.
-- Gemini API 키와 모델명은 브라우저 `localStorage`에 저장됩니다.
 
 
 현재 기능
@@ -246,24 +245,10 @@ Windows unpacked 빌드에서는 실행 파일이 있는 폴더 기준으로 `ap
 - 웹 JSON 백업 다운로드
 - 웹 JSON 백업 전체 로드
 - 웹 JSON 백업 병합 추가 로드, 중복 제외
-- Gemini 기반 AI 문장 분석
 - 브라우저 기본 TTS 기반 일본어 음성 재생
 - 데스크톱 VOICEVOX 기반 일본어 음성 재생
 - Windows unpacked 빌드
 - 데스크톱 schema 변경 시 기존 앱 데이터 백업
-
-
-AI 문장 분석
-------------
-
-웹 앱 설정 탭에서 아래 값을 설정합니다.
-
-- Gemini API 키
-- Gemini 모델명
-
-기본 모델은 `gemini-2.5-flash`입니다. 다른 모델을 사용하려면 설정 탭의 `Gemini 모델` 입력칸에 모델명을 저장합니다.
-
-오늘 공부 탭에서 `AI 문장 분석`을 체크하면 일본어 문장 입력칸이 표시됩니다. 문장을 입력하고 `문장 추가`를 누르면 `packages/ai`의 공통 분석 흐름을 통해 Gemini에 요청하고, 반환된 분석 텍스트를 기존 문장 추가 형식으로 저장합니다.
 
 
 GitHub Pages 배포
@@ -303,8 +288,7 @@ GitHub Pages 배포
 
 - `apps/android` 추가
 - `packages/storage-cloud` 추가
-- 웹 GitHub Pages workflow path에 `packages/ai`와 `packages/storage-idb` 포함
-- AI 호출을 서버/클라우드 함수로 프록시해 브라우저 API 키 노출 줄이기
+- AI 기능을 재도입할 경우 서버/클라우드 함수로 호출을 프록시해 브라우저 API 키 저장을 피하기
 - 문법/표현 퀴즈 구현
 - SRS 알고리즘 고도화
 - 중복 항목 처리 UI 개선

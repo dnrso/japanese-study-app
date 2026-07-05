@@ -56,10 +56,11 @@ function openDialog(kind, item = null) {
   byId("itemSource").value = kind === "source" ? "" : (item?.source || "");
   byId("itemNote").value = item?.note || "";
   byId("sourceTitle").value = item?.title || "";
-  byId("sourceLink").value = item?.source || "";
+  byId("sourceLink").value = uiPages.safeSourceUrl(item?.source) || "";
   byId("sourceNote").value = item?.note || item?.meaning || "";
   byId("sourceLevel").value = item?.level || "";
   byId("sourceTags").value = item?.reading || "";
+  byId("sourceProgress").value = sourceProgressInputValue(item);
   dialog.showModal();
 }
 
@@ -83,6 +84,10 @@ async function saveItemFromDialog() {
   const form = byId("itemForm");
   const kind = byId("itemKind").value;
   const editId = form.dataset.editId;
+  const sourceLink = kind === "source" ? normalizeSourceLinkInput(byId("sourceLink").value) : "";
+  if (sourceLink === null) {
+    return false;
+  }
   const payload = kind === "source" ? {
     id: editId || crypto.randomUUID(),
     kind,
@@ -94,9 +99,9 @@ async function saveItemFromDialog() {
     part: "",
     script: "",
     review: "",
-    source: byId("sourceLink").value.trim(),
+    source: sourceLink,
     note: byId("sourceNote").value.trim(),
-    kanji: ""
+    kanji: normalizeSourceProgressInput(byId("sourceProgress").value)
   } : {
     id: editId || crypto.randomUUID(),
     kind,
@@ -120,6 +125,39 @@ async function saveItemFromDialog() {
 
   applyState(await dataApi.upsertItem(payload));
   return true;
+}
+
+function normalizeSourceLinkInput(value) {
+  const rawUrl = String(value || "").trim();
+  if (!rawUrl) {
+    return "";
+  }
+  const url = uiPages.safeSourceUrl(rawUrl);
+  if (!url) {
+    window.alert("자료 링크는 http:// 또는 https:// URL만 사용할 수 있습니다.");
+    return null;
+  }
+  return url;
+}
+
+function sourceProgressInputValue(item) {
+  if (!item) {
+    return "";
+  }
+  const progress = core.sourceProgress(item);
+  return progress > 0 ? String(progress) : "";
+}
+
+function normalizeSourceProgressInput(value) {
+  const textValue = String(value ?? "").trim();
+  if (!textValue) {
+    return "";
+  }
+  const progress = Number(textValue);
+  if (!Number.isFinite(progress)) {
+    return "";
+  }
+  return String(Math.min(100, Math.max(0, Math.round(progress))));
 }
 
 async function cycleReview(id) {

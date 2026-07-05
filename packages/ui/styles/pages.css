@@ -67,39 +67,6 @@
   line-height: 1.55;
 }
 
-.ai-sentence-analysis-toggle {
-  margin-bottom: 10px;
-}
-
-.ai-sentence-fields {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.ai-sentence-fields[hidden] {
-  display: none;
-}
-
-.ai-sentence-input-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-sentence-input-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.ai-sentence-input-row button {
-  flex: 0 0 auto;
-}
-
-.ai-sentence-analysis-status {
-  margin: -2px 0 10px;
-}
-
 .manual-entry-input {
   min-height: 150px;
 }

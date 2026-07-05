@@ -7,19 +7,6 @@ export function sentenceEntryPanel() {
         <h2 class="panel-title" id="selectedDateTitle">문장 추가</h2>
         <button class="primary-btn" id="addDailyEntryBtn" type="button">문장 추가</button>
       </div>
-      <label class="settings-check ai-sentence-analysis-toggle">
-        <input id="aiSentenceAnalysisCheckbox" type="checkbox" />
-        <span>AI 문장 분석</span>
-      </label>
-      <div class="ai-sentence-fields" id="aiSentenceFields" hidden>
-        <label>일본어 문장
-          <span class="ai-sentence-input-row">
-            <input id="aiSentenceInput" lang="ja" autocomplete="off" placeholder="日本語の文を入力" />
-            <button class="ghost-btn compact-action-btn" id="analyzeAiSentenceBtn" type="button">AI 분석</button>
-          </span>
-        </label>
-      </div>
-      <p class="muted ai-sentence-analysis-status" id="aiSentenceAnalysisStatus"></p>
       <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな
 읽기 わたし なんか きにさわる こと したかな
 해석 나 따위가 기분 상할 만한 일을 한 걸까
