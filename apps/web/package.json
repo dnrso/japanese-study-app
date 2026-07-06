@@ -9,9 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "@nihongo-study/core": "0.1.0",
     "@nihongo-study/storage-idb": "0.1.0",
-    "@nihongo-study/ui": "0.1.0"
+    "@nihongo-study/ui": "0.1.0",
+    "@supabase/supabase-js": "^2.110.0"
   },
   "devDependencies": {
     "vite": "^7.0.0"
