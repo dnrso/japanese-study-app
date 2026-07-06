@@ -1,6 +1,7 @@
 import "@nihongo-study/ui/styles";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
+import { createSupabaseSync } from "@nihongo-study/sync";
 import {
   applyPagePatch as applySharedPagePatch,
   badgeClassByKind,
@@ -37,6 +38,7 @@ import { createSampleState } from "./sampleState.js";
 const store = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
+const sync = createSupabaseSync({ storage: store, mergeSnapshots: mergeBackupData });
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
@@ -1768,7 +1770,20 @@ async function start() {
         </section>
       </main>
     `;
+    return;
   }
+
+  sync.onAuthChange(async session => {
+    if (!session) {
+      return;
+    }
+    const result = await sync.syncNow();
+    if (result && !result.skipped) {
+      state = result.state;
+      resetTransientUiState();
+      renderAll();
+    }
+  });
 }
 
 start();
