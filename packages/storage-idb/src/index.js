@@ -259,6 +259,7 @@ export function createIdbStorage(options = {}) {
       return getState(studyDate);
     }
     const items = await getAll("items");
+    const reviewedAt = now();
     await runTransaction(["items"], "readwrite", transaction => {
       const store = transaction.objectStore("items");
       normalized.forEach(target => {
@@ -268,7 +269,8 @@ export function createIdbStorage(options = {}) {
             ...item,
             review: target.review,
             reviewDueDate: reviewDueDateFor(target.review, studyDate),
-            updatedAt: now()
+            lastReviewedAt: reviewedAt,
+            updatedAt: reviewedAt
           });
         }
       });
@@ -299,6 +301,7 @@ export function createIdbStorage(options = {}) {
     if (correct && payload.updateReviewOnCorrect && nextReview) {
       nextItem.review = nextReview;
       nextItem.reviewDueDate = reviewDueDateFor(nextReview, payload.studyDate);
+      nextItem.lastReviewedAt = nextItem.updatedAt;
       reviewUpdated = true;
     }
 
@@ -753,6 +756,7 @@ function normalizeItem(item = {}) {
     quizCorrectCount: toNumber(item.quizCorrectCount),
     quizWrongCount: toNumber(item.quizWrongCount),
     lastQuizzedAt: text(item.lastQuizzedAt),
+    lastReviewedAt: text(item.lastReviewedAt),
     createdAt: text(item.createdAt || now()),
     updatedAt: text(item.updatedAt || now())
   };

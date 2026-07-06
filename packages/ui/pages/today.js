@@ -5,8 +5,15 @@ export function sentenceEntryPanel() {
     <section class="panel section" id="today-log">
       <div class="panel-header">
         <h2 class="panel-title" id="selectedDateTitle">문장 추가</h2>
-        <button class="primary-btn" id="addDailyEntryBtn" type="button">문장 추가</button>
+        <div class="panel-header-actions">
+          <button class="primary-btn" id="addDailyEntryBtn" type="button">문장 추가</button>
+        </div>
       </div>
+      <label class="settings-check ai-sentence-analysis-toggle">
+        <input id="aiSentenceAnalysisCheckbox" type="checkbox" />
+        <span>AI 문장 분석</span>
+        <span class="login-only-marker"><span class="login-only-icon" aria-hidden="true">!</span>(로그인 유저만 사용 가능)</span>
+      </label>
       <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな
 읽기 わたし なんか きにさわる こと したかな
 해석 나 따위가 기분 상할 만한 일을 한 걸까
@@ -14,6 +21,7 @@ export function sentenceEntryPanel() {
 \`気に障る\` (きにさわる) 기분에 거슬리다 | 한자=気, 障 | 품사=동사표현 | 문자=한자+히라가나
 문법
 \`なんか\` 자신을 낮추거나 가볍게 말할 때 쓰는 표현"></textarea>
+      <p class="muted ai-sentence-analysis-status" id="aiSentenceAnalysisStatus"></p>
     </section>
   `;
 }
