@@ -13,7 +13,11 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Claude Code local project config (not synced to GitHub)
+.claude/
+
 # Android (Capacitor)
+apps/web/android/.idea/
 apps/web/android/.gradle/
 apps/web/android/**/build/
 apps/web/android/local.properties
