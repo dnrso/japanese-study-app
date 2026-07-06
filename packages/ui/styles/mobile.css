@@ -1,0 +1,182 @@
+/* Mobile responsive overrides. Loaded last so it wins the cascade. */
+
+@media (max-width: 768px) {
+  /* Topbar: single compact row, safe-area aware */
+  .topbar {
+    padding-top: calc(8px + env(safe-area-inset-top));
+    flex-wrap: wrap;
+    row-gap: 8px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-title {
+    font-size: 13px;
+  }
+
+  .search {
+    order: 3;
+    width: 100%;
+  }
+
+  /* Tabbar becomes the fixed bottom navigation */
+  .tabbar {
+    order: 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    height: auto;
+    width: 100%;
+    margin: 0;
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    min-height: 48px;
+    flex: 0 0 auto;
+  }
+
+  /* Main layout grid: single column */
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sidebar contains both nav (toc list / quick filters) and info widgets;
+     stack it below main content in normal flow rather than hiding it. */
+  .sidebar {
+    order: 2;
+    position: static;
+    top: auto;
+    height: auto;
+    width: 100%;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    padding-bottom: calc(14px + 64px + env(safe-area-inset-bottom));
+  }
+
+  .main {
+    order: 1;
+    padding: 12px;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  /* Grid collapses */
+  .today-top-grid,
+  .hero,
+  .content-grid,
+  .daily-entry-list {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Word table: horizontal scroll instead of column crushing */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-scroll .table {
+    min-width: 760px;
+  }
+
+  /* Words table needs extra breathing room: 9 columns including
+     reading/meaning text that must not collapse to one char per line. */
+  #words-list .table-scroll .table {
+    min-width: 1000px;
+  }
+
+  #words-list .table-scroll .table td:nth-child(2) {
+    min-width: 70px;
+    white-space: nowrap;
+  }
+
+  #words-list .table-scroll .table td:nth-child(3) {
+    min-width: 140px;
+    white-space: normal;
+  }
+
+  /* Touch targets */
+  .primary-btn,
+  .ghost-btn,
+  .danger-btn,
+  .icon-btn,
+  .word-row-actions .ghost-btn,
+  .word-row-actions .danger-btn {
+    min-height: 40px;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  input,
+  select {
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Modals */
+  .modal {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+    margin-top: calc(env(safe-area-inset-top));
+    margin-bottom: calc(env(safe-area-inset-bottom));
+  }
+
+  /* Typography */
+  h2 {
+    font-size: clamp(18px, 5vw, 22px);
+  }
+
+  .panel-title {
+    font-size: clamp(14px, 4vw, 16px);
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-title {
+    font-size: 12px;
+  }
+
+  .date-chip {
+    display: none;
+  }
+
+  h1 {
+    font-size: clamp(24px, 8vw, 32px);
+  }
+
+  .tab {
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+}
