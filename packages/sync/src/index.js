@@ -1,10 +1,14 @@
 import { getSupabaseClient } from "./client.js";
-import { getSession as getSupabaseSession, onAuthChange as onSupabaseAuthChange } from "./auth.js";
+import {
+  getSession as getSupabaseSession,
+  onAuthChange as onSupabaseAuthChange,
+  signInWithOAuth as signInWithSupabaseOAuth
+} from "./auth.js";
 import { pullSnapshot, pushSnapshot } from "./snapshot.js";
 
 export { getSupabaseClient } from "./client.js";
 export { getSupabaseConfig, isConfigured } from "./config.js";
-export { getSession, onAuthChange } from "./auth.js";
+export { getSession, onAuthChange, signInWithOAuth } from "./auth.js";
 export { pullSnapshot, pushSnapshot } from "./snapshot.js";
 
 export function createSupabaseSync({ storage, mergeSnapshots }) {
@@ -59,6 +63,25 @@ export function createSupabaseSync({ storage, mergeSnapshots }) {
     }
   }
 
+  async function signInWithGoogle() {
+    if (!isEnabled) {
+      return { skipped: true, reason: "disabled" };
+    }
+
+    try {
+      const { error } = await signInWithSupabaseOAuth(supabase, {
+        provider: "google",
+        redirectTo: window.location.origin
+      });
+      if (error) {
+        return { skipped: true, reason: "error", error };
+      }
+      return { skipped: false };
+    } catch (error) {
+      return { skipped: true, reason: "error", error };
+    }
+  }
+
   async function signOut() {
     if (!isEnabled) {
       return;
@@ -71,6 +94,7 @@ export function createSupabaseSync({ storage, mergeSnapshots }) {
     getSession,
     onAuthChange,
     syncNow,
+    signInWithGoogle,
     signOut
   };
 }

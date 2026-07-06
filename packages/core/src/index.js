@@ -231,6 +231,10 @@ export function sourceProgress(item = {}) {
   return progress === undefined ? 0 : Math.min(100, Math.max(0, progress));
 }
 
+export function reviewedTodayCount(items = [], kind, todayDate = dateKey(new Date())) {
+  return items.filter(item => item.kind === kind && String(item.lastReviewedAt || "").slice(0, 10) === todayDate).length;
+}
+
 export function quickFilterCounts(state = {}, searchTerm = "") {
   const items = state.items || [];
   const tasks = state.tasks || [];

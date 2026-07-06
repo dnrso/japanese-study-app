@@ -23,3 +23,13 @@ export function onAuthChange(supabase, cb) {
     data?.subscription?.unsubscribe();
   };
 }
+
+export async function signInWithOAuth(supabase, { provider, redirectTo } = {}) {
+  if (!supabase) {
+    return null;
+  }
+  return supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo }
+  });
+}
