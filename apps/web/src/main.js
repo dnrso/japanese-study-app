@@ -197,10 +197,12 @@ function homePageTemplate() {
               <h2 class="panel-title">복습 큐</h2>
               <button class="primary-btn" type="button" data-open-page="review">복습 보기</button>
             </div>
-            <table class="table">
-              <thead><tr><th>유형</th><th>개수</th><th>상태</th></tr></thead>
-              <tbody id="reviewSummary"></tbody>
-            </table>
+            <div class="table-scroll">
+              <table class="table">
+                <thead><tr><th>유형</th><th>개수</th><th>상태</th></tr></thead>
+                <tbody id="reviewSummary"></tbody>
+              </table>
+            </div>
           </section>
         </div>
       </div>
@@ -305,22 +307,24 @@ function wordsPageTemplate() {
           <select id="wordScriptFilter"><option value="">전체 문자</option></select>
           <select id="wordReviewFilter"><option value="">전체 복습</option></select>
         </div>
-        <table class="table">
-          <thead>
-            <tr>
-              <th><button class="sort-btn" data-word-sort="title" type="button">단어 <span data-word-sort-indicator="title"></span></button></th>
-              <th>읽기</th>
-              <th><button class="sort-btn" data-word-sort="meaning" type="button">뜻 <span data-word-sort-indicator="meaning"></span></button></th>
-              <th><button class="sort-btn" data-word-sort="kanji" type="button">한자 <span data-word-sort-indicator="kanji"></span></button></th>
-              <th><button class="sort-btn" data-word-sort="part" type="button">품사 <span data-word-sort-indicator="part"></span></button></th>
-              <th><button class="sort-btn" data-word-sort="script" type="button">문자 <span data-word-sort-indicator="script"></span></button></th>
-              <th><button class="sort-btn" data-word-sort="sourceSentence" type="button">원본 문장 <span data-word-sort-indicator="sourceSentence"></span></button></th>
-              <th>복습</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="wordRows"></tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th><button class="sort-btn" data-word-sort="title" type="button">단어 <span data-word-sort-indicator="title"></span></button></th>
+                <th>읽기</th>
+                <th><button class="sort-btn" data-word-sort="meaning" type="button">뜻 <span data-word-sort-indicator="meaning"></span></button></th>
+                <th><button class="sort-btn" data-word-sort="kanji" type="button">한자 <span data-word-sort-indicator="kanji"></span></button></th>
+                <th><button class="sort-btn" data-word-sort="part" type="button">품사 <span data-word-sort-indicator="part"></span></button></th>
+                <th><button class="sort-btn" data-word-sort="script" type="button">문자 <span data-word-sort-indicator="script"></span></button></th>
+                <th><button class="sort-btn" data-word-sort="sourceSentence" type="button">원본 문장 <span data-word-sort-indicator="sourceSentence"></span></button></th>
+                <th>복습</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="wordRows"></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="taxonomy-section" id="words-taxonomy">
@@ -435,17 +439,19 @@ function settingsPageTemplate() {
           <h2 class="panel-title">설정</h2>
           <button class="primary-btn" id="resetDataBtn" type="button">샘플 데이터 초기화</button>
         </div>
-        <table class="table">
-          <tbody>
-            <tr><th>저장 방식</th><td>브라우저 IndexedDB</td></tr>
-            <tr><th>데이터 폴더</th><td id="appDataPath">-</td></tr>
-            <tr><th>SQLite</th><td id="sqlitePath">-</td></tr>
-            <tr><th>Export</th><td id="exportPath">-</td></tr>
-            <tr><th>Backup</th><td id="backupPath">-</td></tr>
-            <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
-            <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="table">
+            <tbody>
+              <tr><th>저장 방식</th><td>브라우저 IndexedDB</td></tr>
+              <tr><th>데이터 폴더</th><td id="appDataPath">-</td></tr>
+              <tr><th>SQLite</th><td id="sqlitePath">-</td></tr>
+              <tr><th>Export</th><td id="exportPath">-</td></tr>
+              <tr><th>Backup</th><td id="backupPath">-</td></tr>
+              <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
+              <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
+            </tbody>
+          </table>
+        </div>
         <div class="settings-actions">
           <button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button>
           <button class="ghost-btn" id="loadBackupBtn" type="button">백업 불러오기</button>
