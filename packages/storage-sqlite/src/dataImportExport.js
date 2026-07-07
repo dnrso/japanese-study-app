@@ -2,6 +2,19 @@ const fs = require("fs");
 const path = require("path");
 const YAML = require("yaml");
 
+const tombstoneTtlMs = 90 * 24 * 60 * 60 * 1000;
+
+function pruneStaleTombstones(records) {
+  const cutoff = Date.now() - tombstoneTtlMs;
+  return records.filter(record => {
+    if (!record.deletedAt) {
+      return true;
+    }
+    const deletedAtMs = Date.parse(record.deletedAt);
+    return !Number.isFinite(deletedAtMs) || deletedAtMs >= cutoff;
+  });
+}
+
 function createDataImportExport(deps) {
   const {
     getDb,
@@ -22,6 +35,57 @@ function createDataImportExport(deps) {
   } = deps;
   const { appDataDir, exportsDir, backupsDir, dbPath } = paths;
 
+function allStudyDaysRaw() {
+  return getDb().prepare(`
+    SELECT study_date AS studyDate, minutes, summary, note,
+      created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
+    FROM study_days
+    ORDER BY study_date DESC
+  `).all();
+}
+
+function allDailyEntriesRaw() {
+  return getDb().prepare(`
+    SELECT id, study_date AS studyDate, parent_id AS parentId, kind, title, reading, meaning,
+      raw_text AS rawText, parsed_json AS parsedJson, registered,
+      created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
+    FROM daily_entries
+    ORDER BY study_date DESC, datetime(created_at) DESC
+  `).all();
+}
+
+function allDailyEntryLinksRaw() {
+  return getDb().prepare(`
+    SELECT id, entry_id AS entryId, sentence_id AS sentenceId,
+      created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
+    FROM daily_entry_links
+    ORDER BY datetime(created_at) ASC
+  `).all();
+}
+
+function allTasksRaw() {
+  return getDb().prepare(`
+    SELECT id, title, note, tag, done,
+      created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
+    FROM tasks
+    ORDER BY datetime(created_at) DESC, rowid DESC
+  `).all().map(task => ({ ...task, done: Boolean(task.done) }));
+}
+
+function allItemsRaw() {
+  return getDb().prepare(`
+    SELECT id, kind, title, reading, meaning, level, part, script, review,
+      review_due_date AS reviewDueDate, kanji, source, note,
+      quiz_correct_count AS quizCorrectCount,
+      quiz_wrong_count AS quizWrongCount,
+      last_quizzed_at AS lastQuizzedAt,
+      last_reviewed_at AS lastReviewedAt,
+      created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
+    FROM items
+    ORDER BY datetime(created_at) DESC, rowid DESC
+  `).all();
+}
+
 function exportData() {
   ensureDirectories();
   const state = getState();
@@ -36,20 +100,18 @@ function exportData() {
     studyDays: state.studyDays,
     dailyEntries: state.dailyEntries
   }));
-  writeUtf8(path.join(backupsDir, "full-backup.yaml"), YAML.stringify({
-    ...state,
-    allDailyEntries: getDb().prepare(`
-      SELECT id, study_date AS studyDate, parent_id AS parentId, kind, title, reading, meaning, raw_text AS rawText,
-        parsed_json AS parsedJson, registered
-      FROM daily_entries
-      ORDER BY study_date DESC, datetime(created_at) DESC
-    `).all(),
-    dailyEntryLinks: getDb().prepare(`
-      SELECT entry_id AS entryId, sentence_id AS sentenceId
-      FROM daily_entry_links
-      ORDER BY datetime(created_at) ASC
-    `).all()
-  }));
+
+  const data = {
+    selectedDate: state.selectedDate,
+    studyDays: pruneStaleTombstones(allStudyDaysRaw()),
+    dailyEntries: pruneStaleTombstones(allDailyEntriesRaw()),
+    allDailyEntries: pruneStaleTombstones(allDailyEntriesRaw()),
+    dailyEntryLinks: pruneStaleTombstones(allDailyEntryLinksRaw()),
+    tasks: pruneStaleTombstones(allTasksRaw()),
+    items: pruneStaleTombstones(allItemsRaw())
+  };
+
+  writeUtf8(path.join(backupsDir, "full-backup.yaml"), YAML.stringify(data));
 
   return {
     appDataDir,
@@ -60,7 +122,8 @@ function exportData() {
       ...Object.values(csvFilesByKind).map(filename => path.join(exportsDir, filename)),
       path.join(exportsDir, "study-log.yaml"),
       path.join(backupsDir, "full-backup.yaml")
-    ]
+    ],
+    data
   };
 }
 
@@ -87,24 +150,24 @@ function importFullBackup() {
 
 function replaceBackup(backup) {
   const insertDay = getDb().prepare(`
-    INSERT INTO study_days (study_date, minutes, summary, note)
-    VALUES (@studyDate, @minutes, @summary, @note)
+    INSERT INTO study_days (study_date, minutes, summary, note, created_at, updated_at, deleted_at)
+    VALUES (@studyDate, @minutes, @summary, @note, @createdAt, @updatedAt, @deletedAt)
   `);
   const insertEntry = getDb().prepare(`
-    INSERT INTO daily_entries (id, study_date, parent_id, kind, title, reading, meaning, raw_text, parsed_json, registered)
-    VALUES (@id, @studyDate, @parentId, @kind, @title, @reading, @meaning, @rawText, @parsedJson, @registered)
+    INSERT INTO daily_entries (id, study_date, parent_id, kind, title, reading, meaning, raw_text, parsed_json, registered, created_at, updated_at, deleted_at)
+    VALUES (@id, @studyDate, @parentId, @kind, @title, @reading, @meaning, @rawText, @parsedJson, @registered, @createdAt, @updatedAt, @deletedAt)
   `);
   const insertLink = getDb().prepare(`
-    INSERT OR IGNORE INTO daily_entry_links (entry_id, sentence_id)
-    VALUES (@entryId, @sentenceId)
+    INSERT OR IGNORE INTO daily_entry_links (id, entry_id, sentence_id, created_at, updated_at, deleted_at)
+    VALUES (@id, @entryId, @sentenceId, @createdAt, @updatedAt, @deletedAt)
   `);
   const insertTask = getDb().prepare(`
-    INSERT INTO tasks (id, title, note, tag, done)
-    VALUES (@id, @title, @note, @tag, @done)
+    INSERT INTO tasks (id, title, note, tag, done, deleted_at)
+    VALUES (@id, @title, @note, @tag, @done, @deletedAt)
   `);
   const insertItem = getDb().prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at, last_reviewed_at, deleted_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt, @lastReviewedAt, @deletedAt)
   `);
 
   getDb().transaction(() => {
@@ -113,19 +176,46 @@ function replaceBackup(backup) {
       studyDate: normalizeDate(day.studyDate),
       minutes: toNumber(day.minutes),
       summary: text(day.summary),
-      note: text(day.note)
+      note: text(day.note),
+      createdAt: text(day.createdAt || day.created_at || new Date().toISOString()),
+      updatedAt: text(day.updatedAt || day.updated_at || new Date().toISOString()),
+      deletedAt: normalizeDeletedAtValue(day.deletedAt ?? day.deleted_at)
     }));
-    (backup.allDailyEntries || backup.dailyEntries || []).forEach(entry => insertEntry.run(normalizeDailyEntry(entry)));
-    (backup.dailyEntryLinks || []).forEach(link => insertLink.run({
-      entryId: text(link.entryId || link.entry_id),
-      sentenceId: text(link.sentenceId || link.sentence_id)
-    }));
+    (backup.allDailyEntries || backup.dailyEntries || []).forEach(entry => {
+      const normalized = normalizeDailyEntry(entry);
+      const now = new Date().toISOString();
+      insertEntry.run({
+        ...normalized,
+        createdAt: text(entry.createdAt || entry.created_at || now),
+        updatedAt: text(entry.updatedAt || entry.updated_at || now)
+      });
+    });
+    (backup.dailyEntryLinks || []).forEach(link => {
+      const entryId = text(link.entryId || link.entry_id);
+      const sentenceId = text(link.sentenceId || link.sentence_id);
+      if (!entryId || !sentenceId) {
+        return;
+      }
+      const now = new Date().toISOString();
+      insertLink.run({
+        id: text(link.id || `${entryId}::${sentenceId}`),
+        entryId,
+        sentenceId,
+        createdAt: text(link.createdAt || link.created_at || now),
+        updatedAt: text(link.updatedAt || link.updated_at || link.createdAt || link.created_at || now),
+        deletedAt: normalizeDeletedAtValue(link.deletedAt ?? link.deleted_at)
+      });
+    });
     migrateParentLinks();
     (backup.tasks || []).forEach(task => insertTask.run(normalizeTask(task)));
     (backup.items || []).forEach(item => insertItem.run(normalizeItem(item)));
   })();
 
   return getState(backup.selectedDate);
+}
+
+function normalizeDeletedAtValue(value) {
+  return value ? text(value) : null;
 }
 
 function groupItemsByKind(items) {

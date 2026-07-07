@@ -1,11 +1,9 @@
 import "@nihongo-study/ui/styles";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
-import { createSupabaseSync } from "@nihongo-study/sync";
 import {
   applyPagePatch as applySharedPagePatch,
   badgeClassByKind,
-  homeWelcomePanel,
   kindLabels,
   manualEntryPlaceholders,
   partOptions,
@@ -22,7 +20,6 @@ import {
   renderSourcesPage,
   renderStatsPage,
   renderStudyCardsPage,
-  sentenceEntryPanel,
   renderTasksPage,
   renderTaxonomyPage,
   renderTodayPage,
@@ -34,11 +31,21 @@ import {
   tocByPage
 } from "@nihongo-study/ui";
 import { createSampleState } from "./sampleState.js";
+import { escapeHtml, renderAppShell } from "./templates.js";
+import { mergeBackupData, backupData, parseBackupFile } from "./merge.js";
+import { emptyQuiz, startQuiz as startQuizSession, exitQuizSession as exitQuizSessionImpl, submitQuizChoice as submitQuizChoiceImpl } from "./quiz.js";
+import {
+  createSync,
+  renderAccountStatus as renderAccountStatusImpl,
+  signInWithGoogle as signInWithGoogleImpl,
+  signOutOfAccount as signOutOfAccountImpl,
+  wireAuthChange
+} from "./syncSetup.js";
 
 const store = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
-const sync = createSupabaseSync({ storage: store, mergeSnapshots: mergeBackupData });
+const sync = createSync({ storage: store, mergeSnapshots: (current, imported) => mergeBackupData(current, imported, selectedDate || todayKey()) });
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
@@ -68,429 +75,6 @@ let storageStatus = storageNotice;
 
 function byId(id) {
   return document.getElementById(id);
-}
-
-function renderAppShell() {
-  byId("app").innerHTML = `
-    <div class="app">
-      <header class="topbar">
-        <div class="brand">
-          <div class="brand-mark">学</div>
-          <div>
-            <div class="brand-title">일본어공부노트</div>
-            <div class="brand-subtitle">웹 미리보기</div>
-          </div>
-        </div>
-
-        <nav class="tabbar" aria-label="주요 페이지 탭">
-          <button class="tab active" type="button" data-page="home">홈</button>
-          <button class="tab" type="button" data-page="today">오늘 공부</button>
-          <button class="tab" type="button" data-page="sources">자료</button>
-          <button class="tab" type="button" data-page="sentences">문장</button>
-          <button class="tab" type="button" data-page="words">단어</button>
-          <button class="tab" type="button" data-page="grammar">문법</button>
-          <button class="tab" type="button" data-page="expressions">표현</button>
-          <button class="tab" type="button" data-page="kanji">한자</button>
-          <button class="tab" type="button" data-page="quiz">퀴즈</button>
-          <button class="tab" type="button" data-page="review">복습 큐</button>
-          <button class="tab" type="button" data-page="stats">통계</button>
-          <button class="tab" type="button" data-page="settings">설정</button>
-        </nav>
-
-        <label class="search" aria-label="전체 검색">
-          <span>⌕</span>
-          <input id="globalSearch" placeholder="단어, 문법, 표현, 자료 검색" />
-          <span class="shortcut">Ctrl K</span>
-        </label>
-
-        <div class="top-actions">
-          <div class="date-chip" id="todayDate"></div>
-        </div>
-      </header>
-
-      <div class="layout">
-        <aside class="sidebar">
-          <div class="sidebar-section">
-            <p class="sidebar-title">현재 페이지 목차</p>
-            <div class="toc-list" id="tocList"></div>
-          </div>
-
-          <div class="sidebar-section">
-            <p class="sidebar-title">빠른 필터</p>
-            <div class="toc-list">
-              <button class="toc-item filter-btn" type="button" data-filter="review"><span>복습 필요</span><span class="count" id="reviewFilterCount">0</span></button>
-              <button class="toc-item filter-btn" type="button" data-filter="N3"><span>JLPT N3</span><span class="count" id="n3FilterCount">0</span></button>
-              <button class="toc-item filter-btn" type="button" data-filter="source"><span>자료 연결됨</span><span class="count" id="sourceFilterCount">0</span></button>
-              <button class="toc-item filter-btn" type="button" data-filter="pending"><span>미완료</span><span class="count" id="pendingFilterCount">0</span></button>
-            </div>
-          </div>
-
-          <div class="mini-card">
-            <strong>오늘의 초점</strong>
-            <p id="focusText">새 항목을 추가하고 복습 큐를 정리하세요.</p>
-          </div>
-        </aside>
-
-        <main class="main">
-          ${homePageTemplate()}
-          ${todayPageTemplate()}
-          ${sourcesPageTemplate()}
-          ${sentencesPageTemplate()}
-          ${wordsPageTemplate()}
-          ${cardPageTemplate("grammar", "grammar-detail", "문법 노트", "grammarCards", "+ 문법 추가")}
-          ${cardPageTemplate("expression", "expressions-list", "표현 · 관용구", "expressionCards", "+ 표현 추가", "expressions")}
-          ${kanjiPageTemplate()}
-          ${quizPageTemplate()}
-          ${reviewPageTemplate()}
-          ${statsPageTemplate()}
-          ${settingsPageTemplate()}
-        </main>
-      </div>
-    </div>
-  `;
-}
-
-function homePageTemplate() {
-  return `
-    <section class="page" id="home">
-      <div class="hero" id="home-overview">
-        ${homeWelcomePanel()}
-      </div>
-
-      <div class="stat-grid" id="home-stats">
-        <div class="stat-card"><div class="stat-label">오늘 공부 항목</div><div class="stat-value" id="todayDoneCount">0개</div><div class="stat-note">완료한 할 일 기준</div></div>
-        <div class="stat-card"><div class="stat-label">새 항목</div><div class="stat-value" id="newItemCount">0개</div><div class="stat-note">단어 · 문법 · 표현 · 한자</div></div>
-        <div class="stat-card"><div class="stat-label">복습 항목</div><div class="stat-value" id="reviewItemCount">0개</div><div class="stat-note">오늘/대기 복습 대상</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 복습한 단어</div><div class="stat-value" id="reviewedWordCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 복습한 한자</div><div class="stat-value" id="reviewedKanjiCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
-      </div>
-
-      <div class="content-grid">
-        <div>
-          <section class="panel section" id="home-today">
-            <div class="panel-header">
-              <h2 class="panel-title">오늘 할 일</h2>
-              <button class="ghost-btn" id="addTaskBtn" type="button">+ 할 일 추가</button>
-            </div>
-            <div class="task-list" id="taskList"></div>
-          </section>
-
-          <section class="panel section" id="home-recent">
-            <div class="panel-header">
-              <h2 class="panel-title">최근 추가 항목</h2>
-              <button class="ghost-btn" type="button" data-open-page="words">전체 보기</button>
-            </div>
-            <div class="cards" id="recentItems"></div>
-          </section>
-        </div>
-
-        <div>
-          <section class="panel section" id="home-queue">
-            <div class="panel-header">
-              <h2 class="panel-title">복습 큐</h2>
-              <button class="primary-btn" type="button" data-open-page="review">복습 보기</button>
-            </div>
-            <div class="table-scroll">
-              <table class="table">
-                <thead><tr><th>유형</th><th>개수</th><th>상태</th></tr></thead>
-                <tbody id="reviewSummary"></tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function todayPageTemplate() {
-  return `
-    <section class="page hidden-page" id="today">
-      <div class="today-top-grid">
-        ${sentenceEntryPanel()}
-
-        <section class="panel section" id="today-manual-entry">
-          <div class="panel-header">
-            <h2 class="panel-title">새 항목 추가</h2>
-            <button class="primary-btn" id="addManualEntryBtn" type="button" hidden>추가</button>
-          </div>
-          <div class="daily-kind-radios">
-            <label><input type="radio" name="dailyManualKind" value="word" /> 새 단어</label>
-            <label><input type="radio" name="dailyManualKind" value="grammar" /> 새 문법</label>
-            <label><input type="radio" name="dailyManualKind" value="expression" /> 새 표현</label>
-          </div>
-          <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder="${escapeHtml(manualEntryPlaceholders.word)}" hidden></textarea>
-        </section>
-
-        <section class="panel section" id="today-calendar">
-          <div class="panel-header">
-            <h2 class="panel-title" id="calendarTitle">학습 캘린더</h2>
-            <div class="calendar-actions">
-              <button class="ghost-btn" id="prevMonthBtn" type="button">이전달</button>
-              <button class="ghost-btn" id="todayBtn" type="button">오늘</button>
-              <button class="ghost-btn" id="nextMonthBtn" type="button">다음달</button>
-              <button class="icon-btn calendar-toggle-btn" id="calendarToggleBtn" type="button" aria-expanded="true" aria-label="캘린더 접기/펼치기">⌄</button>
-            </div>
-          </div>
-          <div class="calendar-body" id="calendarBody">
-            <div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
-            <div class="calendar-grid" id="calendarGrid"></div>
-          </div>
-        </section>
-      </div>
-
-      <section class="panel section" id="today-sentences">
-        <div class="panel-header"><h2 class="panel-title">저장된 문장 카드</h2></div>
-        <div class="cards daily-entry-list" id="dailyEntryCards"></div>
-      </section>
-
-      <section class="panel section" id="today-learned">
-        <div class="panel-header">
-          <h2 class="panel-title">오늘 배운 항목</h2>
-          <button class="primary-btn compact-action-btn" id="registerLearnedBtn" type="button">전체 등록</button>
-        </div>
-        <div class="learned-grid">
-          <section class="learned-section"><h3>새 단어</h3><div class="cards compact-cards" id="learnedWordCards"></div></section>
-          <section class="learned-section"><h3>새 문법</h3><div class="cards compact-cards" id="learnedGrammarCards"></div></section>
-          <section class="learned-section"><h3>새 표현</h3><div class="cards compact-cards" id="learnedExpressionCards"></div></section>
-        </div>
-      </section>
-    </section>
-  `;
-}
-
-function sourcesPageTemplate() {
-  return `
-    <section class="page hidden-page" id="sources">
-      <section class="panel section" id="sources-library">
-        <div class="panel-header">
-          <h2 class="panel-title">자료 라이브러리</h2>
-          <button class="primary-btn" type="button" data-kind="source" data-add-item>+ 자료 추가</button>
-        </div>
-        <div class="cards" id="sourceCards"></div>
-      </section>
-    </section>
-  `;
-}
-
-function sentencesPageTemplate() {
-  return `
-    <section class="page hidden-page" id="sentences">
-      <section class="panel section" id="sentences-list">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">문장 노트</h2>
-            <p class="muted" id="sentencePageDate"></p>
-          </div>
-          <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
-        </div>
-        <div class="cards daily-entry-list" id="sentenceCards"></div>
-      </section>
-    </section>
-  `;
-}
-
-function wordsPageTemplate() {
-  return `
-    <section class="page hidden-page" id="words">
-      <section class="panel section" id="words-list">
-        <div class="panel-header">
-          <h2 class="panel-title">단어장</h2>
-          <button class="primary-btn" type="button" data-kind="word" data-add-item>+ 단어 추가</button>
-        </div>
-        <div class="table-tools">
-          <select id="wordPartFilter"><option value="">전체 품사</option></select>
-          <select id="wordScriptFilter"><option value="">전체 문자</option></select>
-          <select id="wordReviewFilter"><option value="">전체 복습</option></select>
-        </div>
-        <div class="table-scroll">
-          <table class="table">
-            <thead>
-              <tr>
-                <th><button class="sort-btn" data-word-sort="title" type="button">단어 <span data-word-sort-indicator="title"></span></button></th>
-                <th>읽기</th>
-                <th><button class="sort-btn" data-word-sort="meaning" type="button">뜻 <span data-word-sort-indicator="meaning"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="kanji" type="button">한자 <span data-word-sort-indicator="kanji"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="part" type="button">품사 <span data-word-sort-indicator="part"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="script" type="button">문자 <span data-word-sort-indicator="script"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="sourceSentence" type="button">원본 문장 <span data-word-sort-indicator="sourceSentence"></span></button></th>
-                <th>복습</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="wordRows"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="taxonomy-section" id="words-taxonomy">
-        <div class="panel-header"><h3 class="panel-title">단어장 분류 체계</h3><span class="badge green">검색 · 필터 기준</span></div>
-        <div class="taxonomy-grid">
-          <article class="taxonomy-card"><h4>품사</h4><div class="taxonomy-chip-wrap" id="partChips"></div></article>
-          <article class="taxonomy-card"><h4>문자</h4><div class="taxonomy-chip-wrap" id="scriptChips"></div></article>
-        </div>
-      </section>
-    </section>
-  `;
-}
-
-function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, pageId = kind) {
-  return `
-    <section class="page hidden-page" id="${pageId}">
-      <section class="panel section" id="${sectionId}">
-        <div class="panel-header">
-          <h2 class="panel-title">${title}</h2>
-          <button class="primary-btn" type="button" data-kind="${kind}" data-add-item>${buttonLabel}</button>
-        </div>
-        <div class="cards" id="${targetId}"></div>
-      </section>
-    </section>
-  `;
-}
-
-function kanjiPageTemplate() {
-  return `
-    <section class="page hidden-page" id="kanji">
-      <section class="panel section" id="kanji-grid">
-        <div class="panel-header">
-          <h2 class="panel-title">한자 노트</h2>
-          <button class="primary-btn" type="button" data-kind="kanji" data-add-item>+ 한자 추가</button>
-        </div>
-        <div class="kanji-grid" id="kanjiCards"></div>
-      </section>
-    </section>
-  `;
-}
-
-function quizPageTemplate() {
-  return `
-    <section class="page hidden-page" id="quiz">
-      <section class="panel section" id="quiz-select">
-        <div class="panel-header">
-          <h2 class="panel-title">퀴즈</h2>
-          <div class="panel-header-actions">
-            <button class="ghost-btn compact-action-btn" id="quizExitBtn" type="button" hidden>목록으로</button>
-            <span class="badge yellow">샘플 데이터</span>
-          </div>
-        </div>
-        <div class="quiz-grid" id="quizSelectGrid">
-          <article class="quiz-card word-quiz-card">
-            <span class="badge red">단어</span><strong>단어 퀴즈</strong><span>4지선다</span>
-            <div class="quiz-mode-options" aria-label="단어 퀴즈 유형">
-              <label><input type="radio" name="wordQuizMode" value="random" checked /> 완전 랜덤</label>
-              <label><input type="radio" name="wordQuizMode" value="jpToMeaning" /> 일본어 → 뜻</label>
-              <label><input type="radio" name="wordQuizMode" value="meaningToJp" /> 뜻 → 일본어</label>
-            </div>
-            <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="word">시작</button>
-          </article>
-          <button class="quiz-card" type="button" data-quiz-kind="grammar"><span class="badge blue">문법</span><strong>문법 퀴즈</strong><span>다음 단계</span></button>
-          <button class="quiz-card" type="button" data-quiz-kind="expression"><span class="badge green">표현</span><strong>표현 퀴즈</strong><span>다음 단계</span></button>
-          <article class="quiz-card kanji-quiz-card">
-            <span class="badge yellow">한자</span><strong>한자 퀴즈</strong><span>4지선다</span>
-            <div class="quiz-mode-options" aria-label="한자 퀴즈 유형">
-              <label><input type="radio" name="kanjiQuizMode" value="random" checked /> 완전 랜덤</label>
-              <label><input type="radio" name="kanjiQuizMode" value="kanjiToMeaning" /> 한자 → 뜻</label>
-              <label><input type="radio" name="kanjiQuizMode" value="meaningToKanji" /> 뜻 → 한자</label>
-            </div>
-            <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="kanji">시작</button>
-          </article>
-        </div>
-        <p class="muted quiz-status" id="quizStatus">샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.</p>
-        <div class="word-quiz-panel" id="wordQuizPanel" hidden></div>
-        <div class="word-quiz-panel kanji-quiz-panel" id="kanjiQuizPanel" hidden></div>
-      </section>
-    </section>
-  `;
-}
-
-function reviewPageTemplate() {
-  return `
-    <section class="page hidden-page" id="review">
-      <section class="panel section" id="review-queue">
-        <div class="panel-header">
-          <h2 class="panel-title">복습 큐</h2>
-          <button class="primary-btn" id="completeReviewBtn" type="button">선택 복습 완료</button>
-        </div>
-        <div class="cards" id="reviewCards"></div>
-      </section>
-    </section>
-  `;
-}
-
-function statsPageTemplate() {
-  return `
-    <section class="page hidden-page" id="stats">
-      <section class="panel section" id="stats-overview">
-        <div class="panel-header"><h2 class="panel-title">학습 통계</h2><span class="muted">샘플 state</span></div>
-        <div class="stat-grid">
-          <div class="stat-card"><div class="stat-label">총 공부 시간</div><div class="stat-value" id="totalMinutes">0분</div><div class="stat-note">누적 기록</div></div>
-          <div class="stat-card"><div class="stat-label">등록 단어</div><div class="stat-value" id="totalWords">0</div><div class="stat-note">단어장 기준</div></div>
-          <div class="stat-card"><div class="stat-label">문법/표현</div><div class="stat-value" id="totalGrammarExpression">0</div><div class="stat-note">노트 기준</div></div>
-          <div class="stat-card"><div class="stat-label">완료 자료</div><div class="stat-value" id="completedSources">0</div><div class="stat-note">진행률 100%</div></div>
-        </div>
-      </section>
-    </section>
-  `;
-}
-
-function settingsPageTemplate() {
-  return `
-    <section class="page hidden-page" id="settings">
-      <section class="panel section" id="settings-general">
-        <div class="panel-header">
-          <h2 class="panel-title">설정</h2>
-          <button class="primary-btn" id="resetDataBtn" type="button">샘플 데이터 초기화</button>
-        </div>
-        <div class="table-scroll">
-          <table class="table">
-            <tbody>
-              <tr><th>저장 방식</th><td>브라우저 IndexedDB</td></tr>
-              <tr><th>데이터 폴더</th><td id="appDataPath">-</td></tr>
-              <tr><th>SQLite</th><td id="sqlitePath">-</td></tr>
-              <tr><th>Export</th><td id="exportPath">-</td></tr>
-              <tr><th>Backup</th><td id="backupPath">-</td></tr>
-              <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
-              <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button>
-          <button class="ghost-btn" id="loadBackupBtn" type="button">백업 불러오기</button>
-          <button class="ghost-btn" id="mergeBackupBtn" type="button">백업 추가하기</button>
-          <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
-          <input id="mergeBackupFileInput" type="file" accept="application/json,.json" hidden />
-        </div>
-        <p class="muted" id="storageStatus"></p>
-      </section>
-
-      <section class="panel section" id="settings-account">
-        <div class="panel-header"><h2 class="panel-title">계정 및 동기화</h2></div>
-        <p class="muted">로그인하면 데이터가 Supabase에 동기화됩니다.</p>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
-          <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
-        </div>
-        <p class="muted" id="accountStatus"></p>
-      </section>
-
-      <section class="panel section" id="settings-quiz">
-        <div class="panel-header"><h2 class="panel-title">퀴즈 표시 및 복습</h2></div>
-        <div class="settings-grid">
-          <label>문제 텍스트 크기 <span id="quizQuestionFontSizeValue">32px</span><input id="quizQuestionFontSizeRange" type="range" min="24" max="64" step="1" value="32" /></label>
-          <label class="settings-check"><input id="quizReviewOnCorrectCheckbox" type="checkbox" checked /><span>정답 시 복습 상태 변경</span></label>
-          <label>정답 후 복습 상태<select id="quizCorrectReviewSelect"></select></label>
-        </div>
-        <p class="muted">퀴즈 설정은 현재 브라우저 세션에 반영됩니다.</p>
-      </section>
-
-      <section class="panel section" id="settings-tts">
-        <div class="panel-header"><h2 class="panel-title">음성 재생</h2></div>
-        <p class="muted">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
-      </section>
-
-    </section>
-  `;
 }
 
 function bindEvents() {
@@ -932,12 +516,7 @@ function updateQuizSessionView() {
 }
 
 function exitQuizSession() {
-  wordQuiz = emptyQuiz();
-  kanjiQuiz = emptyQuiz();
-  byId("quizStatus").textContent = "샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.";
-  renderWordQuiz();
-  renderKanjiQuiz();
-  byId("quiz-select").scrollIntoView({ behavior: "smooth", block: "start" });
+  exitQuizSessionImpl(quizCtx());
 }
 
 function renderReview() {
@@ -998,68 +577,15 @@ function renderStorageStatus() {
 }
 
 function renderAccountStatus() {
-  if (!accountSession && aiSentenceAnalysisEnabled) {
-    aiSentenceAnalysisEnabled = false;
-    const checkbox = byId("aiSentenceAnalysisCheckbox");
-    if (checkbox) {
-      checkbox.checked = false;
-    }
-    updateDailyEntryPlaceholder();
-  }
-
-  const signInBtn = byId("googleSignInBtn");
-  const signOutBtn = byId("googleSignOutBtn");
-  const status = byId("accountStatus");
-  if (!signInBtn || !signOutBtn || !status) {
-    return;
-  }
-  const email = accountSession?.user?.email || "";
-  signInBtn.hidden = Boolean(accountSession);
-  signOutBtn.hidden = !accountSession;
-  status.textContent = accountSession
-    ? `${email} 계정으로 로그인되어 있습니다.`
-    : sync.isEnabled
-      ? "로그인되어 있지 않습니다."
-      : "Supabase 환경변수가 설정되지 않아 로그인을 사용할 수 없습니다.";
+  renderAccountStatusImpl(syncCtx());
 }
 
 async function signInWithGoogle() {
-  let result;
-  try {
-    result = await sync.signInWithGoogle();
-  } catch (error) {
-    console.error("Google 로그인 처리 중 예외 발생:", error);
-    const message = `Google 로그인 실패: ${error?.message || error}`;
-    window.alert(message);
-    const status = byId("accountStatus");
-    if (status) {
-      status.textContent = message;
-    }
-    return;
-  }
-  if (result?.skipped) {
-    if (result.reason === "error") {
-      console.error("Google 로그인 실패:", result.error);
-    }
-    const message = result.reason === "disabled"
-      ? "Supabase 환경변수가 설정되지 않았습니다."
-      : `Google 로그인 실패: ${result.error?.message || result.reason}`;
-    window.alert(message);
-    const status = byId("accountStatus");
-    if (status) {
-      status.textContent = message;
-    }
-  }
+  await signInWithGoogleImpl(syncCtx());
 }
 
 async function signOutOfAccount() {
-  try {
-    await sync.signOut();
-  } catch (error) {
-    console.error("로그아웃 처리 중 예외 발생:", error);
-  }
-  accountSession = null;
-  renderAccountStatus();
+  await signOutOfAccountImpl(syncCtx());
 }
 
 function renderDate() {
@@ -1446,69 +972,11 @@ async function cycleReview(id) {
 }
 
 function startQuiz(kind) {
-  if (kind === "grammar" || kind === "expression") {
-    byId("quizStatus").textContent = `${kindLabels[kind]} 퀴즈는 다음 단계에서 구현합니다.`;
-    return;
-  }
-
-  const isKanji = kind === "kanji";
-  const question = core.buildQuizQuestion({
-    items: state.items,
-    kind: isKanji ? "kanji" : "word",
-    mode: isKanji ? kanjiQuizMode : wordQuizMode,
-    forwardMode: isKanji ? "kanjiToMeaning" : "jpToMeaning",
-    reverseMode: isKanji ? "meaningToKanji" : "meaningToJp"
-  });
-
-  const nextQuiz = { question, answered: false, selectedAnswer: "", result: null };
-  if (isKanji) {
-    kanjiQuiz = nextQuiz;
-    wordQuiz = emptyQuiz();
-  } else {
-    wordQuiz = nextQuiz;
-    kanjiQuiz = emptyQuiz();
-  }
-  byId("quizStatus").textContent = question ? "정답을 선택하세요." : "퀴즈를 만들려면 같은 유형의 항목과 보기 후보가 4개 이상 필요합니다.";
-  renderWordQuiz();
-  renderKanjiQuiz();
-
-  if (question) {
-    const panelId = isKanji ? "kanjiQuizPanel" : "wordQuizPanel";
-    window.setTimeout(() => {
-      byId(panelId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  }
+  startQuizSession(kind, quizCtx());
 }
 
 async function submitQuizChoice(kind, selectedAnswer) {
-  const quiz = kind === "kanji" ? kanjiQuiz : wordQuiz;
-  const response = await store.submitWordQuizAnswer({
-    quizKind: kind,
-    itemId: quiz.question.item.id,
-    selectedAnswer,
-    answerType: quiz.question.answerType,
-    updateReviewOnCorrect: quizReviewOnCorrect,
-    correctReview: quizCorrectReview,
-    studyDate: selectedDate
-  });
-  state = response.state;
-  const item = state.items.find(candidate => candidate.id === quiz.question.item.id);
-  const nextQuiz = {
-    ...quiz,
-    question: { ...quiz.question, item: item || quiz.question.item },
-    answered: true,
-    selectedAnswer,
-    result: response.result
-  };
-  if (kind === "kanji") {
-    kanjiQuiz = nextQuiz;
-    renderKanjiQuiz();
-  } else {
-    wordQuiz = nextQuiz;
-    renderWordQuiz();
-  }
-  renderStats();
-  renderQuickFilters();
+  await submitQuizChoiceImpl(kind, selectedAnswer, quizCtx());
 }
 
 async function completeSelectedReview() {
@@ -1601,7 +1069,7 @@ async function mergeBackupFromFile(event) {
     }
     const backup = parseBackupFile(await file.text());
     const current = await store.exportData();
-    const result = mergeBackupData(backupData(current), backupData(backup));
+    const result = mergeBackupData(backupData(current), backupData(backup), selectedDate || todayKey());
     state = await store.importFullBackup({ data: result.data });
     resetTransientUiState();
     storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
@@ -1624,269 +1092,6 @@ function resetTransientUiState() {
   kanjiQuiz = emptyQuiz();
   reviewQueueDrafts = new Map();
   byId("globalSearch").value = "";
-}
-
-function parseBackupFile(text) {
-  let backup;
-  try {
-    backup = JSON.parse(text);
-  } catch {
-    throw new Error("JSON 백업 파일을 읽을 수 없습니다.");
-  }
-
-  const data = backupData(backup);
-  if (!isBackupData(data)) {
-    throw new Error("일본어 공부노트 백업 파일 형식이 아닙니다.");
-  }
-  return backup;
-}
-
-function backupData(backup) {
-  return backup?.data && typeof backup.data === "object" ? backup.data : backup;
-}
-
-function isBackupData(data) {
-  return Boolean(data && typeof data === "object" && [
-    "studyDays",
-    "dailyEntries",
-    "allDailyEntries",
-    "dailyEntryLinks",
-    "tasks",
-    "items"
-  ].some(name => Array.isArray(data[name])));
-}
-
-function mergeBackupData(currentData, importedData) {
-  const idMap = new Map();
-  const studyDays = mergeUniqueRows(
-    rows(currentData.studyDays),
-    rows(importedData.studyDays),
-    studyDayKeys
-  );
-  const dailyEntries = mergeDailyEntries(
-    rows(currentData.allDailyEntries || currentData.dailyEntries),
-    rows(importedData.allDailyEntries || importedData.dailyEntries),
-    idMap
-  );
-  const tasks = mergeUniqueRows(
-    rows(currentData.tasks),
-    rows(importedData.tasks),
-    taskKeys
-  );
-  const items = mergeUniqueRows(
-    rows(currentData.items),
-    rows(importedData.items),
-    itemKeys
-  );
-  const dailyEntryLinks = mergeUniqueRows(
-    rows(currentData.dailyEntryLinks),
-    rows(importedData.dailyEntryLinks)
-      .map(link => remapDailyEntryLink(link, idMap))
-      .filter(link => link.entryId && link.sentenceId),
-    dailyEntryLinkKeys
-  );
-
-  return {
-    data: {
-      selectedDate: currentData.selectedDate || selectedDate || importedData.selectedDate || todayKey(),
-      studyDays: studyDays.rows,
-      dailyEntries: dailyEntries.rows,
-      dailyEntryLinks: dailyEntryLinks.rows,
-      tasks: tasks.rows,
-      items: items.rows
-    },
-    summary: sumMergeSummaries([studyDays, dailyEntries, dailyEntryLinks, tasks, items])
-  };
-}
-
-function mergeDailyEntries(currentRows, importedRows, idMap) {
-  const existing = new Map();
-  currentRows.forEach(row => {
-    dailyEntryKeys(row).forEach(key => existing.set(key, row.id));
-  });
-
-  importedRows.forEach(row => {
-    const matchedId = dailyEntryKeys(row).map(key => existing.get(key)).find(Boolean);
-    if (matchedId && row.id) {
-      idMap.set(String(row.id), matchedId);
-    }
-  });
-
-  const mergedRows = [...currentRows];
-  const indexById = new Map(mergedRows.map((row, index) => [row.id, index]));
-  let added = 0;
-  let skipped = 0;
-  let updated = 0;
-
-  importedRows.forEach(rawRow => {
-    const row = remapDailyEntry(rawRow, idMap);
-    const keys = dailyEntryKeys(row);
-    const matchedId = keys.map(key => existing.get(key)).find(Boolean);
-    if (matchedId) {
-      if (rawRow.id) {
-        idMap.set(String(rawRow.id), matchedId);
-      }
-      const matchedIndex = indexById.get(matchedId);
-      const currentRow = matchedIndex === undefined ? undefined : mergedRows[matchedIndex];
-      if (currentRow && matchedIndex !== undefined) {
-        const winner = pickNewer(currentRow, row);
-        if (winner !== currentRow) {
-          mergedRows[matchedIndex] = { ...winner, id: matchedId };
-          updated += 1;
-        } else {
-          skipped += 1;
-        }
-      } else {
-        skipped += 1;
-      }
-      return;
-    }
-
-    mergedRows.push(row);
-    indexById.set(row.id, mergedRows.length - 1);
-    if (rawRow.id) {
-      idMap.set(String(rawRow.id), row.id);
-    }
-    keys.forEach(key => existing.set(key, row.id));
-    added += 1;
-  });
-
-  return { rows: mergedRows, added, skipped, updated };
-}
-
-function mergeUniqueRows(currentRows, importedRows, keyFactory) {
-  const existing = new Map();
-  currentRows.forEach((row, index) => {
-    keyFactory(row).forEach(key => existing.set(key, index));
-  });
-  const mergedRows = [...currentRows];
-  let added = 0;
-  let skipped = 0;
-  let updated = 0;
-
-  importedRows.forEach(row => {
-    const keys = keyFactory(row);
-    const matchedIndex = keys.map(rowKey => existing.get(rowKey)).find(index => index !== undefined);
-    if (matchedIndex !== undefined) {
-      const currentRow = mergedRows[matchedIndex];
-      const winner = pickNewer(currentRow, row);
-      if (winner !== currentRow) {
-        mergedRows[matchedIndex] = winner;
-        updated += 1;
-      } else {
-        skipped += 1;
-      }
-      return;
-    }
-    mergedRows.push(row);
-    keys.forEach(key => existing.set(key, mergedRows.length - 1));
-    added += 1;
-  });
-
-  return { rows: mergedRows, added, skipped, updated };
-}
-
-// Last-write-wins for a single key collision: newer `updatedAt` wins; ties (and
-// legacy records missing `updatedAt` on both sides) keep the current/local row.
-// Records without `updatedAt` are treated as epoch 0 so they lose to any
-// timestamped record on the other side.
-function pickNewer(currentRow, importedRow) {
-  const currentMs = updatedAtMs(currentRow);
-  const importedMs = updatedAtMs(importedRow);
-  return importedMs > currentMs ? importedRow : currentRow;
-}
-
-function updatedAtMs(row) {
-  const parsed = Date.parse(row?.updatedAt || "");
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function remapDailyEntry(entry, idMap) {
-  const parentId = remappedId(entry.parentId, idMap);
-  return {
-    ...entry,
-    parentId,
-    sourceSentences: rows(entry.sourceSentences).map(sentence => ({
-      ...sentence,
-      id: remappedId(sentence.id, idMap)
-    }))
-  };
-}
-
-function remapDailyEntryLink(link, idMap) {
-  const entryId = remappedId(link.entryId || link.entry_id, idMap);
-  const sentenceId = remappedId(link.sentenceId || link.sentence_id, idMap);
-  return {
-    ...link,
-    id: link.id || `${entryId}::${sentenceId}`,
-    entryId,
-    sentenceId
-  };
-}
-
-function remappedId(id, idMap) {
-  const key = String(id || "");
-  return key ? idMap.get(key) || key : "";
-}
-
-function studyDayKeys(row) {
-  return compactKeys([key("studyDay", row.studyDate)]);
-}
-
-function dailyEntryKeys(row) {
-  return compactKeys([
-    key("dailyEntryId", row.id),
-    key("dailyEntry", row.studyDate, row.kind, row.title, row.reading, row.meaning, row.parentTitle || row.parentId)
-  ]);
-}
-
-function dailyEntryLinkKeys(row) {
-  return compactKeys([
-    key("dailyEntryLinkId", row.id),
-    key("dailyEntryLink", row.entryId || row.entry_id, row.sentenceId || row.sentence_id)
-  ]);
-}
-
-function taskKeys(row) {
-  return compactKeys([
-    key("taskId", row.id),
-    key("task", row.studyDate, row.title, row.note, row.tag)
-  ]);
-}
-
-function itemKeys(row) {
-  return compactKeys([
-    key("itemId", row.id),
-    key("item", row.kind, row.title, row.reading, row.meaning)
-  ]);
-}
-
-function compactKeys(keys) {
-  return keys.filter(Boolean);
-}
-
-function key(scope, ...parts) {
-  const normalized = parts.map(keyPart);
-  if (!normalized.some(Boolean)) {
-    return "";
-  }
-  return `${scope}:${normalized.join("|")}`;
-}
-
-function keyPart(value) {
-  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function rows(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function sumMergeSummaries(results) {
-  return results.reduce((summary, result) => ({
-    added: summary.added + result.added,
-    skipped: summary.skipped + result.skipped,
-    updated: summary.updated + (result.updated || 0)
-  }), { added: 0, skipped: 0, updated: 0 });
 }
 
 function backupFileName() {
@@ -2010,10 +1215,6 @@ function pageForKind(kind) {
   return kind === "word" ? "words" : kind;
 }
 
-function emptyQuiz() {
-  return { question: null, answered: false, selectedAnswer: "", result: null };
-}
-
 function nextId(prefix) {
   if (globalThis.crypto?.randomUUID) {
     return `${prefix}-${globalThis.crypto.randomUUID()}`;
@@ -2032,21 +1233,51 @@ function todayKey() {
   return toDateKey(new Date());
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function highlight(value) {
   return escapeHtml(value);
 }
 
+function quizCtx() {
+  return {
+    byId,
+    getState: () => state,
+    setState: nextState => { state = nextState; },
+    store,
+    selectedDate,
+    wordQuizMode,
+    kanjiQuizMode,
+    quizReviewOnCorrect,
+    quizCorrectReview,
+    getWordQuiz: () => wordQuiz,
+    setWordQuiz: nextQuiz => { wordQuiz = nextQuiz; },
+    getKanjiQuiz: () => kanjiQuiz,
+    setKanjiQuiz: nextQuiz => { kanjiQuiz = nextQuiz; },
+    renderWordQuiz,
+    renderKanjiQuiz,
+    renderStats,
+    renderQuickFilters
+  };
+}
+
+function syncCtx() {
+  return {
+    byId,
+    sync,
+    getAccountSession: () => accountSession,
+    setAccountSession: nextSession => { accountSession = nextSession; },
+    getAiSentenceAnalysisEnabled: () => aiSentenceAnalysisEnabled,
+    setAiSentenceAnalysisEnabled: enabled => { aiSentenceAnalysisEnabled = enabled; },
+    updateDailyEntryPlaceholder,
+    renderAccountStatus,
+    getState: () => state,
+    setState: nextState => { state = nextState; },
+    resetTransientUiState,
+    renderAll
+  };
+}
+
 async function start() {
-  renderAppShell();
+  renderAppShell(byId);
   bindEvents();
   try {
     await store.initDatabase();
@@ -2066,19 +1297,7 @@ async function start() {
     return;
   }
 
-  sync.onAuthChange(async session => {
-    accountSession = session;
-    renderAccountStatus();
-    if (!session) {
-      return;
-    }
-    const result = await sync.syncNow();
-    if (result && !result.skipped) {
-      state = result.state;
-      resetTransientUiState();
-      renderAll();
-    }
-  });
+  wireAuthChange(syncCtx());
 }
 
 start();

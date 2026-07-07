@@ -1,3 +1,4 @@
+// Schema (table + RLS policies) lives at supabase/migrations/20260707000000_study_snapshots.sql
 const tableName = "study_snapshots";
 
 export async function pullSnapshot(supabase, userId) {
