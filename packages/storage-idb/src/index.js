@@ -67,11 +67,11 @@ export function createIdbStorage(options = {}) {
     await promoteDueReviews();
     const selectedDate = normalizeDate(studyDate);
     const [studyDays, allDailyEntries, tasks, items, links] = await Promise.all([
-      getAll("studyDays"),
-      getAll("dailyEntries"),
-      getAll("tasks"),
-      getAll("items"),
-      getAll("dailyEntryLinks")
+      getAllActive("studyDays"),
+      getAllActive("dailyEntries"),
+      getAllActive("tasks"),
+      getAllActive("items"),
+      getAllActive("dailyEntryLinks")
     ]);
 
     const allDailyEntriesWithLinks = allDailyEntries
@@ -151,7 +151,7 @@ export function createIdbStorage(options = {}) {
 
   async function deleteDailyEntry(id, studyDate = todayKey()) {
     const entry = await getValue("dailyEntries", id);
-    if (!entry) {
+    if (!entry || entry.deletedAt) {
       return getState(studyDate);
     }
     const allEntries = await getAll("dailyEntries");
@@ -159,25 +159,31 @@ export function createIdbStorage(options = {}) {
     const removeIds = new Set([id]);
     if (entry.kind === "sentence") {
       allEntries
-        .filter(candidate => candidate.parentId === id)
+        .filter(candidate => candidate.parentId === id && !candidate.deletedAt)
         .forEach(candidate => removeIds.add(candidate.id));
     }
 
+    const tombstoneAt = now();
     await runTransaction(["dailyEntries", "dailyEntryLinks"], "readwrite", transaction => {
       const entryStore = transaction.objectStore("dailyEntries");
       const linkStore = transaction.objectStore("dailyEntryLinks");
-      removeIds.forEach(removeId => entryStore.delete(removeId));
+      removeIds.forEach(removeId => {
+        const candidate = allEntries.find(item => item.id === removeId);
+        if (candidate) {
+          entryStore.put({ ...candidate, deletedAt: tombstoneAt, updatedAt: tombstoneAt });
+        }
+      });
       allLinks
-        .filter(link => removeIds.has(link.entryId) || removeIds.has(link.sentenceId))
-        .forEach(link => linkStore.delete(link.id));
+        .filter(link => (removeIds.has(link.entryId) || removeIds.has(link.sentenceId)) && !link.deletedAt)
+        .forEach(link => linkStore.put({ ...link, deletedAt: tombstoneAt, updatedAt: tombstoneAt }));
     });
 
     return getState(studyDate || entry.studyDate);
   }
 
   async function registerDailyEntries(ids = [], studyDate = todayKey()) {
-    const entries = await getAll("dailyEntries");
-    const items = await getAll("items");
+    const entries = await getAllActive("dailyEntries");
+    const items = await getAllActive("items");
     const targets = entries.filter(entry => ids.includes(entry.id) && ["word", "grammar", "expression"].includes(entry.kind));
     const registered = [];
     const duplicates = [];
@@ -235,7 +241,11 @@ export function createIdbStorage(options = {}) {
   }
 
   async function deleteItem(id, studyDate = todayKey()) {
-    await deleteValue("items", id);
+    const item = await getValue("items", id);
+    if (item && !item.deletedAt) {
+      const tombstoneAt = now();
+      await putValue("items", { ...item, deletedAt: tombstoneAt, updatedAt: tombstoneAt });
+    }
     return getState(studyDate);
   }
 
@@ -258,7 +268,7 @@ export function createIdbStorage(options = {}) {
     if (!normalized.length) {
       return getState(studyDate);
     }
-    const items = await getAll("items");
+    const items = await getAllActive("items");
     const reviewedAt = now();
     await runTransaction(["items"], "readwrite", transaction => {
       const store = transaction.objectStore("items");
@@ -281,7 +291,7 @@ export function createIdbStorage(options = {}) {
   async function submitWordQuizAnswer(payload = {}) {
     const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
     const item = await getValue("items", text(payload.itemId));
-    if (!item || item.kind !== quizKind) {
+    if (!item || item.deletedAt || item.kind !== quizKind) {
       return { state: await getState(payload.studyDate), result: { correct: false, missing: true } };
     }
 
@@ -342,11 +352,11 @@ export function createIdbStorage(options = {}) {
   async function exportData() {
     const data = {
       selectedDate: todayKey(),
-      studyDays: await getAll("studyDays"),
-      dailyEntries: await getAll("dailyEntries"),
-      dailyEntryLinks: await getAll("dailyEntryLinks"),
-      tasks: await getAll("tasks"),
-      items: await getAll("items")
+      studyDays: pruneStaleTombstones(await getAll("studyDays")),
+      dailyEntries: pruneStaleTombstones(await getAll("dailyEntries")),
+      dailyEntryLinks: pruneStaleTombstones(await getAll("dailyEntryLinks")),
+      tasks: pruneStaleTombstones(await getAll("tasks")),
+      items: pruneStaleTombstones(await getAll("items"))
     };
     return { ...paths, data };
   }
@@ -405,6 +415,10 @@ export function createIdbStorage(options = {}) {
     return requestToPromise(db.transaction(storeName, "readonly").objectStore(storeName).getAll());
   }
 
+  async function getAllActive(storeName) {
+    return (await getAll(storeName)).filter(record => !record.deletedAt);
+  }
+
   async function getValue(storeName, key) {
     const db = await getDb();
     return requestToPromise(db.transaction(storeName, "readonly").objectStore(storeName).get(key));
@@ -440,7 +454,7 @@ export function createIdbStorage(options = {}) {
 
   async function promoteDueReviews() {
     const today = todayKey();
-    const dueItems = (await getAll("items")).filter(item =>
+    const dueItems = (await getAllActive("items")).filter(item =>
       item.reviewDueDate && item.reviewDueDate <= today && item.kind !== "source"
     );
     if (!dueItems.length) {
@@ -611,7 +625,9 @@ function normalizeDailyEntryLink(link = {}) {
     id: text(link.id || `${entryId}::${sentenceId}`),
     entryId,
     sentenceId,
-    createdAt: text(link.createdAt || link.created_at || now())
+    createdAt: text(link.createdAt || link.created_at || now()),
+    updatedAt: text(link.updatedAt || link.updated_at || link.createdAt || link.created_at || now()),
+    deletedAt: normalizeDeletedAt(link.deletedAt || link.deleted_at)
   };
 }
 
@@ -640,7 +656,8 @@ function normalizeStudyDay(day = {}) {
     summary: text(day.summary),
     note: text(day.note),
     createdAt: text(day.createdAt || now()),
-    updatedAt: text(day.updatedAt || now())
+    updatedAt: text(day.updatedAt || now()),
+    deletedAt: normalizeDeletedAt(day.deletedAt)
   };
 }
 
@@ -651,7 +668,8 @@ function ensureStudyDayPayload(studyDate) {
     summary: "",
     note: "",
     createdAt: now(),
-    updatedAt: now()
+    updatedAt: now(),
+    deletedAt: null
   };
 }
 
@@ -719,7 +737,8 @@ function normalizeDailyEntry(entry = {}) {
     registered: Boolean(entry.registered),
     sourceSentences: entry.sourceSentences || [],
     createdAt: text(entry.createdAt || now()),
-    updatedAt: text(entry.updatedAt || now())
+    updatedAt: text(entry.updatedAt || now()),
+    deletedAt: normalizeDeletedAt(entry.deletedAt)
   };
 }
 
@@ -732,7 +751,8 @@ function normalizeTask(task = {}) {
     done: Boolean(task.done),
     studyDate: normalizeDate(task.studyDate),
     createdAt: text(task.createdAt || now()),
-    updatedAt: text(task.updatedAt || now())
+    updatedAt: text(task.updatedAt || now()),
+    deletedAt: normalizeDeletedAt(task.deletedAt)
   };
 }
 
@@ -758,7 +778,8 @@ function normalizeItem(item = {}) {
     lastQuizzedAt: text(item.lastQuizzedAt),
     lastReviewedAt: text(item.lastReviewedAt),
     createdAt: text(item.createdAt || now()),
-    updatedAt: text(item.updatedAt || now())
+    updatedAt: text(item.updatedAt || now()),
+    deletedAt: normalizeDeletedAt(item.deletedAt)
   };
 }
 
@@ -867,11 +888,14 @@ function uniqueSourceSentences(sourceSentences) {
 }
 
 function linkPayload(entryId, sentenceId) {
+  const createdAt = now();
   return {
     id: `${entryId}::${sentenceId}`,
     entryId,
     sentenceId,
-    createdAt: now()
+    createdAt,
+    updatedAt: createdAt,
+    deletedAt: null
   };
 }
 
@@ -910,6 +934,10 @@ function normalizeDate(value) {
 
 function normalizeOptionalDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : "";
+}
+
+function normalizeDeletedAt(value) {
+  return value ? text(value) : null;
 }
 
 function normalizeReview(value) {
@@ -961,6 +989,19 @@ function kindLabel(kind) {
 
 function sortNewest(left, right) {
   return text(right.createdAt).localeCompare(text(left.createdAt));
+}
+
+const tombstoneTtlMs = 90 * 24 * 60 * 60 * 1000;
+
+function pruneStaleTombstones(records) {
+  const cutoff = Date.now() - tombstoneTtlMs;
+  return records.filter(record => {
+    if (!record.deletedAt) {
+      return true;
+    }
+    const deletedAtMs = Date.parse(record.deletedAt);
+    return !Number.isFinite(deletedAtMs) || deletedAtMs >= cutoff;
+  });
 }
 
 function now() {
