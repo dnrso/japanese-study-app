@@ -9,7 +9,7 @@ export function getSupabaseConfig() {
   const env = readEnv();
   return {
     url: String(env.VITE_SUPABASE_URL || "").trim(),
-    anonKey: String(env.VITE_SUPABASE_ANON_KEY || "").trim()
+    anonKey: String(env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY || "").trim()
   };
 }
 

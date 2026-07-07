@@ -1026,8 +1026,23 @@ function renderAccountStatus() {
 }
 
 async function signInWithGoogle() {
-  const result = await sync.signInWithGoogle();
+  let result;
+  try {
+    result = await sync.signInWithGoogle();
+  } catch (error) {
+    console.error("Google 로그인 처리 중 예외 발생:", error);
+    const message = `Google 로그인 실패: ${error?.message || error}`;
+    window.alert(message);
+    const status = byId("accountStatus");
+    if (status) {
+      status.textContent = message;
+    }
+    return;
+  }
   if (result?.skipped) {
+    if (result.reason === "error") {
+      console.error("Google 로그인 실패:", result.error);
+    }
     const message = result.reason === "disabled"
       ? "Supabase 환경변수가 설정되지 않았습니다."
       : `Google 로그인 실패: ${result.error?.message || result.reason}`;
@@ -1040,7 +1055,11 @@ async function signInWithGoogle() {
 }
 
 async function signOutOfAccount() {
-  await sync.signOut();
+  try {
+    await sync.signOut();
+  } catch (error) {
+    console.error("로그아웃 처리 중 예외 발생:", error);
+  }
   accountSession = null;
   renderAccountStatus();
 }
