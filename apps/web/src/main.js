@@ -228,9 +228,9 @@ function todayPageTemplate() {
           <div class="panel-header">
             <h2 class="panel-title" id="calendarTitle">학습 캘린더</h2>
             <div class="calendar-actions">
-              <button class="ghost-btn" id="prevMonthBtn" type="button">이전</button>
+              <button class="ghost-btn" id="prevMonthBtn" type="button">이전달</button>
               <button class="ghost-btn" id="todayBtn" type="button">오늘</button>
-              <button class="ghost-btn" id="nextMonthBtn" type="button">다음</button>
+              <button class="ghost-btn" id="nextMonthBtn" type="button">다음달</button>
               <button class="icon-btn calendar-toggle-btn" id="calendarToggleBtn" type="button" aria-expanded="true" aria-label="캘린더 접기/펼치기">⌄</button>
             </div>
           </div>

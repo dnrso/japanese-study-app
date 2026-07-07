@@ -191,6 +191,23 @@
     height: 40px;
   }
 
+  /* Calendar header buttons stay compact on mobile too, overriding the
+     generic touch-target bump above. The header itself already wraps
+     width-driven (see pages.css); on narrow screens the actions group
+     naturally drops to its own line since it can't fit beside the title. */
+  #today-calendar .calendar-actions .ghost-btn {
+    min-height: 30px;
+    padding: 5px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  #today-calendar .calendar-toggle-btn {
+    min-height: 30px;
+    width: 30px;
+    height: 30px;
+  }
+
   input,
   select {
     min-height: 40px;
