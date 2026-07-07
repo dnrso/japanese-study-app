@@ -1234,6 +1234,10 @@ async function addDailyEntryFromInput() {
         setAiSentenceAnalysisStatus(result?.message || "AI 분석 요청이 실패했습니다.");
         return;
       }
+      if (!core.hasValidSentenceBlockStructure(result.rawText)) {
+        setAiSentenceAnalysisStatus("AI 분석 결과가 올바른 형식이 아닙니다. 다시 시도해 주세요.");
+        return;
+      }
       rawText = result.rawText;
       setAiSentenceAnalysisStatus("AI 분석 결과를 문장 카드에 추가했습니다.");
     } catch (error) {

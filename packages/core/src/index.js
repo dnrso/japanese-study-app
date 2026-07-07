@@ -23,6 +23,29 @@ export function clampQuizQuestionFontSize(value) {
   return Math.min(64, Math.max(24, Number(value) || 32));
 }
 
+// Minimal structural contract for an AI-generated (or manually written)
+// sentence analysis block, mirrored from packages/storage-idb's
+// parseSentenceBlock and supabase/functions/_shared/ai.js's
+// hasValidSentenceBlockStructure: the raw text must open with a "# "
+// heading line and contain at least a 읽기 line and a 해석 line. Used to
+// reject conversational AI replies (no structured block) before they are
+// ever saved as a sentence card.
+export function hasValidSentenceBlockStructure(rawText) {
+  const lines = String(rawText || "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  if (!lines.length) {
+    return false;
+  }
+  if (!lines[0].startsWith("# ")) {
+    return false;
+  }
+  const hasReading = lines.some(line => line.startsWith("읽기"));
+  const hasMeaning = lines.some(line => line.startsWith("해석"));
+  return hasReading && hasMeaning;
+}
+
 export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
   if (value === "") {
     return "";
