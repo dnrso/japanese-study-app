@@ -11,16 +11,28 @@
   }
 
   .brand {
+    order: 1;
     min-width: 0;
+    flex: 0 0 auto;
   }
 
   .brand-title {
-    font-size: 13px;
+    font-size: 18px;
+  }
+
+  .panel.welcome h1 {
+    font-size: 26px;
   }
 
   .search {
+    order: 2;
+    flex: 1 1 0%;
+    min-width: 0;
+    width: auto;
+  }
+
+  .top-actions {
     order: 3;
-    width: 100%;
   }
 
   /* Tabbar becomes the fixed bottom navigation */
@@ -84,8 +96,58 @@
     grid-template-columns: 1fr;
   }
 
+  /* Today tab: compact vertical rhythm between stacked panels and
+     between items inside them. */
+  #today .today-top-grid {
+    gap: 8px;
+  }
+
+  #today .section {
+    margin-bottom: 8px;
+  }
+
+  #today .daily-entry-list {
+    gap: 6px;
+  }
+
+  #today .daily-kind-radios {
+    margin-bottom: 6px;
+  }
+
+  #today .panel-header {
+    margin-bottom: 8px;
+  }
+
+  /* Study calendar: collapsible body with a chevron toggle, mobile only.
+     Default state is expanded (matches current desktop behavior). */
+  .calendar-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.16s ease;
+  }
+
+  .calendar-toggle-btn[aria-expanded="false"] {
+    transform: rotate(-90deg);
+  }
+
+  #today-calendar.calendar-collapsed .calendar-body {
+    display: none;
+  }
+
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Guard against min-content blowout: classless grid children (e.g. in
+     .content-grid) or nested wide content (e.g. .table-scroll tables)
+     must not inflate the 1fr track beyond the viewport. */
+  .content-grid > *,
+  .today-top-grid > *,
+  .hero > *,
+  .daily-entry-list > *,
+  .stat-grid > * {
+    min-width: 0;
   }
 
   /* Word table: horizontal scroll instead of column crushing */
@@ -129,6 +191,23 @@
     height: 40px;
   }
 
+  /* Calendar header buttons stay compact on mobile too, overriding the
+     generic touch-target bump above. The header itself already wraps
+     width-driven (see pages.css); on narrow screens the actions group
+     naturally drops to its own line since it can't fit beside the title. */
+  #today-calendar .calendar-actions .ghost-btn {
+    min-height: 30px;
+    padding: 5px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  #today-calendar .calendar-toggle-btn {
+    min-height: 30px;
+    width: 30px;
+    height: 30px;
+  }
+
   input,
   select {
     min-height: 40px;
@@ -161,10 +240,6 @@
 @media (max-width: 480px) {
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .brand-title {
-    font-size: 12px;
   }
 
   .date-chip {

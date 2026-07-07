@@ -1,0 +1,4 @@
+project_id = "nihongo-study"
+
+[functions.analyze-sentence]
+verify_jwt = true

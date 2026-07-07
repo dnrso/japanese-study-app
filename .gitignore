@@ -1,4 +1,6 @@
 node_modules/
+.env
+.env.local
 app-data/
 user-data/
 .portable-data-preserve/
@@ -11,8 +13,8 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Local-only project instructions (not synced to GitHub)
-CLAUDE.md
+# Claude Code local project config (not synced to GitHub)
+.claude/
 
 # Android (Capacitor)
 apps/web/android/.idea/
@@ -26,3 +28,10 @@ apps/web/android/app/src/main/assets/capacitor.plugins.json
 apps/web/android/app/src/main/res/xml/config.xml
 *.keystore
 *.jks
+
+# Supabase local secrets
+supabase/.env
+supabase/.env.local
+supabase/functions/.env
+supabase/.branches
+supabase/.temp

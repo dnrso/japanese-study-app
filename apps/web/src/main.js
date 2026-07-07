@@ -1,6 +1,8 @@
 import "@nihongo-study/ui/styles";
+import { analyzeJapaneseSentenceForStudy, defaultGeminiModel } from "@nihongo-study/ai";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
+import { createSupabaseSync } from "@nihongo-study/sync";
 import {
   applyPagePatch as applySharedPagePatch,
   badgeClassByKind,
@@ -37,14 +39,23 @@ import { createSampleState } from "./sampleState.js";
 const store = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
+const sync = createSupabaseSync({ storage: store, mergeSnapshots: mergeBackupData });
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
+const geminiApiKeyStorageKey = "nihongo-study.geminiApiKey";
+
+const aiSentenceAnalysisPlaceholder = "한국어 또는 일본어 문장을 입력하세요 *AI 문장 분석 사용";
 
 let state = createSampleState(todayKey);
+let aiSentenceAnalysisInProgress = false;
+let aiSentenceAnalysisEnabled = false;
+let dailyEntryInputDefaultPlaceholder = "";
+let accountSession = null;
 let currentPage = "home";
 let selectedDate = state.selectedDate;
 let calendarMonth = selectedDate.slice(0, 7);
+let calendarCollapsed = false;
 let searchTerm = "";
 let wordSort = { key: "", direction: "" };
 let wordQuizMode = "random";
@@ -96,7 +107,6 @@ function renderAppShell() {
 
         <div class="top-actions">
           <div class="date-chip" id="todayDate"></div>
-          <button class="primary-btn" id="quickAddBtn" type="button">+ 빠른 추가</button>
         </div>
       </header>
 
@@ -147,29 +157,14 @@ function homePageTemplate() {
     <section class="page" id="home">
       <div class="hero" id="home-overview">
         ${homeWelcomePanel()}
-
-        <div class="panel today-panel" id="home-progress">
-          <div class="panel-header">
-            <h2 class="panel-title">오늘 진행률</h2>
-            <span class="badge red">목표 90분</span>
-          </div>
-          <div class="progress-ring" id="progressRing">
-            <div class="progress-inner">
-              <div>
-                <strong id="progressPercent">0%</strong>
-                <span>완료</span>
-              </div>
-            </div>
-          </div>
-          <p class="muted" id="progressText">오늘 공부 시간을 기록하면 진행률이 갱신됩니다.</p>
-        </div>
       </div>
 
       <div class="stat-grid" id="home-stats">
         <div class="stat-card"><div class="stat-label">오늘 공부 항목</div><div class="stat-value" id="todayDoneCount">0개</div><div class="stat-note">완료한 할 일 기준</div></div>
         <div class="stat-card"><div class="stat-label">새 항목</div><div class="stat-value" id="newItemCount">0개</div><div class="stat-note">단어 · 문법 · 표현 · 한자</div></div>
         <div class="stat-card"><div class="stat-label">복습 항목</div><div class="stat-value" id="reviewItemCount">0개</div><div class="stat-note">오늘/대기 복습 대상</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 공부 시간</div><div class="stat-value" id="studyMinutes">0분</div><div class="stat-note">목표 90분</div></div>
+        <div class="stat-card"><div class="stat-label">오늘 복습한 단어</div><div class="stat-value" id="reviewedWordCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
+        <div class="stat-card"><div class="stat-label">오늘 복습한 한자</div><div class="stat-value" id="reviewedKanjiCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
       </div>
 
       <div class="content-grid">
@@ -219,27 +214,30 @@ function todayPageTemplate() {
         <section class="panel section" id="today-manual-entry">
           <div class="panel-header">
             <h2 class="panel-title">새 항목 추가</h2>
-            <button class="primary-btn" id="addManualEntryBtn" type="button">추가</button>
+            <button class="primary-btn" id="addManualEntryBtn" type="button" hidden>추가</button>
           </div>
           <div class="daily-kind-radios">
-            <label><input type="radio" name="dailyManualKind" value="word" checked /> 새 단어</label>
+            <label><input type="radio" name="dailyManualKind" value="word" /> 새 단어</label>
             <label><input type="radio" name="dailyManualKind" value="grammar" /> 새 문법</label>
             <label><input type="radio" name="dailyManualKind" value="expression" /> 새 표현</label>
           </div>
-          <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder="${escapeHtml(manualEntryPlaceholders.word)}"></textarea>
+          <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder="${escapeHtml(manualEntryPlaceholders.word)}" hidden></textarea>
         </section>
 
         <section class="panel section" id="today-calendar">
           <div class="panel-header">
             <h2 class="panel-title" id="calendarTitle">학습 캘린더</h2>
             <div class="calendar-actions">
-              <button class="ghost-btn" id="prevMonthBtn" type="button">이전</button>
+              <button class="ghost-btn" id="prevMonthBtn" type="button">이전달</button>
               <button class="ghost-btn" id="todayBtn" type="button">오늘</button>
-              <button class="ghost-btn" id="nextMonthBtn" type="button">다음</button>
+              <button class="ghost-btn" id="nextMonthBtn" type="button">다음달</button>
+              <button class="icon-btn calendar-toggle-btn" id="calendarToggleBtn" type="button" aria-expanded="true" aria-label="캘린더 접기/펼치기">⌄</button>
             </div>
           </div>
-          <div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
-          <div class="calendar-grid" id="calendarGrid"></div>
+          <div class="calendar-body" id="calendarBody">
+            <div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+          </div>
         </section>
       </div>
 
@@ -370,8 +368,14 @@ function quizPageTemplate() {
   return `
     <section class="page hidden-page" id="quiz">
       <section class="panel section" id="quiz-select">
-        <div class="panel-header"><h2 class="panel-title">퀴즈</h2><span class="badge yellow">샘플 데이터</span></div>
-        <div class="quiz-grid">
+        <div class="panel-header">
+          <h2 class="panel-title">퀴즈</h2>
+          <div class="panel-header-actions">
+            <button class="ghost-btn compact-action-btn" id="quizExitBtn" type="button" hidden>목록으로</button>
+            <span class="badge yellow">샘플 데이터</span>
+          </div>
+        </div>
+        <div class="quiz-grid" id="quizSelectGrid">
           <article class="quiz-card word-quiz-card">
             <span class="badge red">단어</span><strong>단어 퀴즈</strong><span>4지선다</span>
             <div class="quiz-mode-options" aria-label="단어 퀴즈 유형">
@@ -462,6 +466,16 @@ function settingsPageTemplate() {
         <p class="muted" id="storageStatus"></p>
       </section>
 
+      <section class="panel section" id="settings-account">
+        <div class="panel-header"><h2 class="panel-title">계정 및 동기화</h2></div>
+        <p class="muted">로그인하면 데이터가 Supabase에 동기화됩니다.</p>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
+          <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
+        </div>
+        <p class="muted" id="accountStatus"></p>
+      </section>
+
       <section class="panel section" id="settings-quiz">
         <div class="panel-header"><h2 class="panel-title">퀴즈 표시 및 복습</h2></div>
         <div class="settings-grid">
@@ -482,6 +496,8 @@ function settingsPageTemplate() {
 }
 
 function bindEvents() {
+  dailyEntryInputDefaultPlaceholder = byId("dailyEntryInput").placeholder;
+
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => openPage(tab.dataset.page));
   });
@@ -634,10 +650,10 @@ function bindEvents() {
   });
   byId("wordReviewFilter").addEventListener("change", renderWords);
 
-  byId("quickAddBtn").addEventListener("click", () => promptAddItem("word"));
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
   byId("nextMonthBtn").addEventListener("click", () => moveCalendarMonth(1));
+  byId("calendarToggleBtn").addEventListener("click", toggleCalendarCollapsed);
   byId("todayBtn").addEventListener("click", async () => {
     selectedDate = todayKey();
     calendarMonth = selectedDate.slice(0, 7);
@@ -645,18 +661,45 @@ function bindEvents() {
   });
 
   byId("addDailyEntryBtn").addEventListener("click", addDailyEntryFromInput);
+  byId("aiSentenceAnalysisCheckbox")?.addEventListener("click", event => {
+    if (event.target.checked && !accountSession) {
+      event.preventDefault();
+      event.target.checked = false;
+      setAiSentenceAnalysisStatus("로그인 유저만 사용 가능합니다.");
+      return;
+    }
+  });
+  byId("aiSentenceAnalysisCheckbox")?.addEventListener("change", event => {
+    aiSentenceAnalysisEnabled = event.target.checked;
+    updateDailyEntryPlaceholder();
+    setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled ? "AI 문장 분석이 켜졌습니다." : "");
+  });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
   byId("registerLearnedBtn").addEventListener("click", registerLearnedEntries);
   byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
+  byId("quizExitBtn").addEventListener("click", exitQuizSession);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
   byId("downloadBackupBtn").addEventListener("click", downloadBackup);
   byId("loadBackupBtn").addEventListener("click", () => byId("backupFileInput").click());
   byId("mergeBackupBtn").addEventListener("click", () => byId("mergeBackupFileInput").click());
+  byId("googleSignInBtn").addEventListener("click", signInWithGoogle);
+  byId("googleSignOutBtn").addEventListener("click", signOutOfAccount);
   byId("backupFileInput").addEventListener("change", loadBackupFromFile);
   byId("mergeBackupFileInput").addEventListener("change", mergeBackupFromFile);
 
+  let lastSelectedManualKind = "";
   document.querySelectorAll("input[name='dailyManualKind']").forEach(input => {
-    input.addEventListener("change", updateManualEntryPlaceholder);
+    input.addEventListener("click", () => {
+      if (input.checked && lastSelectedManualKind === input.value) {
+        input.checked = false;
+        lastSelectedManualKind = "";
+        hideManualEntryInput();
+        return;
+      }
+      lastSelectedManualKind = input.value;
+      updateManualEntryPlaceholder();
+      revealManualEntryInput();
+    });
   });
 
   document.querySelectorAll("input[name='wordQuizMode']").forEach(input => {
@@ -729,6 +772,7 @@ function renderAll() {
   renderQuickFilters();
   renderQuizSettings();
   renderStorageStatus();
+  renderAccountStatus();
 }
 
 async function refreshState(studyDate = selectedDate) {
@@ -743,6 +787,12 @@ function renderHome() {
     overview: core.homeOverview(state, searchTerm),
     helpers: renderHelpers()
   }));
+  applyPagePatch({
+    text: {
+      reviewedWordCount: `${core.reviewedTodayCount(state.items, "word", selectedDate)}개`,
+      reviewedKanjiCount: `${core.reviewedTodayCount(state.items, "kanji", selectedDate)}개`
+    }
+  });
 }
 
 function renderTasks() {
@@ -773,6 +823,22 @@ function renderCalendar() {
     studyDays: state.studyDays,
     toDateKey
   }));
+  applyCalendarCollapsedState();
+}
+
+function applyCalendarCollapsedState() {
+  const panel = byId("today-calendar");
+  const toggleBtn = byId("calendarToggleBtn");
+  if (!panel || !toggleBtn) {
+    return;
+  }
+  panel.classList.toggle("calendar-collapsed", calendarCollapsed);
+  toggleBtn.setAttribute("aria-expanded", String(!calendarCollapsed));
+}
+
+function toggleCalendarCollapsed() {
+  calendarCollapsed = !calendarCollapsed;
+  applyCalendarCollapsedState();
 }
 
 function renderLearnedSections() {
@@ -845,6 +911,7 @@ function renderWordQuiz() {
     quiz: wordQuiz,
     helpers: renderHelpers()
   }));
+  updateQuizSessionView();
 }
 
 function renderKanjiQuiz() {
@@ -852,6 +919,27 @@ function renderKanjiQuiz() {
     quiz: kanjiQuiz,
     helpers: renderHelpers()
   }));
+  updateQuizSessionView();
+}
+
+function updateQuizSessionView() {
+  const grid = byId("quizSelectGrid");
+  const exitBtn = byId("quizExitBtn");
+  if (!grid || !exitBtn) {
+    return;
+  }
+  const sessionActive = Boolean(wordQuiz.question || kanjiQuiz.question);
+  grid.hidden = sessionActive;
+  exitBtn.hidden = !sessionActive;
+}
+
+function exitQuizSession() {
+  wordQuiz = emptyQuiz();
+  kanjiQuiz = emptyQuiz();
+  byId("quizStatus").textContent = "샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.";
+  renderWordQuiz();
+  renderKanjiQuiz();
+  byId("quiz-select").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderReview() {
@@ -911,6 +999,71 @@ function renderStorageStatus() {
   });
 }
 
+function renderAccountStatus() {
+  if (!accountSession && aiSentenceAnalysisEnabled) {
+    aiSentenceAnalysisEnabled = false;
+    const checkbox = byId("aiSentenceAnalysisCheckbox");
+    if (checkbox) {
+      checkbox.checked = false;
+    }
+    updateDailyEntryPlaceholder();
+  }
+
+  const signInBtn = byId("googleSignInBtn");
+  const signOutBtn = byId("googleSignOutBtn");
+  const status = byId("accountStatus");
+  if (!signInBtn || !signOutBtn || !status) {
+    return;
+  }
+  const email = accountSession?.user?.email || "";
+  signInBtn.hidden = Boolean(accountSession);
+  signOutBtn.hidden = !accountSession;
+  status.textContent = accountSession
+    ? `${email} 계정으로 로그인되어 있습니다.`
+    : sync.isEnabled
+      ? "로그인되어 있지 않습니다."
+      : "Supabase 환경변수가 설정되지 않아 로그인을 사용할 수 없습니다.";
+}
+
+async function signInWithGoogle() {
+  let result;
+  try {
+    result = await sync.signInWithGoogle();
+  } catch (error) {
+    console.error("Google 로그인 처리 중 예외 발생:", error);
+    const message = `Google 로그인 실패: ${error?.message || error}`;
+    window.alert(message);
+    const status = byId("accountStatus");
+    if (status) {
+      status.textContent = message;
+    }
+    return;
+  }
+  if (result?.skipped) {
+    if (result.reason === "error") {
+      console.error("Google 로그인 실패:", result.error);
+    }
+    const message = result.reason === "disabled"
+      ? "Supabase 환경변수가 설정되지 않았습니다."
+      : `Google 로그인 실패: ${result.error?.message || result.reason}`;
+    window.alert(message);
+    const status = byId("accountStatus");
+    if (status) {
+      status.textContent = message;
+    }
+  }
+}
+
+async function signOutOfAccount() {
+  try {
+    await sync.signOut();
+  } catch (error) {
+    console.error("로그아웃 처리 중 예외 발생:", error);
+  }
+  accountSession = null;
+  renderAccountStatus();
+}
+
 function renderDate() {
   byId("todayDate").textContent = new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -963,9 +1116,30 @@ function updatePageVisibility() {
   });
 }
 
+function updateDailyEntryPlaceholder() {
+  const input = byId("dailyEntryInput");
+  if (!input) {
+    return;
+  }
+  input.placeholder = aiSentenceAnalysisEnabled
+    ? aiSentenceAnalysisPlaceholder
+    : dailyEntryInputDefaultPlaceholder;
+}
+
 function updateManualEntryPlaceholder() {
-  const kind = document.querySelector("input[name='dailyManualKind']:checked")?.value || "word";
+  const checked = document.querySelector("input[name='dailyManualKind']:checked");
+  const kind = checked?.value || "word";
   byId("manualEntryInput").placeholder = manualEntryPlaceholders[kind] || manualEntryPlaceholders.word;
+}
+
+function revealManualEntryInput() {
+  byId("manualEntryInput").hidden = false;
+  byId("addManualEntryBtn").hidden = false;
+}
+
+function hideManualEntryInput() {
+  byId("manualEntryInput").hidden = true;
+  byId("addManualEntryBtn").hidden = true;
 }
 
 function openPage(pageId) {
@@ -1026,12 +1200,62 @@ async function toggleTask(id) {
 }
 
 async function addDailyEntryFromInput() {
+  if (aiSentenceAnalysisInProgress) {
+    return;
+  }
   const input = byId("dailyEntryInput");
-  const rawText = input.value.trim();
-  if (!rawText) {
+  const rawInput = input.value.trim();
+  if (!rawInput) {
     input.focus();
     return;
   }
+
+  let rawText = rawInput;
+  if (aiSentenceAnalysisEnabled) {
+    if (!accountSession) {
+      setAiSentenceAnalysisStatus("로그인 유저만 사용 가능합니다.");
+      return;
+    }
+
+    const apiKey = readGeminiApiKey();
+    if (!apiKey) {
+      const message = "Gemini API 키가 설정되지 않았습니다. AI 분석을 사용하려면 API 키를 입력하세요.";
+      setAiSentenceAnalysisStatus(message);
+      const enteredKey = window.prompt("Gemini API 키를 입력하세요. (브라우저에만 저장됩니다)");
+      if (!enteredKey || !enteredKey.trim()) {
+        window.alert(message);
+        return;
+      }
+      writeGeminiApiKey(enteredKey.trim());
+    }
+
+    setAiSentenceAnalysisBusy(true);
+    setAiSentenceAnalysisStatus("AI 문장 분석 중입니다.");
+    try {
+      const result = await analyzeJapaneseSentenceForStudy({
+        sentence: rawInput,
+        apiKey: readGeminiApiKey(),
+        model: defaultGeminiModel
+      });
+      if (!result.ok) {
+        setAiSentenceAnalysisStatus(result.message);
+        if (result.reason === "missingApiKey") {
+          window.alert(result.message);
+        }
+        return;
+      }
+      rawText = result.rawText;
+      setAiSentenceAnalysisStatus("AI 분석 결과를 문장 카드에 추가했습니다.");
+    } catch (error) {
+      const message = error.message || String(error);
+      setAiSentenceAnalysisStatus(`AI 문장 분석 실패: ${message}`);
+      window.alert(`AI 문장 분석 실패\n${message}`);
+      return;
+    } finally {
+      setAiSentenceAnalysisBusy(false);
+    }
+  }
+
   state = await store.addDailyEntry({
     studyDate: selectedDate,
     kind: "sentence",
@@ -1044,7 +1268,46 @@ async function addDailyEntryFromInput() {
     note: state.studyLog.note || ""
   });
   input.value = "";
+  if (!aiSentenceAnalysisEnabled) {
+    setAiSentenceAnalysisStatus("");
+  }
   renderAll();
+}
+
+function setAiSentenceAnalysisBusy(busy) {
+  aiSentenceAnalysisInProgress = busy;
+  const addButton = byId("addDailyEntryBtn");
+  const checkbox = byId("aiSentenceAnalysisCheckbox");
+  if (addButton) {
+    addButton.disabled = busy;
+    addButton.textContent = busy ? "분석 중" : "문장 추가";
+  }
+  if (checkbox) {
+    checkbox.disabled = busy;
+  }
+}
+
+function setAiSentenceAnalysisStatus(message) {
+  const element = byId("aiSentenceAnalysisStatus");
+  if (element) {
+    element.textContent = message;
+  }
+}
+
+function readGeminiApiKey() {
+  try {
+    return globalThis.localStorage?.getItem(geminiApiKeyStorageKey) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeGeminiApiKey(value) {
+  try {
+    globalThis.localStorage?.setItem(geminiApiKeyStorageKey, value);
+  } catch {
+    // Local browser storage can be unavailable in restricted modes.
+  }
 }
 
 async function addManualEntryFromInput() {
@@ -1231,6 +1494,13 @@ function startQuiz(kind) {
   byId("quizStatus").textContent = question ? "정답을 선택하세요." : "퀴즈를 만들려면 같은 유형의 항목과 보기 후보가 4개 이상 필요합니다.";
   renderWordQuiz();
   renderKanjiQuiz();
+
+  if (question) {
+    const panelId = isKanji ? "kanjiQuizPanel" : "wordQuizPanel";
+    window.setTimeout(() => {
+      byId(panelId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
 }
 
 async function submitQuizChoice(kind, selectedAnswer) {
@@ -1659,6 +1929,7 @@ function renderHelpers() {
     highlight,
     kindLabels,
     reviewQueueStatusText,
+    reviewQueueReview,
     reviewStatusText: core.reviewStatusText
   };
 }
@@ -1703,6 +1974,10 @@ function reviewQueueStatusText(item) {
     drafts: reviewQueueDrafts,
     todayKey: selectedDate
   });
+}
+
+function reviewQueueReview(item) {
+  return core.reviewQueueReview(item, reviewQueueDrafts);
 }
 
 function pageForKind(kind) {
@@ -1768,7 +2043,22 @@ async function start() {
         </section>
       </main>
     `;
+    return;
   }
+
+  sync.onAuthChange(async session => {
+    accountSession = session;
+    renderAccountStatus();
+    if (!session) {
+      return;
+    }
+    const result = await sync.syncNow();
+    if (result && !result.skipped) {
+      state = result.state;
+      resetTransientUiState();
+      renderAll();
+    }
+  });
 }
 
 start();
