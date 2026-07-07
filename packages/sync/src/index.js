@@ -11,6 +11,25 @@ export { getSupabaseConfig, isConfigured } from "./config.js";
 export { getSession, onAuthChange, signInWithOAuth } from "./auth.js";
 export { pullSnapshot, pushSnapshot } from "./snapshot.js";
 
+async function readErrorResponseData(error) {
+  const response = error?.context;
+  if (!response || typeof response.json !== "function") {
+    return null;
+  }
+  try {
+    // The Response body can only be read once; `context` is a fresh
+    // Response supplied by supabase-js specifically for this purpose, so
+    // consuming it here is safe.
+    return await response.clone().json();
+  } catch {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function createSupabaseSync({ storage, mergeSnapshots }) {
   const supabase = getSupabaseClient();
   const isEnabled = Boolean(supabase);
@@ -102,6 +121,16 @@ export function createSupabaseSync({ storage, mergeSnapshots }) {
 
       const { data, error } = await supabase.functions.invoke(name, { body });
       if (error) {
+        // On a non-2xx response, supabase-js returns `data: null` and an
+        // error (e.g. FunctionsHttpError) whose `.context` is the raw
+        // Response object — the JSON body (with our {ok, reason, message}
+        // shape) hasn't been parsed yet. Parse it here so callers can still
+        // read `reason`/`message` from a failed invoke just like they would
+        // from a successful one.
+        const errorData = await readErrorResponseData(error);
+        if (errorData) {
+          return { skipped: false, data: errorData };
+        }
         return { skipped: true, reason: "error", error };
       }
       return { skipped: false, data };

@@ -1,8 +1,11 @@
-export const defaultGeminiModel = "gemini-2.5-flash";
+export const defaultGeminiModel = "gemini-3.1-flash-lite";
 export const geminiInteractionsEndpoint = "https://generativelanguage.googleapis.com/v1beta/interactions";
+
+export const maxSentenceLength = 300;
 
 export const aiSentenceAnalysisMessages = Object.freeze({
   emptySentence: "분석할 일본어 문장을 입력하세요.",
+  tooLong: "문장은 300자 이내로 입력해 주세요.",
   missingApiKey: "Gemini API 키를 먼저 설정하세요.",
   unsupportedFetch: "이 환경에서는 AI 요청을 보낼 수 없습니다.",
   emptyResponse: "Gemini API 응답에서 분석 결과를 찾지 못했습니다."
@@ -162,6 +165,15 @@ export async function analyzeJapaneseSentenceForStudy({
       message: aiSentenceAnalysisMessages.emptySentence,
       rawText: "",
       sourceSentence: ""
+    };
+  }
+  if (input.length > maxSentenceLength) {
+    return {
+      ok: false,
+      reason: "too-long",
+      message: aiSentenceAnalysisMessages.tooLong,
+      rawText: "",
+      sourceSentence: input
     };
   }
   if (!normalizeApiKey(apiKey)) {
