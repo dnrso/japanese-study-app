@@ -70,14 +70,21 @@ function initDatabase() {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
+  migrateDailyEntryLinksTable();
   db.exec(databaseSchema);
 
 
   ensureColumn("daily_entries", "parent_id", "TEXT");
+  ensureColumn("daily_entries", "deleted_at", "TEXT");
   ensureColumn("items", "quiz_correct_count", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("items", "quiz_wrong_count", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("items", "last_quizzed_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("items", "review_due_date", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("items", "last_reviewed_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("items", "deleted_at", "TEXT");
+  ensureColumn("study_days", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
+  ensureColumn("study_days", "deleted_at", "TEXT");
+  ensureColumn("tasks", "deleted_at", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_daily_entries_parent ON daily_entries(parent_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_items_review_due_date ON items(review_due_date);");
   migrateReviewDueDates();
@@ -90,6 +97,54 @@ function ensureColumn(tableName, columnName, definition) {
   if (!columns.some(column => column.name === columnName)) {
     db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`).run();
   }
+}
+
+// Older databases created daily_entry_links with a composite primary key
+// (entry_id, sentence_id) and no id/updated_at/deleted_at columns. Since that
+// primary key shape can't be altered in place, rebuild the table under the
+// current schema (surrogate id primary key + unique(entry_id, sentence_id))
+// and copy existing rows across, synthesizing the same id idb uses.
+function migrateDailyEntryLinksTable() {
+  const exists = db.prepare(`
+    SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'daily_entry_links'
+  `).get();
+  if (!exists) {
+    return;
+  }
+  const columns = db.prepare("PRAGMA table_info(daily_entry_links)").all();
+  const hasId = columns.some(column => column.name === "id");
+  if (hasId) {
+    return;
+  }
+
+  db.transaction(() => {
+    db.exec("ALTER TABLE daily_entry_links RENAME TO daily_entry_links_legacy");
+    db.exec(`
+      CREATE TABLE daily_entry_links (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL,
+        sentence_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT,
+        FOREIGN KEY (entry_id) REFERENCES daily_entries(id) ON DELETE CASCADE,
+        FOREIGN KEY (sentence_id) REFERENCES daily_entries(id) ON DELETE CASCADE
+      )
+    `);
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_entry_links_pair ON daily_entry_links(entry_id, sentence_id)");
+    const legacyRows = db.prepare("SELECT entry_id AS entryId, sentence_id AS sentenceId, created_at AS createdAt FROM daily_entry_links_legacy").all();
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO daily_entry_links (id, entry_id, sentence_id, created_at, updated_at, deleted_at)
+      VALUES (@id, @entryId, @sentenceId, @createdAt, @createdAt, NULL)
+    `);
+    legacyRows.forEach(row => insert.run({
+      id: `${row.entryId}::${row.sentenceId}`,
+      entryId: row.entryId,
+      sentenceId: row.sentenceId,
+      createdAt: row.createdAt || new Date().toISOString()
+    }));
+    db.exec("DROP TABLE daily_entry_links_legacy");
+  })();
 }
 
 function migrateLegacyStudyLog() {
@@ -109,8 +164,8 @@ function migrateLegacyStudyLog() {
 
 function migrateParentLinks() {
   db.prepare(`
-    INSERT OR IGNORE INTO daily_entry_links (entry_id, sentence_id)
-    SELECT child.id, child.parent_id
+    INSERT OR IGNORE INTO daily_entry_links (id, entry_id, sentence_id)
+    SELECT child.id || '::' || child.parent_id, child.id, child.parent_id
     FROM daily_entries child
     JOIN daily_entries parent ON parent.id = child.parent_id
     WHERE child.parent_id IS NOT NULL
@@ -140,6 +195,7 @@ function promoteDueReviews() {
       updated_at = CURRENT_TIMESTAMP
     WHERE review_due_date <> ''
       AND review_due_date <= ?
+      AND deleted_at IS NULL
   `).run(todayKey());
 }
 
@@ -147,15 +203,17 @@ function getState(studyDate = todayKey()) {
   promoteDueReviews();
   const selectedDate = normalizeDate(studyDate);
   const studyLog = getStudyLog(selectedDate);
-  const tasks = db.prepare("SELECT id, title, note, tag, done FROM tasks ORDER BY datetime(created_at) DESC, rowid DESC").all()
+  const tasks = db.prepare("SELECT id, title, note, tag, done FROM tasks WHERE deleted_at IS NULL ORDER BY datetime(created_at) DESC, rowid DESC").all()
     .map(task => ({ ...task, done: Boolean(task.done) }));
   const items = db.prepare(`
     SELECT id, kind, title, reading, meaning, level, part, script, review,
       review_due_date AS reviewDueDate, kanji, source, note,
       quiz_correct_count AS quizCorrectCount,
       quiz_wrong_count AS quizWrongCount,
-      last_quizzed_at AS lastQuizzedAt
+      last_quizzed_at AS lastQuizzedAt,
+      last_reviewed_at AS lastReviewedAt
     FROM items
+    WHERE deleted_at IS NULL
     ORDER BY datetime(created_at) DESC, rowid DESC
   `).all();
   const itemLinks = itemSourceLinks();
@@ -169,6 +227,7 @@ function getState(studyDate = todayKey()) {
     FROM daily_entries child
     LEFT JOIN daily_entries parent ON parent.id = child.parent_id
     WHERE child.study_date = ?
+      AND child.deleted_at IS NULL
     ORDER BY datetime(child.created_at) DESC, child.rowid DESC
   `).all(selectedDate).map(entry => ({
     ...entry,
@@ -184,8 +243,9 @@ function getState(studyDate = todayKey()) {
   });
   const studyDays = db.prepare(`
     SELECT study_date AS studyDate, minutes, summary,
-      (SELECT COUNT(*) FROM daily_entries WHERE daily_entries.study_date = study_days.study_date) AS entryCount
+      (SELECT COUNT(*) FROM daily_entries WHERE daily_entries.study_date = study_days.study_date AND daily_entries.deleted_at IS NULL) AS entryCount
     FROM study_days
+    WHERE deleted_at IS NULL
     ORDER BY study_date DESC
   `).all();
 
@@ -198,6 +258,8 @@ function dailyEntryLinks(studyDate) {
     FROM daily_entry_links link
     JOIN daily_entries sentence ON sentence.id = link.sentence_id
     WHERE sentence.study_date = ?
+      AND link.deleted_at IS NULL
+      AND sentence.deleted_at IS NULL
     ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
   `).all(studyDate);
 
@@ -220,6 +282,9 @@ function itemSourceLinks() {
     JOIN daily_entry_links link ON link.entry_id = source.id
     JOIN daily_entries sentence ON sentence.id = link.sentence_id
     WHERE source.kind IN ('word', 'grammar', 'expression')
+      AND source.deleted_at IS NULL
+      AND link.deleted_at IS NULL
+      AND sentence.deleted_at IS NULL
     ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
   `).all();
 
@@ -246,12 +311,12 @@ function normalizeLinkTitle(value) {
 }
 
 function getStudyLog(studyDate) {
-  const day = db.prepare("SELECT minutes, summary, note FROM study_days WHERE study_date = ?").get(studyDate) || {
+  const day = db.prepare("SELECT minutes, summary, note FROM study_days WHERE study_date = ? AND deleted_at IS NULL").get(studyDate) || {
     minutes: 0,
     summary: "",
     note: ""
   };
-  const total = db.prepare("SELECT COALESCE(SUM(minutes), 0) AS totalMinutes FROM study_days").get();
+  const total = db.prepare("SELECT COALESCE(SUM(minutes), 0) AS totalMinutes FROM study_days WHERE deleted_at IS NULL").get();
   return { ...day, totalMinutes: total.totalMinutes };
 }
 
@@ -299,41 +364,48 @@ function addDailyEntry(entry) {
   return getState(payload.studyDate);
 }
 
+// Soft delete: stamps deletedAt/updatedAt instead of removing rows, mirroring
+// storage-idb's cascade (sentence + its child word/grammar/expression entries,
+// plus any links touching those ids) and its already-tombstoned no-op guard.
 function deleteDailyEntry(id, studyDate) {
-  const date = normalizeDate(studyDate);
-  db.transaction(() => {
-    const entry = db.prepare("SELECT id, kind FROM daily_entries WHERE id = ?").get(id);
-    if (!entry) {
-      return;
+  const date = normalizeDate(studyDate || todayKey());
+  const result = db.transaction(() => {
+    const entry = db.prepare("SELECT id, kind, study_date AS studyDate, deleted_at AS deletedAt FROM daily_entries WHERE id = ?").get(id);
+    if (!entry || entry.deletedAt) {
+      return entry ? entry.studyDate : date;
     }
+
+    const removeIds = new Set([id]);
     if (entry.kind === "sentence") {
-      const linkedEntries = db.prepare("SELECT entry_id AS entryId FROM daily_entry_links WHERE sentence_id = ?").all(id);
-      db.prepare("DELETE FROM daily_entry_links WHERE sentence_id = ?").run(id);
-      const hasLink = db.prepare("SELECT 1 FROM daily_entry_links WHERE entry_id = ? LIMIT 1");
-      const getRemainingLink = db.prepare("SELECT sentence_id AS sentenceId FROM daily_entry_links WHERE entry_id = ? LIMIT 1");
-      const getChild = db.prepare("SELECT parent_id AS parentId FROM daily_entries WHERE id = ?");
-      linkedEntries.forEach(link => {
-        const child = getChild.get(link.entryId);
-        if (child?.parentId === id && !hasLink.get(link.entryId)) {
-          db.prepare("DELETE FROM daily_entries WHERE id = ?").run(link.entryId);
-        } else if (child?.parentId === id) {
-          const remaining = getRemainingLink.get(link.entryId);
-          db.prepare("UPDATE daily_entries SET parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(remaining?.sentenceId || "", link.entryId);
-        }
-      });
-    } else {
-      db.prepare("DELETE FROM daily_entry_links WHERE entry_id = ?").run(id);
+      db.prepare(`
+        SELECT id FROM daily_entries WHERE parent_id = ? AND deleted_at IS NULL
+      `).all(id).forEach(child => removeIds.add(child.id));
     }
-    db.prepare("DELETE FROM daily_entries WHERE id = ?").run(id);
+
+    const tombstoneAt = new Date().toISOString();
+    const tombstoneEntry = db.prepare(`
+      UPDATE daily_entries SET deleted_at = ?, updated_at = ? WHERE id = ?
+    `);
+    removeIds.forEach(removeId => tombstoneEntry.run(tombstoneAt, tombstoneAt, removeId));
+
+    const idList = [...removeIds];
+    const placeholders = idList.map(() => "?").join(", ");
+    db.prepare(`
+      UPDATE daily_entry_links SET deleted_at = ?, updated_at = ?
+      WHERE deleted_at IS NULL
+        AND (entry_id IN (${placeholders}) OR sentence_id IN (${placeholders}))
+    `).run(tombstoneAt, tombstoneAt, ...idList, ...idList);
+
+    return entry.studyDate;
   })();
-  return getState(date);
+  return getState(result || date);
 }
 
 function insertDailyEntry(payload) {
   db.prepare(`
-    INSERT INTO daily_entries (id, study_date, parent_id, kind, title, reading, meaning, raw_text, parsed_json)
-    VALUES (@id, @studyDate, @parentId, @kind, @title, @reading, @meaning, @rawText, @parsedJson)
-  `).run(payload);
+    INSERT INTO daily_entries (id, study_date, parent_id, kind, title, reading, meaning, raw_text, parsed_json, deleted_at)
+    VALUES (@id, @studyDate, @parentId, @kind, @title, @reading, @meaning, @rawText, @parsedJson, @deletedAt)
+  `).run({ deletedAt: null, ...payload });
 }
 
 function upsertDailyCandidate(payload, sentenceId) {
@@ -344,7 +416,7 @@ function upsertDailyCandidate(payload, sentenceId) {
   const existing = db.prepare(`
     SELECT *
     FROM daily_entries
-    WHERE study_date = ? AND kind = ? AND title = ?
+    WHERE study_date = ? AND kind = ? AND title = ? AND deleted_at IS NULL
     ORDER BY CASE WHEN parent_id IS NULL OR parent_id = '' THEN 1 ELSE 0 END, datetime(created_at), rowid
     LIMIT 1
   `).get(payload.studyDate, payload.kind, payload.title);
@@ -390,10 +462,22 @@ function linkDailyEntryToSentence(entryId, sentenceId) {
   if (!sentenceId) {
     return 0;
   }
+  const existing = db.prepare(`
+    SELECT deleted_at AS deletedAt FROM daily_entry_links WHERE entry_id = ? AND sentence_id = ?
+  `).get(entryId, sentenceId);
+  if (existing) {
+    if (!existing.deletedAt) {
+      return 0;
+    }
+    return db.prepare(`
+      UPDATE daily_entry_links SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE entry_id = ? AND sentence_id = ?
+    `).run(entryId, sentenceId).changes;
+  }
   const result = db.prepare(`
-    INSERT OR IGNORE INTO daily_entry_links (entry_id, sentence_id)
-    VALUES (?, ?)
-  `).run(entryId, sentenceId);
+    INSERT INTO daily_entry_links (id, entry_id, sentence_id)
+    VALUES (@id, @entryId, @sentenceId)
+  `).run({ id: `${entryId}::${sentenceId}`, entryId, sentenceId });
   return result.changes;
 }
 
@@ -429,7 +513,7 @@ function dailyCandidatePayload(parent, kind, item) {
 }
 
 function registerDailyEntry(id) {
-  const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ?").get(id);
+  const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ? AND deleted_at IS NULL").get(id);
   if (!entry) {
     return { state: getState(), result: { registered: [], duplicates: ["항목을 찾을 수 없습니다."], linked: [] } };
   }
@@ -440,10 +524,10 @@ function registerDailyEntry(id) {
   const registered = [];
   const linked = [];
 
-  const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? LIMIT 1");
+  const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? AND deleted_at IS NULL LIMIT 1");
   const insert = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at, last_reviewed_at, deleted_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt, @lastReviewedAt, @deletedAt)
   `);
 
   db.transaction(() => {
@@ -500,8 +584,8 @@ function registerDailyEntries(ids, studyDate) {
 
 function addTask(task) {
   db.prepare(`
-    INSERT INTO tasks (id, title, note, tag, done)
-    VALUES (@id, @title, @note, @tag, @done)
+    INSERT INTO tasks (id, title, note, tag, done, deleted_at)
+    VALUES (@id, @title, @note, @tag, @done, @deletedAt)
   `).run(normalizeTask({ ...task, id: task.id || createId() }));
   return getState(task.studyDate);
 }
@@ -520,7 +604,9 @@ function upsertItem(item) {
         review_due_date AS reviewDueDate,
         quiz_correct_count AS quizCorrectCount,
         quiz_wrong_count AS quizWrongCount,
-        last_quizzed_at AS lastQuizzedAt
+        last_quizzed_at AS lastQuizzedAt,
+        last_reviewed_at AS lastReviewedAt,
+        deleted_at AS deletedAt
       FROM items
       WHERE id = ?
     `).get(item.id)
@@ -535,9 +621,15 @@ function upsertItem(item) {
       ? existingItem.reviewDueDate
       : reviewDueDateFor(payload.review);
   }
+  if (existingItem && item.lastReviewedAt === undefined && item.last_reviewed_at === undefined) {
+    payload.lastReviewedAt = existingItem.lastReviewedAt;
+  }
+  if (existingItem && item.deletedAt === undefined && item.deleted_at === undefined) {
+    payload.deletedAt = existingItem.deletedAt;
+  }
   const insert = db.prepare(`
-    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at)
-    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt)
+    INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at, last_reviewed_at, deleted_at)
+    VALUES (@id, @kind, @title, @reading, @meaning, @level, @part, @script, @review, @reviewDueDate, @kanji, @source, @note, @quizCorrectCount, @quizWrongCount, @lastQuizzedAt, @lastReviewedAt, @deletedAt)
     ON CONFLICT(id) DO UPDATE SET
       kind = excluded.kind,
       title = excluded.title,
@@ -554,9 +646,11 @@ function upsertItem(item) {
        quiz_correct_count = excluded.quiz_correct_count,
        quiz_wrong_count = excluded.quiz_wrong_count,
        last_quizzed_at = excluded.last_quizzed_at,
+       last_reviewed_at = excluded.last_reviewed_at,
+       deleted_at = excluded.deleted_at,
        updated_at = CURRENT_TIMESTAMP
   `);
-  const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? LIMIT 1");
+  const exists = db.prepare("SELECT 1 FROM items WHERE kind = ? AND title = ? AND deleted_at IS NULL LIMIT 1");
 
   db.transaction(() => {
     insert.run(payload);
@@ -580,6 +674,8 @@ function updateLinkedDailyEntryTitles(previousKind, previousTitle, nextKind, nex
     FROM daily_entries entry
     JOIN daily_entry_links link ON link.entry_id = entry.id
     WHERE entry.kind = ? AND entry.title = ?
+      AND entry.deleted_at IS NULL
+      AND link.deleted_at IS NULL
   `).all(previousKind, previousTitle);
   const update = db.prepare(`
     UPDATE daily_entries SET
@@ -601,8 +697,14 @@ function updateLinkedDailyEntryTitles(previousKind, previousTitle, nextKind, nex
   });
 }
 
+// Soft delete: stamps deletedAt/updatedAt instead of removing the row,
+// mirroring storage-idb's already-tombstoned no-op guard.
 function deleteItem(id, studyDate) {
-  db.prepare("DELETE FROM items WHERE id = ?").run(id);
+  const tombstoneAt = new Date().toISOString();
+  db.prepare(`
+    UPDATE items SET deleted_at = ?, updated_at = ?
+    WHERE id = ? AND deleted_at IS NULL
+  `).run(tombstoneAt, tombstoneAt, id);
   return getState(studyDate);
 }
 
@@ -623,16 +725,19 @@ function completeReview(ids, studyDate) {
   if (targets.length === 0) {
     return getState(studyDate);
   }
+  const reviewedAt = new Date().toISOString();
   const update = db.prepare(`
     UPDATE items SET
       review = ?,
       review_due_date = ?,
-      updated_at = CURRENT_TIMESTAMP
+      last_reviewed_at = ?,
+      updated_at = ?
     WHERE id = ?
       AND kind <> 'source'
+      AND deleted_at IS NULL
   `);
   db.transaction(items => {
-    items.forEach(item => update.run(item.review, reviewDueDateFor(item.review), item.id));
+    items.forEach(item => update.run(item.review, reviewDueDateFor(item.review), reviewedAt, reviewedAt, item.id));
   })(targets);
   return getState(studyDate);
 }
@@ -667,7 +772,7 @@ function normalizeCompletionReview(value) {
 
 function submitWordQuizAnswer(payload = {}) {
   const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
-  const item = db.prepare("SELECT id, title, meaning FROM items WHERE id = ? AND kind = ?").get(text(payload.itemId), quizKind);
+  const item = db.prepare("SELECT id, title, meaning FROM items WHERE id = ? AND kind = ? AND deleted_at IS NULL").get(text(payload.itemId), quizKind);
   if (!item) {
     return { state: getState(payload.studyDate), result: { correct: false, missing: true } };
   }
@@ -681,24 +786,27 @@ function submitWordQuizAnswer(payload = {}) {
   let nextReviewDueDate = "";
 
   db.transaction(() => {
+    const quizzedAt = new Date().toISOString();
     db.prepare(`
       UPDATE items SET
         ${column} = ${column} + 1,
-        last_quizzed_at = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
+        last_quizzed_at = ?,
+        updated_at = ?
       WHERE id = ?
-    `).run(item.id);
+    `).run(quizzedAt, quizzedAt, item.id);
 
     nextReview = normalizeReview(payload.correctReview || payload.reviewAfterCorrect);
     if (correct && payload.updateReviewOnCorrect && nextReview) {
       nextReviewDueDate = reviewDueDateFor(nextReview);
+      const reviewedAt = new Date().toISOString();
       db.prepare(`
         UPDATE items SET
           review = ?,
           review_due_date = ?,
-          updated_at = CURRENT_TIMESTAMP
+          last_reviewed_at = ?,
+          updated_at = ?
         WHERE id = ?
-      `).run(nextReview, nextReviewDueDate, item.id);
+      `).run(nextReview, nextReviewDueDate, reviewedAt, reviewedAt, item.id);
       reviewUpdated = true;
     }
   })();
@@ -744,7 +852,8 @@ function normalizeDailyEntry(entry) {
     meaning: text(entry.meaning),
     rawText: text(entry.rawText || entry.raw_text),
     parsedJson: text(entry.parsedJson || entry.parsed_json || "{}"),
-    registered: entry.registered ? 1 : 0
+    registered: entry.registered ? 1 : 0,
+    deletedAt: normalizeDeletedAt(entry.deletedAt ?? entry.deleted_at)
   };
 }
 
@@ -763,7 +872,8 @@ function normalizeTask(task) {
     title: text(task.title),
     note: text(task.note),
     tag: text(task.tag),
-    done: task.done ? 1 : 0
+    done: task.done ? 1 : 0,
+    deletedAt: normalizeDeletedAt(task.deletedAt ?? task.deleted_at)
   };
 }
 
@@ -789,8 +899,14 @@ function normalizeItem(item) {
     note: text(item.note),
     quizCorrectCount: toNumber(item.quizCorrectCount || item.quiz_correct_count),
     quizWrongCount: toNumber(item.quizWrongCount || item.quiz_wrong_count),
-    lastQuizzedAt: text(item.lastQuizzedAt || item.last_quizzed_at)
+    lastQuizzedAt: text(item.lastQuizzedAt || item.last_quizzed_at),
+    lastReviewedAt: text(item.lastReviewedAt ?? item.last_reviewed_at),
+    deletedAt: normalizeDeletedAt(item.deletedAt ?? item.deleted_at)
   };
+}
+
+function normalizeDeletedAt(value) {
+  return value ? text(value) : null;
 }
 
 function normalizeDailyKind(kind) {

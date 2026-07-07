@@ -13,7 +13,9 @@ const databaseSchema = `
       minutes INTEGER NOT NULL DEFAULT 0,
       summary TEXT NOT NULL DEFAULT '',
       note TEXT NOT NULL DEFAULT '',
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS daily_entries (
@@ -28,17 +30,22 @@ const databaseSchema = `
       parsed_json TEXT NOT NULL DEFAULT '{}',
       registered INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS daily_entry_links (
+      id TEXT PRIMARY KEY,
       entry_id TEXT NOT NULL,
       sentence_id TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (entry_id, sentence_id),
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT,
       FOREIGN KEY (entry_id) REFERENCES daily_entries(id) ON DELETE CASCADE,
       FOREIGN KEY (sentence_id) REFERENCES daily_entries(id) ON DELETE CASCADE
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_entry_links_pair ON daily_entry_links(entry_id, sentence_id);
 
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
@@ -47,7 +54,8 @@ const databaseSchema = `
       tag TEXT NOT NULL DEFAULT '',
       done INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS items (
@@ -67,8 +75,10 @@ const databaseSchema = `
       quiz_correct_count INTEGER NOT NULL DEFAULT 0,
       quiz_wrong_count INTEGER NOT NULL DEFAULT 0,
       last_quizzed_at TEXT NOT NULL DEFAULT '',
+      last_reviewed_at TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_items_kind ON items(kind);
