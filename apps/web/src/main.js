@@ -1604,7 +1604,7 @@ async function mergeBackupFromFile(event) {
     const result = mergeBackupData(backupData(current), backupData(backup));
     state = await store.importFullBackup({ data: result.data });
     resetTransientUiState();
-    storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 중복 제외 ${result.summary.skipped}개`;
+    storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
@@ -1713,8 +1713,10 @@ function mergeDailyEntries(currentRows, importedRows, idMap) {
   });
 
   const mergedRows = [...currentRows];
+  const indexById = new Map(mergedRows.map((row, index) => [row.id, index]));
   let added = 0;
   let skipped = 0;
+  let updated = 0;
 
   importedRows.forEach(rawRow => {
     const row = remapDailyEntry(rawRow, idMap);
@@ -1724,11 +1726,24 @@ function mergeDailyEntries(currentRows, importedRows, idMap) {
       if (rawRow.id) {
         idMap.set(String(rawRow.id), matchedId);
       }
-      skipped += 1;
+      const matchedIndex = indexById.get(matchedId);
+      const currentRow = matchedIndex === undefined ? undefined : mergedRows[matchedIndex];
+      if (currentRow && matchedIndex !== undefined) {
+        const winner = pickNewer(currentRow, row);
+        if (winner !== currentRow) {
+          mergedRows[matchedIndex] = { ...winner, id: matchedId };
+          updated += 1;
+        } else {
+          skipped += 1;
+        }
+      } else {
+        skipped += 1;
+      }
       return;
     }
 
     mergedRows.push(row);
+    indexById.set(row.id, mergedRows.length - 1);
     if (rawRow.id) {
       idMap.set(String(rawRow.id), row.id);
     }
@@ -1736,27 +1751,54 @@ function mergeDailyEntries(currentRows, importedRows, idMap) {
     added += 1;
   });
 
-  return { rows: mergedRows, added, skipped };
+  return { rows: mergedRows, added, skipped, updated };
 }
 
 function mergeUniqueRows(currentRows, importedRows, keyFactory) {
-  const existing = new Set(currentRows.flatMap(keyFactory));
+  const existing = new Map();
+  currentRows.forEach((row, index) => {
+    keyFactory(row).forEach(key => existing.set(key, index));
+  });
   const mergedRows = [...currentRows];
   let added = 0;
   let skipped = 0;
+  let updated = 0;
 
   importedRows.forEach(row => {
     const keys = keyFactory(row);
-    if (keys.some(key => existing.has(key))) {
-      skipped += 1;
+    const matchedIndex = keys.map(rowKey => existing.get(rowKey)).find(index => index !== undefined);
+    if (matchedIndex !== undefined) {
+      const currentRow = mergedRows[matchedIndex];
+      const winner = pickNewer(currentRow, row);
+      if (winner !== currentRow) {
+        mergedRows[matchedIndex] = winner;
+        updated += 1;
+      } else {
+        skipped += 1;
+      }
       return;
     }
     mergedRows.push(row);
-    keys.forEach(key => existing.add(key));
+    keys.forEach(key => existing.set(key, mergedRows.length - 1));
     added += 1;
   });
 
-  return { rows: mergedRows, added, skipped };
+  return { rows: mergedRows, added, skipped, updated };
+}
+
+// Last-write-wins for a single key collision: newer `updatedAt` wins; ties (and
+// legacy records missing `updatedAt` on both sides) keep the current/local row.
+// Records without `updatedAt` are treated as epoch 0 so they lose to any
+// timestamped record on the other side.
+function pickNewer(currentRow, importedRow) {
+  const currentMs = updatedAtMs(currentRow);
+  const importedMs = updatedAtMs(importedRow);
+  return importedMs > currentMs ? importedRow : currentRow;
+}
+
+function updatedAtMs(row) {
+  const parsed = Date.parse(row?.updatedAt || "");
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function remapDailyEntry(entry, idMap) {
@@ -1842,8 +1884,9 @@ function rows(value) {
 function sumMergeSummaries(results) {
   return results.reduce((summary, result) => ({
     added: summary.added + result.added,
-    skipped: summary.skipped + result.skipped
-  }), { added: 0, skipped: 0 });
+    skipped: summary.skipped + result.skipped,
+    updated: summary.updated + (result.updated || 0)
+  }), { added: 0, skipped: 0, updated: 0 });
 }
 
 function backupFileName() {
