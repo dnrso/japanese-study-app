@@ -1,5 +1,4 @@
 import "@nihongo-study/ui/styles";
-import { analyzeJapaneseSentenceForStudy, defaultGeminiModel } from "@nihongo-study/ai";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import { createSupabaseSync } from "@nihongo-study/sync";
@@ -43,7 +42,6 @@ const sync = createSupabaseSync({ storage: store, mergeSnapshots: mergeBackupDat
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
-const geminiApiKeyStorageKey = "nihongo-study.geminiApiKey";
 
 const aiSentenceAnalysisPlaceholder = "한국어 또는 일본어 문장을 입력하세요 *AI 문장 분석 사용";
 
@@ -1217,39 +1215,30 @@ async function addDailyEntryFromInput() {
       return;
     }
 
-    const apiKey = readGeminiApiKey();
-    if (!apiKey) {
-      const message = "Gemini API 키가 설정되지 않았습니다. AI 분석을 사용하려면 API 키를 입력하세요.";
-      setAiSentenceAnalysisStatus(message);
-      const enteredKey = window.prompt("Gemini API 키를 입력하세요. (브라우저에만 저장됩니다)");
-      if (!enteredKey || !enteredKey.trim()) {
-        window.alert(message);
-        return;
-      }
-      writeGeminiApiKey(enteredKey.trim());
-    }
-
     setAiSentenceAnalysisBusy(true);
     setAiSentenceAnalysisStatus("AI 문장 분석 중입니다.");
     try {
-      const result = await analyzeJapaneseSentenceForStudy({
-        sentence: rawInput,
-        apiKey: readGeminiApiKey(),
-        model: defaultGeminiModel
-      });
-      if (!result.ok) {
-        setAiSentenceAnalysisStatus(result.message);
-        if (result.reason === "missingApiKey") {
-          window.alert(result.message);
-        }
+      const invokeResult = await sync.invokeFunction("analyze-sentence", { sentence: rawInput });
+      if (invokeResult.skipped) {
+        const message = invokeResult.reason === "no-session"
+          ? "로그인 유저만 사용 가능합니다."
+          : invokeResult.reason === "disabled"
+            ? "Supabase 환경변수가 설정되지 않았습니다."
+            : `AI 분석 요청이 실패했습니다: ${invokeResult.error?.message || invokeResult.reason}`;
+        setAiSentenceAnalysisStatus(message);
+        return;
+      }
+
+      const result = invokeResult.data;
+      if (!result?.ok) {
+        setAiSentenceAnalysisStatus(result?.message || "AI 분석 요청이 실패했습니다.");
         return;
       }
       rawText = result.rawText;
       setAiSentenceAnalysisStatus("AI 분석 결과를 문장 카드에 추가했습니다.");
     } catch (error) {
       const message = error.message || String(error);
-      setAiSentenceAnalysisStatus(`AI 문장 분석 실패: ${message}`);
-      window.alert(`AI 문장 분석 실패\n${message}`);
+      setAiSentenceAnalysisStatus(`AI 분석 요청이 실패했습니다: ${message}`);
       return;
     } finally {
       setAiSentenceAnalysisBusy(false);
@@ -1291,22 +1280,6 @@ function setAiSentenceAnalysisStatus(message) {
   const element = byId("aiSentenceAnalysisStatus");
   if (element) {
     element.textContent = message;
-  }
-}
-
-function readGeminiApiKey() {
-  try {
-    return globalThis.localStorage?.getItem(geminiApiKeyStorageKey) || "";
-  } catch {
-    return "";
-  }
-}
-
-function writeGeminiApiKey(value) {
-  try {
-    globalThis.localStorage?.setItem(geminiApiKeyStorageKey, value);
-  } catch {
-    // Local browser storage can be unavailable in restricted modes.
   }
 }
 

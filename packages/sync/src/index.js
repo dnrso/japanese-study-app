@@ -89,12 +89,34 @@ export function createSupabaseSync({ storage, mergeSnapshots }) {
     await supabase.auth.signOut();
   }
 
+  async function invokeFunction(name, body) {
+    if (!isEnabled) {
+      return { skipped: true, reason: "disabled" };
+    }
+
+    try {
+      const session = await getSession();
+      if (!session) {
+        return { skipped: true, reason: "no-session" };
+      }
+
+      const { data, error } = await supabase.functions.invoke(name, { body });
+      if (error) {
+        return { skipped: true, reason: "error", error };
+      }
+      return { skipped: false, data };
+    } catch (error) {
+      return { skipped: true, reason: "error", error };
+    }
+  }
+
   return {
     isEnabled,
     getSession,
     onAuthChange,
     syncNow,
     signInWithGoogle,
-    signOut
+    signOut,
+    invokeFunction
   };
 }
