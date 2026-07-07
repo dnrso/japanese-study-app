@@ -13,7 +13,9 @@
     "build": "node apps/desktop/scripts/build-windows.js",
     "web:dev": "npm --workspace @nihongo-study/web run dev --",
     "web:build": "npm run build --workspace @nihongo-study/web",
-    "web:preview": "npm --workspace @nihongo-study/web run preview --"
+    "web:preview": "npm --workspace @nihongo-study/web run preview --",
+    "android:sync": "npm run web:build && npm --workspace @nihongo-study/web run cap:sync",
+    "android:open": "npm --workspace @nihongo-study/web run cap:open"
   },
   "build": {
     "appId": "com.nihongo.study",
