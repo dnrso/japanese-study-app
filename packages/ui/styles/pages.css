@@ -1,7 +1,42 @@
 .calendar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+/* Calendar panel header: title on the left, action buttons pushed to the
+   right end of the same row. Width-driven, not forced -- when the row
+   can't fit both, flex-wrap drops the actions to their own line. */
+#today-calendar .panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+#today-calendar .panel-title {
+  flex: 0 1 auto;
+}
+
+#today-calendar .calendar-actions {
+  margin-left: auto;
+}
+
+/* Calendar header buttons (이전달/오늘/다음달 + collapse toggle) are scoped
+   slightly smaller than the default ghost/icon button size to stay
+   visually compact next to the panel title. Desktop-only reduction here;
+   mobile.css applies a further reduction that also overrides the
+   generic touch-target rule. */
+#today-calendar .calendar-actions .ghost-btn {
+  min-height: 28px;
+  padding: 5px 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#today-calendar .calendar-toggle-btn {
+  min-height: 28px;
+  width: 28px;
+  padding: 0;
 }
 
 .calendar-toggle-btn {
