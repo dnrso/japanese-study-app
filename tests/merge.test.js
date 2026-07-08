@@ -1,10 +1,10 @@
 // Ported from scratchpad merge-lww-test.mjs.
 // The scratchpad script originally replicated the merge logic inline because
 // main.js was a monolith with browser-only top-level imports. Merge logic now
-// lives dependency-free in apps/web/src/merge.js, so we import the real
-// module directly instead of re-implementing it.
+// lives dependency-free in packages/core, so we import the real module
+// directly instead of re-implementing it.
 import { describe, it, expect } from "vitest";
-import { mergeBackupData } from "../apps/web/src/merge.js";
+import { mergeBackupData } from "../packages/core/src/index.js";
 
 describe("mergeBackupData (LWW merge)", () => {
   it("(a) newer local tombstone survives over older remote live copy", () => {

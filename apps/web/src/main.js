@@ -32,7 +32,6 @@ import {
 } from "@nihongo-study/ui";
 import { createSampleState } from "./sampleState.js";
 import { escapeHtml, renderAppShell } from "./templates.js";
-import { mergeBackupData, backupData, parseBackupFile } from "./merge.js";
 import { emptyQuiz, startQuiz as startQuizSession, exitQuizSession as exitQuizSessionImpl, submitQuizChoice as submitQuizChoiceImpl } from "./quiz.js";
 import {
   createSync,
@@ -45,7 +44,7 @@ import {
 const store = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
-const sync = createSync({ storage: store, mergeSnapshots: (current, imported) => mergeBackupData(current, imported, selectedDate || todayKey()) });
+const sync = createSync({ storage: store, mergeSnapshots: (current, imported) => core.mergeBackupData(current, imported, selectedDate || todayKey()) });
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
@@ -1042,7 +1041,7 @@ async function loadBackupFromFile(event) {
     if (!window.confirm("현재 브라우저에 저장된 일본어 공부 데이터를 선택한 백업으로 교체할까요?")) {
       return;
     }
-    const backup = parseBackupFile(await file.text());
+    const backup = core.parseBackupFile(await file.text());
     state = await store.importFullBackup(backup);
     resetTransientUiState();
     storageStatus = `백업 로드 완료: ${file.name}`;
@@ -1067,9 +1066,9 @@ async function mergeBackupFromFile(event) {
     if (!window.confirm("선택한 백업 데이터를 현재 데이터에 추가할까요? 중복 데이터는 제외됩니다.")) {
       return;
     }
-    const backup = parseBackupFile(await file.text());
+    const backup = core.parseBackupFile(await file.text());
     const current = await store.exportData();
-    const result = mergeBackupData(backupData(current), backupData(backup), selectedDate || todayKey());
+    const result = core.mergeBackupData(core.backupData(current), core.backupData(backup), selectedDate || todayKey());
     state = await store.importFullBackup({ data: result.data });
     resetTransientUiState();
     storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
