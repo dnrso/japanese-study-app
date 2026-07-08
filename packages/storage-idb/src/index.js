@@ -721,8 +721,14 @@ function itemFromDailyEntry(entry) {
   });
 }
 
+// Accepts either the canonical exchange shape (structured `parsed` object)
+// or a legacy sqlite-shaped entry that only carries a `parsedJson`/
+// `parsed_json` string, so pre-parity desktop backup files still import
+// without losing the parsed word/grammar/expression breakdown.
 function normalizeDailyEntry(entry = {}) {
-  const parsed = entry.parsed || {};
+  const parsed = entry.parsed && typeof entry.parsed === "object"
+    ? entry.parsed
+    : parseLegacyParsedJson(entry.parsedJson ?? entry.parsed_json);
   return {
     id: text(entry.id || createId()),
     studyDate: normalizeDate(entry.studyDate),
@@ -790,6 +796,18 @@ function normalizeStudyLog(studyLog = {}) {
     summary: text(studyLog.summary),
     note: text(studyLog.note)
   };
+}
+
+function parseLegacyParsedJson(value) {
+  if (typeof value !== "string" || !value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 function parseDailyEntry(kind, rawText) {

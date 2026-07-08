@@ -12,6 +12,9 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import YAML from "yaml";
+import "fake-indexeddb/auto";
+import { createIdbStorage } from "@nihongo-study/storage-idb";
 
 const require = createRequire(import.meta.url);
 
@@ -303,5 +306,86 @@ describeMaybe("storage-sqlite (better-sqlite3, temp DBs)", () => {
 
     const state2 = store2.getState(studyDate);
     expect(state2.dailyEntries.some(entry => entry.id === legacyWordId)).toBe(true);
+  });
+
+  it("Case7: fresh DB init adds tasks.study_date column", () => {
+    const dir = tmpDataDir("tasks-study-date");
+    const store = createSqliteStorage({ appDataDir: dir });
+    store.initDatabase();
+
+    const rawDb = new Database(path.join(dir, "nihongo.sqlite"));
+    const taskCols = rawDb.prepare("PRAGMA table_info(tasks)").all().map(c => c.name);
+    rawDb.close();
+    expect(taskCols).toContain("study_date");
+  });
+
+  it("Case8: addTask persists studyDate and it round-trips through getState and exportData", () => {
+    const dir = tmpDataDir("tasks-roundtrip");
+    const store = createSqliteStorage({ appDataDir: dir });
+    store.initDatabase();
+
+    const state = store.addTask({ title: "복습하기", note: "", tag: "일반", done: false, studyDate });
+    const task = state.tasks.find(candidate => candidate.title === "복습하기");
+    expect(task?.studyDate).toBe(studyDate);
+
+    const exported = store.exportData();
+    const exportedTask = exported.data.tasks.find(candidate => candidate.id === task.id);
+    expect(exportedTask?.studyDate).toBe(studyDate);
+  });
+
+  it("Case9: round-trip - idb exportData -> sqlite importFullBackup -> sqlite exportData preserves parsed structure, sourceSentences, and tasks.studyDate", async () => {
+    const dbName = `sqlite-parity-idb-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const idbStore = createIdbStorage({ dbName });
+    await idbStore.initDatabase();
+
+    await idbStore.addDailyEntry({
+      studyDate,
+      kind: "sentence",
+      rawText: [
+        "# 라운드트립 문장",
+        "읽기 らうんどとりっぷぶんしょう",
+        "해석 round trip sentence",
+        "단어장",
+        "`単語`(たんご)|품사=명사|메모=단어",
+        "문법",
+        "표현"
+      ].join("\n")
+    });
+    await idbStore.addTask({ id: "idb-task-1", title: "복습", note: "", tag: "일반", done: false, studyDate });
+
+    const idbExport = await idbStore.exportData();
+    const idbSentence = idbExport.data.dailyEntries.find(entry => entry.kind === "sentence");
+    expect(idbSentence).toBeTruthy();
+    expect(idbSentence.parsed).toBeTruthy();
+    expect(typeof idbSentence.parsed).toBe("object");
+
+    const sqliteDir = tmpDataDir("roundtrip-sqlite");
+    const sqliteStore = createSqliteStorage({ appDataDir: sqliteDir });
+    sqliteStore.initDatabase();
+    // Prime backupsDir/full-backup.yaml, then overwrite it with the idb
+    // export so importFullBackup() (which always reads from that fixed
+    // file) picks up the idb-shaped payload.
+    sqliteStore.exportData();
+    fs.writeFileSync(
+      path.join(sqliteDir, "backups", "full-backup.yaml"),
+      YAML.stringify(idbExport.data),
+      "utf8"
+    );
+    sqliteStore.importFullBackup();
+
+    const sqliteExport = sqliteStore.exportData();
+    const importedSentence = sqliteExport.data.dailyEntries.find(entry => entry.kind === "sentence" && entry.title === idbSentence.title);
+    expect(importedSentence).toBeTruthy();
+    expect(importedSentence.parsed).toBeTruthy();
+    expect(importedSentence.parsed.title).toBe(idbSentence.parsed.title);
+    expect(importedSentence.parsed.reading).toBe(idbSentence.parsed.reading);
+    expect(importedSentence.registered).toBe(false);
+
+    const importedWord = sqliteExport.data.dailyEntries.find(entry => entry.kind === "word" && entry.title === "単語");
+    expect(importedWord).toBeTruthy();
+    expect(importedWord.sourceSentences.some(sentence => sentence.title === idbSentence.title)).toBe(true);
+
+    const importedTask = sqliteExport.data.tasks.find(task => task.id === "idb-task-1");
+    expect(importedTask?.studyDate).toBe(studyDate);
   });
 });

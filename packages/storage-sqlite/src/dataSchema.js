@@ -53,6 +53,7 @@ const databaseSchema = `
       note TEXT NOT NULL DEFAULT '',
       tag TEXT NOT NULL DEFAULT '',
       done INTEGER NOT NULL DEFAULT 0,
+      study_date TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TEXT
