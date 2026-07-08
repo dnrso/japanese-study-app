@@ -38,7 +38,8 @@ import {
   renderAccountStatus as renderAccountStatusImpl,
   signInWithGoogle as signInWithGoogleImpl,
   signOutOfAccount as signOutOfAccountImpl,
-  wireAuthChange
+  wireAuthChange,
+  wireAuthCallback
 } from "./syncSetup.js";
 
 const store = createIdbStorage({
@@ -1297,6 +1298,7 @@ async function start() {
   }
 
   wireAuthChange(syncCtx());
+  wireAuthCallback(syncCtx());
 }
 
 start();

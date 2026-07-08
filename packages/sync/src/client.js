@@ -18,7 +18,11 @@ export function getSupabaseClient() {
   memoizedClient = createClient(config.url, config.anonKey, {
     auth: {
       persistSession: true,
-      autoRefreshToken: true
+      autoRefreshToken: true,
+      // Explicit so native (Capacitor) OAuth deep-link handling can rely on
+      // the ?code= exchange flow rather than the implicit #access_token
+      // fragment. This is also the supabase-js v2 default.
+      flowType: "pkce"
     }
   });
   memoizedKey = cacheKey;
