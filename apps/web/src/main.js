@@ -51,6 +51,8 @@ const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
 
 const aiSentenceAnalysisPlaceholder = "한국어 또는 일본어 문장을 입력하세요 *AI 문장 분석 사용";
+const aiSentenceAnalysisMaxLength = 300;
+const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 주세요.";
 
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
@@ -254,6 +256,7 @@ function bindEvents() {
   byId("aiSentenceAnalysisCheckbox")?.addEventListener("change", event => {
     aiSentenceAnalysisEnabled = event.target.checked;
     updateDailyEntryPlaceholder();
+    updateDailyEntryMaxLength();
     setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled ? "AI 문장 분석이 켜졌습니다." : "");
   });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
@@ -650,6 +653,18 @@ function updateDailyEntryPlaceholder() {
     : dailyEntryInputDefaultPlaceholder;
 }
 
+function updateDailyEntryMaxLength() {
+  const input = byId("dailyEntryInput");
+  if (!input) {
+    return;
+  }
+  if (aiSentenceAnalysisEnabled) {
+    input.maxLength = aiSentenceAnalysisMaxLength;
+  } else {
+    input.removeAttribute("maxlength");
+  }
+}
+
 function updateManualEntryPlaceholder() {
   const checked = document.querySelector("input[name='dailyManualKind']:checked");
   const kind = checked?.value || "word";
@@ -740,6 +755,10 @@ async function addDailyEntryFromInput() {
       setAiSentenceAnalysisStatus("로그인 유저만 사용 가능합니다.");
       return;
     }
+    if (rawInput.length > aiSentenceAnalysisMaxLength) {
+      setAiSentenceAnalysisStatus(aiSentenceAnalysisTooLongMessage);
+      return;
+    }
 
     setAiSentenceAnalysisBusy(true);
     setAiSentenceAnalysisStatus("AI 문장 분석 중입니다.");
@@ -757,7 +776,12 @@ async function addDailyEntryFromInput() {
 
       const result = invokeResult.data;
       if (!result?.ok) {
-        setAiSentenceAnalysisStatus(result?.message || "AI 분석 요청이 실패했습니다.");
+        const reasonMessages = {
+          "too-long": aiSentenceAnalysisTooLongMessage,
+          "rate-limited-minute": "AI 분석은 1분에 한 번만 사용할 수 있습니다. 잠시 후 다시 시도해 주세요.",
+          "rate-limited-daily": "오늘의 AI 분석 사용량(100회)을 모두 사용했습니다."
+        };
+        setAiSentenceAnalysisStatus(result?.message || reasonMessages[result?.reason] || "AI 분석 요청이 실패했습니다.");
         return;
       }
       if (!core.hasValidSentenceBlockStructure(result.rawText)) {
