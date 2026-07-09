@@ -66,14 +66,23 @@ const aiSentenceAnalysisPlaceholder = "한국어 또는 일본어 문장을 입�
 const aiSentenceAnalysisMaxLength = 300;
 const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 주세요.";
 
-// Client-side pagination page sizes - one constant per list view, chosen
-// from typical card/row heights so each page stays short without feeling
-// choppy. See packages/ui/components/pagination.js for the shared
+// Client-side pagination: per-view page sizes default to
+// core.DEFAULT_LIST_PAGE_SIZES (chosen from typical card/row heights so
+// each page stays short without feeling choppy), but the user can override
+// any single view from 설정 > 목록 표시. See pageSizeFor() below and
+// packages/ui/components/pagination.js for the shared
 // paginate()/paginationControls() helpers.
-const SENTENCE_PAGE_SIZE = 10;
-const WORD_PAGE_SIZE = 20;
-const CARD_PAGE_SIZE = 12; // grammar / expression cards
-const KANJI_PAGE_SIZE = 24;
+//
+// Persistence: neither this setting nor the existing quiz display settings
+// (quizQuestionFontSize/quizReviewOnCorrect/quizCorrectReview below) have
+// any existing persisted-settings mechanism to reuse - there's no
+// state.settings field, and storage-idb's "meta" object store is only
+// ever used for the one-time "initialized" flag (see
+// packages/storage-idb/src/index.js). So this uses a dedicated
+// localStorage key, which is the simplest option that survives reloads
+// (though unlike state.dailyEntries/items it won't ride along in
+// JSON backups/sync - those only cover study data).
+const LIST_PAGE_SIZE_STORAGE_KEY = "nihongo-study.listPageSizes";
 
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
@@ -108,6 +117,10 @@ let pageIndex = {
   expression: 1,
   kanji: 1
 };
+// Per-view page-size override (null/undefined = 기본값, i.e. this view's
+// entry in core.DEFAULT_LIST_PAGE_SIZES). Loaded once at startup from
+// localStorage; see LIST_PAGE_SIZE_STORAGE_KEY above.
+let listPageSizeOverrides = loadListPageSizeOverrides();
 
 function byId(id) {
   return document.getElementById(id);
@@ -117,6 +130,46 @@ function resetPageIndex(...names) {
   names.forEach(name => {
     pageIndex[name] = 1;
   });
+}
+
+function loadListPageSizeOverrides() {
+  const overrides = {};
+  Object.keys(core.DEFAULT_LIST_PAGE_SIZES).forEach(view => {
+    overrides[view] = null;
+  });
+  try {
+    const raw = localStorage.getItem(LIST_PAGE_SIZE_STORAGE_KEY);
+    if (!raw) {
+      return overrides;
+    }
+    const parsed = JSON.parse(raw);
+    // Guards against a stale/foreign value under this key (e.g. a single
+    // number rather than the per-view map shape) by only reading it when
+    // it's a plain object - anything else just falls back to defaults.
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      Object.keys(overrides).forEach(view => {
+        const value = Number(parsed[view]);
+        overrides[view] = core.LIST_PAGE_SIZE_OPTIONS.includes(value) ? value : null;
+      });
+    }
+  } catch {
+    // localStorage unavailable (privacy mode, etc.) or malformed JSON -
+    // fall back to defaults for every view.
+  }
+  return overrides;
+}
+
+function saveListPageSizeOverrides() {
+  try {
+    localStorage.setItem(LIST_PAGE_SIZE_STORAGE_KEY, JSON.stringify(listPageSizeOverrides));
+  } catch {
+    // Ignore write failures (quota, privacy mode, etc.) - the setting just
+    // won't survive a reload in that case.
+  }
+}
+
+function pageSizeFor(view) {
+  return core.resolveListPageSize(view, listPageSizeOverrides[view]);
 }
 
 // Re-renders just the affected list after a pagination prev/next click,
@@ -405,6 +458,18 @@ function bindEvents() {
     renderQuizSettings();
   });
 
+  document.querySelectorAll("[data-list-page-size-view]").forEach(select => {
+    select.addEventListener("change", event => {
+      const view = event.target.dataset.listPageSizeView;
+      listPageSizeOverrides[view] = event.target.value ? Number(event.target.value) : null;
+      saveListPageSizeOverrides();
+      // Only that tab's page index/list re-renders - a per-view setting
+      // shouldn't disturb the other four lists.
+      resetPageIndex(view);
+      PAGINATED_LIST_RENDERERS[view]?.();
+    });
+  });
+
   document.addEventListener("keydown", event => {
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
       event.preventDefault();
@@ -441,6 +506,7 @@ function renderAll() {
   renderTaxonomy();
   renderQuickFilters();
   renderQuizSettings();
+  renderListPageSizeSettings();
   renderStorageStatus();
   renderAccountStatus();
 }
@@ -543,7 +609,7 @@ function renderSources() {
 
 function renderSentences() {
   const sentenceEntries = core.rootSentenceEntries(allDailyEntriesForSentences());
-  const paged = paginate(sentenceEntries, pageIndex.sentences, SENTENCE_PAGE_SIZE);
+  const paged = paginate(sentenceEntries, pageIndex.sentences, pageSizeFor("sentences"));
   pageIndex.sentences = paged.page;
   applyPagePatch(renderSentencesPage({
     caption: searchTerm ? `검색 결과 ${sentenceEntries.length}개` : `오늘 공부에서 저장한 문장 ${sentenceEntries.length}개`,
@@ -576,7 +642,7 @@ function renderWords() {
     (!script || item.script === script) &&
     (!review || item.review === review)
   ), wordSort);
-  const paged = paginate(rows, pageIndex.words, WORD_PAGE_SIZE);
+  const paged = paginate(rows, pageIndex.words, pageSizeFor("words"));
   pageIndex.words = paged.page;
   renderWordSortHeaders();
   applyPagePatch(renderWordsPage({ rows: paged.pageItems, helpers: renderHelpers() }));
@@ -588,7 +654,7 @@ function renderWords() {
 }
 
 function renderCards(kind, targetId) {
-  const paged = paginate(items(kind), pageIndex[kind], CARD_PAGE_SIZE);
+  const paged = paginate(items(kind), pageIndex[kind], pageSizeFor(kind));
   pageIndex[kind] = paged.page;
   applyPagePatch(renderStudyCardsPage({
     kind,
@@ -604,7 +670,7 @@ function renderCards(kind, targetId) {
 }
 
 function renderKanji() {
-  const paged = paginate(items("kanji"), pageIndex.kanji, KANJI_PAGE_SIZE);
+  const paged = paginate(items("kanji"), pageIndex.kanji, pageSizeFor("kanji"));
   pageIndex.kanji = paged.page;
   applyPagePatch(renderKanjiPage({
     kanji: paged.pageItems,
@@ -699,6 +765,15 @@ function renderQuizSettings() {
     helpers: renderHelpers()
   }));
   byId("quizReviewOnCorrectCheckbox").checked = quizReviewOnCorrect;
+}
+
+function renderListPageSizeSettings() {
+  Object.keys(listPageSizeOverrides).forEach(view => {
+    const select = byId(`listPageSize-${view}`);
+    if (select) {
+      select.value = listPageSizeOverrides[view] ? String(listPageSizeOverrides[view]) : "";
+    }
+  });
 }
 
 function renderStorageStatus() {

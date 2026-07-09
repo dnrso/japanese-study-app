@@ -4,6 +4,7 @@ import {
   manualEntryPlaceholders,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
+import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -394,6 +395,24 @@ export function statsPageTemplate() {
   `;
 }
 
+// One labeled <select> per paginated list view, for the 설정 tab's
+// "목록 표시" section - each view gets its own override (기본값 falls back
+// to that view's constant from packages/core's DEFAULT_LIST_PAGE_SIZES).
+// Wired up in apps/web/src/main.js via the shared data-list-page-size-view
+// attribute (see bindEvents()).
+function listPageSizeSelect(view, label) {
+  const defaultValue = DEFAULT_LIST_PAGE_SIZES[view];
+  const options = LIST_PAGE_SIZE_OPTIONS.map(size => `<option value="${size}">${size}</option>`).join("");
+  return `
+    <label>${escapeHtml(label)}
+      <select id="listPageSize-${view}" data-list-page-size-view="${view}">
+        <option value="">기본값 (${defaultValue})</option>
+        ${options}
+      </select>
+    </label>
+  `;
+}
+
 export function settingsPageTemplate() {
   return `
     <section class="page hidden-page" id="settings">
@@ -433,6 +452,18 @@ export function settingsPageTemplate() {
           <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
         </div>
         <p class="muted" id="accountStatus"></p>
+      </section>
+
+      <section class="panel section" id="settings-list-page-size">
+        <div class="panel-header"><h2 class="panel-title">목록 표시</h2></div>
+        <div class="settings-grid">
+          ${listPageSizeSelect("sentences", "문장 페이지당 항목 수")}
+          ${listPageSizeSelect("words", "단어 페이지당 항목 수")}
+          ${listPageSizeSelect("grammar", "문법 페이지당 항목 수")}
+          ${listPageSizeSelect("expression", "표현 페이지당 항목 수")}
+          ${listPageSizeSelect("kanji", "한자 페이지당 항목 수")}
+        </div>
+        <p class="muted">문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 따로 적용됩니다.</p>
       </section>
 
       <section class="panel section" id="settings-quiz">

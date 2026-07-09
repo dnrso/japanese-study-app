@@ -339,6 +339,29 @@ export function pickRandomSentence(dailyEntries = [], random = Math.random, { ex
   return pool[Math.floor(random() * pool.length)];
 }
 
+// Selectable page sizes for the 설정 tab's "페이지당 항목 수" control, plus
+// the per-view defaults used when the user picks 기본값 (no override).
+export const LIST_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+
+export const DEFAULT_LIST_PAGE_SIZES = {
+  sentences: 10,
+  words: 20,
+  grammar: 12,
+  expression: 12,
+  kanji: 24
+};
+
+// Pure resolver so the settings-driven page size is unit-testable without
+// touching the DOM/localStorage: `override` is either a number from
+// LIST_PAGE_SIZE_OPTIONS (applies to every view uniformly) or a falsy
+// value meaning "기본값" (use this view's own default).
+export function resolveListPageSize(view, override, defaults = DEFAULT_LIST_PAGE_SIZES) {
+  if (override) {
+    return override;
+  }
+  return defaults[view] || defaults.words;
+}
+
 export function studyStats(state = {}) {
   const items = state.items || [];
   return {
