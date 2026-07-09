@@ -239,6 +239,7 @@ export function sentencesPageTemplate() {
           <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
         </div>
         <div class="cards daily-entry-list" id="sentenceCards"></div>
+        <div id="sentencePagination"></div>
       </section>
     </section>
   `;
@@ -275,6 +276,7 @@ export function wordsPageTemplate() {
             <tbody id="wordRows"></tbody>
           </table>
         </div>
+        <div id="wordsPagination"></div>
       </section>
 
       <section class="taxonomy-section" id="words-taxonomy">
@@ -297,6 +299,7 @@ export function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, 
           <button class="primary-btn" type="button" data-kind="${kind}" data-add-item>${buttonLabel}</button>
         </div>
         <div class="cards" id="${targetId}"></div>
+        <div id="${kind}Pagination"></div>
       </section>
     </section>
   `;
@@ -311,6 +314,7 @@ export function kanjiPageTemplate() {
           <button class="primary-btn" type="button" data-kind="kanji" data-add-item>+ 한자 추가</button>
         </div>
         <div class="kanji-grid" id="kanjiCards"></div>
+        <div id="kanjiPagination"></div>
       </section>
     </section>
   `;

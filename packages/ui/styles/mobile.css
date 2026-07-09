@@ -251,6 +251,59 @@
     height: 30px;
   }
 
+  /* 한자 tab: desktop's minmax(164px, 1fr) only fits a single column at
+     375px (~321px of usable width once .main/.panel padding is
+     subtracted), making each ~250px-tall card take a whole screen row by
+     itself. Two narrower, shorter columns roughly double the cards
+     visible per screen while keeping the glyph itself large-ish - only
+     the surrounding metadata/padding/buttons shrink. Desktop is
+     untouched (this block only applies ≤768px). */
+  .kanji-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .kanji-card {
+    min-height: 0;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .kanji-char {
+    font-size: 44px;
+  }
+
+  .kanji-card-top {
+    min-height: 22px;
+  }
+
+  .kanji-info {
+    min-height: 0;
+    gap: 2px;
+  }
+
+  .kanji-info strong {
+    font-size: 12px;
+  }
+
+  .kanji-info p {
+    font-size: 10px;
+  }
+
+  .kanji-card .card-actions {
+    gap: 4px;
+  }
+
+  /* Beats the generic .ghost-btn touch-target bump above via a higher
+     specificity compound selector (3 classes vs. 1), regardless of
+     source order - same technique as #homeSentenceRefreshBtn (id vs.
+     class) elsewhere in this file. */
+  .kanji-card .card-actions .ghost-btn {
+    min-height: 26px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
   input,
   select {
     min-height: 40px;

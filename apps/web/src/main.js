@@ -6,6 +6,8 @@ import {
   badgeClassByKind,
   kindLabels,
   manualEntryPlaceholders,
+  paginate,
+  paginationControls,
   partOptions,
   renderCalendarPage,
   renderHomePage,
@@ -64,6 +66,15 @@ const aiSentenceAnalysisPlaceholder = "한국어 또는 일본어 문장을 입�
 const aiSentenceAnalysisMaxLength = 300;
 const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 주세요.";
 
+// Client-side pagination page sizes - one constant per list view, chosen
+// from typical card/row heights so each page stays short without feeling
+// choppy. See packages/ui/components/pagination.js for the shared
+// paginate()/paginationControls() helpers.
+const SENTENCE_PAGE_SIZE = 10;
+const WORD_PAGE_SIZE = 20;
+const CARD_PAGE_SIZE = 12; // grammar / expression cards
+const KANJI_PAGE_SIZE = 24;
+
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
 let aiSentenceAnalysisEnabled = false;
@@ -86,9 +97,44 @@ let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
 let storageStatus = storageNotice;
 let homeSentenceEntryId = null;
+// Current page (1-based) per paginated list tab. Reset to 1 wherever that
+// tab's filter/search/sort changes (see resetPageIndex callers below);
+// paginate() itself also falls back to 1 if data shrinks below the
+// previously-stored page.
+let pageIndex = {
+  sentences: 1,
+  words: 1,
+  grammar: 1,
+  expression: 1,
+  kanji: 1
+};
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+function resetPageIndex(...names) {
+  names.forEach(name => {
+    pageIndex[name] = 1;
+  });
+}
+
+// Re-renders just the affected list after a pagination prev/next click,
+// keyed by the same pageName used in paginationControls()/pageIndex.
+const PAGINATED_LIST_RENDERERS = {
+  sentences: () => renderSentences(),
+  words: () => renderWords(),
+  grammar: () => renderCards("grammar", "grammarCards"),
+  expression: () => renderCards("expression", "expressionCards"),
+  kanji: () => renderKanji()
+};
+
+function changePage(pageName, direction) {
+  if (!pageName || !(pageName in pageIndex)) {
+    return;
+  }
+  pageIndex[pageName] = (pageIndex[pageName] || 1) + (direction === "next" ? 1 : -1);
+  PAGINATED_LIST_RENDERERS[pageName]?.();
 }
 
 function bindEvents() {
@@ -117,6 +163,12 @@ function bindEvents() {
       return;
     }
 
+    const pageNavTarget = event.target.closest("[data-page-nav]");
+    if (pageNavTarget) {
+      changePage(pageNavTarget.dataset.pageName, pageNavTarget.dataset.pageNav);
+      return;
+    }
+
     const calendarTarget = event.target.closest("[data-calendar-date]");
     if (calendarTarget) {
       selectedDate = calendarTarget.dataset.calendarDate;
@@ -134,6 +186,7 @@ function bindEvents() {
     const wordSortTarget = event.target.closest("[data-word-sort]");
     if (wordSortTarget) {
       wordSort = core.nextWordSort(wordSort, wordSortTarget.dataset.wordSort);
+      resetPageIndex("words");
       renderWords();
       return;
     }
@@ -143,6 +196,7 @@ function bindEvents() {
       const select = byId(taxonomyTarget.dataset.wordTaxonomy === "part" ? "wordPartFilter" : "wordScriptFilter");
       const value = taxonomyTarget.dataset.wordTaxonomyValue;
       select.value = select.value === value ? "" : value;
+      resetPageIndex("words");
       renderWords();
       renderTaxonomy();
       return;
@@ -244,18 +298,24 @@ function bindEvents() {
 
   byId("globalSearch").addEventListener("input", event => {
     searchTerm = event.target.value.trim();
+    resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
     renderAll();
   });
 
   byId("wordPartFilter").addEventListener("change", () => {
+    resetPageIndex("words");
     renderWords();
     renderTaxonomy();
   });
   byId("wordScriptFilter").addEventListener("change", () => {
+    resetPageIndex("words");
     renderWords();
     renderTaxonomy();
   });
-  byId("wordReviewFilter").addEventListener("change", renderWords);
+  byId("wordReviewFilter").addEventListener("change", () => {
+    resetPageIndex("words");
+    renderWords();
+  });
 
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
@@ -483,15 +543,22 @@ function renderSources() {
 
 function renderSentences() {
   const sentenceEntries = core.rootSentenceEntries(allDailyEntriesForSentences());
+  const paged = paginate(sentenceEntries, pageIndex.sentences, SENTENCE_PAGE_SIZE);
+  pageIndex.sentences = paged.page;
   applyPagePatch(renderSentencesPage({
     caption: searchTerm ? `검색 결과 ${sentenceEntries.length}개` : `오늘 공부에서 저장한 문장 ${sentenceEntries.length}개`,
-    sentences: sentenceEntries,
+    sentences: paged.pageItems,
     helpers: {
       ...renderHelpers(),
       entryToCandidate: core.dailyEntryToCandidate,
       linkedEntriesForSentence: linkedEntriesForAnySentence
     }
   }));
+  applyPagePatch({
+    html: {
+      sentencePagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "sentences" })
+    }
+  });
 }
 
 function renderWordFilters() {
@@ -509,24 +576,45 @@ function renderWords() {
     (!script || item.script === script) &&
     (!review || item.review === review)
   ), wordSort);
+  const paged = paginate(rows, pageIndex.words, WORD_PAGE_SIZE);
+  pageIndex.words = paged.page;
   renderWordSortHeaders();
-  applyPagePatch(renderWordsPage({ rows, helpers: renderHelpers() }));
+  applyPagePatch(renderWordsPage({ rows: paged.pageItems, helpers: renderHelpers() }));
+  applyPagePatch({
+    html: {
+      wordsPagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "words" })
+    }
+  });
 }
 
 function renderCards(kind, targetId) {
+  const paged = paginate(items(kind), pageIndex[kind], CARD_PAGE_SIZE);
+  pageIndex[kind] = paged.page;
   applyPagePatch(renderStudyCardsPage({
     kind,
     targetId,
-    list: items(kind),
+    list: paged.pageItems,
     helpers: renderHelpers()
   }));
+  applyPagePatch({
+    html: {
+      [`${kind}Pagination`]: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: kind })
+    }
+  });
 }
 
 function renderKanji() {
+  const paged = paginate(items("kanji"), pageIndex.kanji, KANJI_PAGE_SIZE);
+  pageIndex.kanji = paged.page;
   applyPagePatch(renderKanjiPage({
-    kanji: items("kanji"),
+    kanji: paged.pageItems,
     helpers: renderHelpers()
   }));
+  applyPagePatch({
+    html: {
+      kanjiPagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "kanji" })
+    }
+  });
 }
 
 function renderWordQuiz() {
@@ -1214,6 +1302,7 @@ function applyQuizQuestionFontSize() {
 function setSearch(value) {
   searchTerm = String(value || "").trim();
   byId("globalSearch").value = searchTerm;
+  resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
 }
 
 function applyPagePatch(patch) {
