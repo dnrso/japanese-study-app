@@ -301,6 +301,44 @@ export function unregisteredStudyDates(dailyEntries = []) {
   );
 }
 
+// A sentence has "complete" registration once every word/grammar/expression
+// entry linked to it (its children) has been registered - mirrors the
+// rollup used by the sentence cards on the 오늘 공부/문장 tabs.
+export function sentenceHasCompleteRegistration(dailyEntries = [], sentenceId) {
+  const children = ["word", "grammar", "expression"].flatMap(kind =>
+    linkedEntriesForSentence(dailyEntries, kind, sentenceId)
+  );
+  return children.length > 0 && children.every(child => !entryNeedsRegistration(child));
+}
+
+// Picks a random sentence entry for the home tab's "오늘의 문장" panel,
+// preferring sentences whose linked entries are all registered and falling
+// back to any sentence when none qualify.
+//
+// `excludeId` (used for the refresh button's re-roll) drops the currently
+// shown sentence from consideration first, so the button doesn't look
+// broken when the "complete" pool only has one member: if excluding it
+// empties the preferred pool, we fall back to the full sentence pool (also
+// minus excludeId) before finally falling back to re-showing the same
+// sentence when it's the only one in storage.
+export function pickRandomSentence(dailyEntries = [], random = Math.random, { excludeId } = {}) {
+  const sentences = rootSentenceEntries(dailyEntries);
+  if (!sentences.length) {
+    return null;
+  }
+  const complete = sentences.filter(entry => sentenceHasCompleteRegistration(dailyEntries, entry.id));
+  const preferred = complete.length ? complete : sentences;
+
+  const withoutExcluded = excludeId ? preferred.filter(entry => entry.id !== excludeId) : preferred;
+  if (withoutExcluded.length) {
+    return withoutExcluded[Math.floor(random() * withoutExcluded.length)];
+  }
+
+  const fallbackWithoutExcluded = excludeId ? sentences.filter(entry => entry.id !== excludeId) : sentences;
+  const pool = fallbackWithoutExcluded.length ? fallbackWithoutExcluded : sentences;
+  return pool[Math.floor(random() * pool.length)];
+}
+
 export function studyStats(state = {}) {
   const items = state.items || [];
   return {

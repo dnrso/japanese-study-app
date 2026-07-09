@@ -9,6 +9,7 @@ import {
   partOptions,
   renderCalendarPage,
   renderHomePage,
+  renderHomeSentencePanel,
   renderKanjiPage,
   renderKanjiQuizPage,
   renderLearnedSectionsPage,
@@ -84,6 +85,7 @@ let quizQuestionFontSize = 32;
 let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
 let storageStatus = storageNotice;
+let homeSentenceEntryId = null;
 
 function byId(id) {
   return document.getElementById(id);
@@ -259,6 +261,7 @@ function bindEvents() {
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
   byId("nextMonthBtn").addEventListener("click", () => moveCalendarMonth(1));
   byId("calendarToggleBtn").addEventListener("click", toggleCalendarCollapsed);
+  byId("homeSentenceRefreshBtn").addEventListener("click", () => renderHomeSentence({ reroll: true }));
   byId("todayBtn").addEventListener("click", async () => {
     selectedDate = todayKey();
     calendarMonth = selectedDate.slice(0, 7);
@@ -400,6 +403,17 @@ function renderHome() {
       reviewedKanjiCount: `${core.reviewedTodayCount(state.items, "kanji", selectedDate)}개`
     }
   });
+  renderHomeSentence();
+}
+
+function renderHomeSentence({ reroll = false } = {}) {
+  const entries = state.allDailyEntries || state.dailyEntries;
+  const sentence = core.pickRandomSentence(entries, Math.random, reroll ? { excludeId: homeSentenceEntryId } : {});
+  homeSentenceEntryId = sentence ? sentence.id : null;
+  applyPagePatch(renderHomeSentencePanel({
+    sentence,
+    helpers: renderHelpers()
+  }));
 }
 
 function renderTasks() {
@@ -474,6 +488,7 @@ function renderSentences() {
     sentences: sentenceEntries,
     helpers: {
       ...renderHelpers(),
+      entryToCandidate: core.dailyEntryToCandidate,
       linkedEntriesForSentence: linkedEntriesForAnySentence
     }
   }));

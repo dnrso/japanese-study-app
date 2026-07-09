@@ -198,8 +198,8 @@
      specificity as the rule above (single class), so source order
      (later wins) is what makes this take effect. */
   .tiny-action-btn {
-    min-height: 32px;
-    padding: 5px 8px;
+    min-height: 26px;
+    padding: 4px 8px;
   }
 
   /* Calendar header buttons stay compact on mobile too, overriding the

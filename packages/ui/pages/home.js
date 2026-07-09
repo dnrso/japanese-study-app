@@ -1,4 +1,4 @@
-import { empty, studyCard } from "../components/index.js";
+import { empty, speakerButton, studyCard } from "../components/index.js";
 
 export function homeWelcomePanel() {
   return `
@@ -12,6 +12,46 @@ export function homeWelcomePanel() {
         <button class="ghost-btn" type="button" data-open-page="sources">자료 이어서 보기</button>
       </div>
     </div>
+  `;
+}
+
+export function homeSentencePanel() {
+  return `
+    <section class="panel section home-sentence-panel" id="home-sentence">
+      <div class="panel-header">
+        <h2 class="panel-title">오늘의 문장</h2>
+        <button class="icon-btn" id="homeSentenceRefreshBtn" type="button" title="다른 문장 보기" aria-label="다른 문장 보기">↻</button>
+      </div>
+      <div id="homeSentenceCard"></div>
+    </section>
+  `;
+}
+
+export function renderHomeSentencePanel({ sentence, helpers }) {
+  return {
+    html: {
+      homeSentenceCard: sentence
+        ? homeSentenceCardMarkup(sentence, helpers)
+        : empty("아직 등록된 문장이 없습니다.")
+    }
+  };
+}
+
+function homeSentenceCardMarkup(entry, helpers) {
+  return `
+    <article class="home-sentence-card">
+      <h3 class="daily-sentence-title">${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span></h3>
+      <div class="daily-reading-meaning">
+        <section>
+          <span>읽기</span>
+          <p>${helpers.highlight(entry.reading || "-")}</p>
+        </section>
+        <section>
+          <span>해석</span>
+          <p>${helpers.highlight(entry.meaning || "-")}</p>
+        </section>
+      </div>
+    </article>
   `;
 }
 

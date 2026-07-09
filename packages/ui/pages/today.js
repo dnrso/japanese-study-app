@@ -95,7 +95,7 @@ function dailyEntryCard(entry, helpers) {
   // word/grammar/expression children are ever registered - see
   // storage-idb's registerDailyEntries) - so the "needs registration" mark
   // on a sentence card is a rollup over its children, not entry.registered.
-  const needsRegistration = children.length ? children.some(child => !child.registered) : false;
+  const needsRegistration = children.length ? children.some(child => helpers.core.entryNeedsRegistration(child)) : false;
   const leftCandidates = childWords.length ? `
     <section class="candidate-section">
       <div class="candidate-title">새 단어</div>
@@ -181,7 +181,7 @@ function learnedCard(entry, helpers) {
   `;
 }
 
-function wordCandidate(word, helpers) {
+export function wordCandidate(word, helpers) {
   return `
     <div class="word-candidate">
       <div class="word-candidate-main">
@@ -201,7 +201,7 @@ function wordCandidate(word, helpers) {
   `;
 }
 
-function grammarCandidate(item, helpers) {
+export function grammarCandidate(item, helpers) {
   return `
     <article class="grammar-candidate">
       <div class="grammar-candidate-head">

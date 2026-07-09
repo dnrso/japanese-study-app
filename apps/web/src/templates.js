@@ -1,4 +1,5 @@
 import {
+  homeSentencePanel,
   homeWelcomePanel,
   manualEntryPlaceholders,
   sentenceEntryPanel
@@ -98,6 +99,7 @@ export function homePageTemplate() {
     <section class="page" id="home">
       <div class="hero" id="home-overview">
         ${homeWelcomePanel()}
+        ${homeSentencePanel()}
       </div>
 
       <div class="stat-grid" id="home-stats">
