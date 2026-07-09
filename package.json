@@ -15,7 +15,9 @@
     "web:build": "npm run build --workspace @nihongo-study/web",
     "web:preview": "npm --workspace @nihongo-study/web run preview --",
     "android:sync": "npm run web:build && npm --workspace @nihongo-study/web run cap:sync",
-    "android:open": "npm --workspace @nihongo-study/web run cap:open"
+    "android:open": "npm --workspace @nihongo-study/web run cap:open",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "build": {
     "appId": "com.nihongo.study",
@@ -39,7 +41,9 @@
   "devDependencies": {
     "@electron/asar": "^3.4.1",
     "electron": "^41.7.2",
-    "electron-builder": "^26.15.2"
+    "electron-builder": "^26.15.2",
+    "fake-indexeddb": "^6.2.5",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
