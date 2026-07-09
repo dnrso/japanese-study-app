@@ -191,6 +191,17 @@
     height: 40px;
   }
 
+  /* Card delete/edit/review actions (daily-entry cards, study cards) stay
+     compact on mobile instead of being bumped to the 40px generic touch
+     target above - a small secondary/destructive action reads better at
+     ~32px here, which is still an acceptable touch target. Same
+     specificity as the rule above (single class), so source order
+     (later wins) is what makes this take effect. */
+  .tiny-action-btn {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+
   /* Calendar header buttons stay compact on mobile too, overriding the
      generic touch-target bump above. The header itself already wraps
      width-driven (see pages.css); on narrow screens the actions group

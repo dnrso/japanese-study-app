@@ -92,6 +92,14 @@
   line-height: 1;
 }
 
+.calendar-day-flag {
+  margin-left: 2px;
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .calendar-day span {
   display: block;
   margin-top: 4px;
@@ -461,9 +469,17 @@
   gap: 5px;
 }
 
+/* Compact inline action for card headers/action rows (삭제/수정/복습 etc.) -
+   these sit alongside badges or in a dense action row and should read as
+   small inline actions rather than full-size form buttons. Overrides the
+   base .primary-btn/.ghost-btn/.danger-btn sizing from layout.css via
+   source-order (pages.css loads after layout.css; both are single-class
+   selectors of equal specificity). See mobile.css for the ≤768px
+   override that keeps this compact even after the generic touch-target
+   bump. */
 .tiny-action-btn {
-  min-height: 22px;
-  padding: 2px 6px;
+  min-height: 26px;
+  padding: 4px 8px;
   border-radius: 6px;
   font-size: 11px;
 }

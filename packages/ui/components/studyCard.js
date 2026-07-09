@@ -14,9 +14,9 @@ export function studyCard(item, helpers) {
       ${note ? `<p class="muted">${highlight(note)}</p>` : ""}
       ${item.kind === "grammar" ? `<div class="source-link-list">${sourceSentenceLinks(item.sourceSentences, helpers)}</div>` : ""}
       <div class="card-actions">
-        ${item.review ? `<button class="ghost-btn" data-cycle-review="${item.id}">복습: ${escapeHtml(reviewStatusText(item))}</button>` : ""}
-        <button class="ghost-btn" data-edit-item="${item.id}">수정</button>
-        <button class="danger-btn" data-delete-item="${item.id}">삭제</button>
+        ${item.review ? `<button class="ghost-btn tiny-action-btn" data-cycle-review="${item.id}">복습: ${escapeHtml(reviewStatusText(item))}</button>` : ""}
+        <button class="ghost-btn tiny-action-btn" data-edit-item="${item.id}">수정</button>
+        <button class="danger-btn tiny-action-btn" data-delete-item="${item.id}">삭제</button>
       </div>
     </article>
   `;

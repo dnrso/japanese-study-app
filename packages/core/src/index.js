@@ -237,6 +237,31 @@ export function uniqueSourceSentences(sourceSentences = []) {
   );
 }
 
+// Only word/grammar/expression daily entries ever get promoted into the
+// permanent study collections (see storage-idb's registerDailyEntries,
+// which filters to exactly these kinds). Sentence entries are never a
+// target of that call, so entry.registered stays false forever for a
+// sentence and isn't a meaningful "needs action" signal by itself - a
+// sentence "needs registration" only in the sense that it still has
+// unregistered word/grammar/expression children.
+const REGISTERABLE_DAILY_KINDS = ["word", "grammar", "expression"];
+
+export function entryNeedsRegistration(entry) {
+  return REGISTERABLE_DAILY_KINDS.includes(entry?.kind) && !entry?.registered;
+}
+
+export function hasUnregisteredEntries(dailyEntries = []) {
+  return (dailyEntries || []).some(entryNeedsRegistration);
+}
+
+export function unregisteredStudyDates(dailyEntries = []) {
+  return new Set(
+    (dailyEntries || [])
+      .filter(entryNeedsRegistration)
+      .map(entry => entry.studyDate)
+  );
+}
+
 export function studyStats(state = {}) {
   const items = state.items || [];
   return {

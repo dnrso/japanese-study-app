@@ -406,7 +406,8 @@ function renderCalendar() {
     calendarMonth,
     selectedDate,
     studyDays: state.studyDays,
-    toDateKey
+    toDateKey,
+    unregisteredDates: core.unregisteredStudyDates(state.allDailyEntries || state.dailyEntries)
   }));
   applyCalendarCollapsedState();
 }
