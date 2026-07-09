@@ -202,6 +202,45 @@ export function buildQuizQuestion({
   };
 }
 
+// Sentence quiz question builder. Unlike buildQuizQuestion, `entries` are
+// daily-entry-shaped sentence records (title = 원문, meaning = 해석), not
+// review items, so there is no quizCorrectCount weighting and answering a
+// sentence question never touches SRS/review state.
+export function buildSentenceQuizQuestion({
+  entries = [],
+  mode = "meaning",
+  random = Math.random,
+  excludeItemId = ""
+} = {}) {
+  const candidates = entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
+  const answerType = mode === "listen" ? "title" : "meaning";
+  const uniqueAnswers = [...new Set(candidates.map(entry => entry[answerType]))];
+  if (candidates.length < 4 || uniqueAnswers.length < 4) {
+    return null;
+  }
+
+  const pool = excludeItemId ? candidates.filter(entry => entry.id !== excludeItemId) : candidates;
+  const item = randomItem(pool.length ? pool : candidates, random);
+  const correctAnswer = item[answerType];
+  const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
+    .map(candidate => candidate[answerType])
+    .filter((answer, index, list) => answer && list.indexOf(answer) === index)
+    .slice(0, 3);
+
+  if (distractors.length < 3) {
+    return null;
+  }
+
+  return {
+    item,
+    kind: "sentence",
+    mode,
+    answerType,
+    correctAnswer,
+    choices: shuffle([correctAnswer, ...distractors], random)
+  };
+}
+
 export function reviewItems(items = [], searchTerm = "") {
   return items.filter(item => isReviewQueueItem(item) && matchesSearch(item, searchTerm));
 }
@@ -235,6 +274,92 @@ export function uniqueSourceSentences(sourceSentences = []) {
   return (sourceSentences || []).filter((sentence, index, list) =>
     list.findIndex(item => sourceSentenceKey(item) === sourceSentenceKey(sentence)) === index
   );
+}
+
+// Only word/grammar/expression daily entries ever get promoted into the
+// permanent study collections (see storage-idb's registerDailyEntries,
+// which filters to exactly these kinds). Sentence entries are never a
+// target of that call, so entry.registered stays false forever for a
+// sentence and isn't a meaningful "needs action" signal by itself - a
+// sentence "needs registration" only in the sense that it still has
+// unregistered word/grammar/expression children.
+const REGISTERABLE_DAILY_KINDS = ["word", "grammar", "expression"];
+
+export function entryNeedsRegistration(entry) {
+  return REGISTERABLE_DAILY_KINDS.includes(entry?.kind) && !entry?.registered;
+}
+
+export function hasUnregisteredEntries(dailyEntries = []) {
+  return (dailyEntries || []).some(entryNeedsRegistration);
+}
+
+export function unregisteredStudyDates(dailyEntries = []) {
+  return new Set(
+    (dailyEntries || [])
+      .filter(entryNeedsRegistration)
+      .map(entry => entry.studyDate)
+  );
+}
+
+// A sentence has "complete" registration once every word/grammar/expression
+// entry linked to it (its children) has been registered - mirrors the
+// rollup used by the sentence cards on the 오늘 공부/문장 tabs.
+export function sentenceHasCompleteRegistration(dailyEntries = [], sentenceId) {
+  const children = ["word", "grammar", "expression"].flatMap(kind =>
+    linkedEntriesForSentence(dailyEntries, kind, sentenceId)
+  );
+  return children.length > 0 && children.every(child => !entryNeedsRegistration(child));
+}
+
+// Picks a random sentence entry for the home tab's "오늘의 문장" panel,
+// preferring sentences whose linked entries are all registered and falling
+// back to any sentence when none qualify.
+//
+// `excludeId` (used for the refresh button's re-roll) drops the currently
+// shown sentence from consideration first, so the button doesn't look
+// broken when the "complete" pool only has one member: if excluding it
+// empties the preferred pool, we fall back to the full sentence pool (also
+// minus excludeId) before finally falling back to re-showing the same
+// sentence when it's the only one in storage.
+export function pickRandomSentence(dailyEntries = [], random = Math.random, { excludeId } = {}) {
+  const sentences = rootSentenceEntries(dailyEntries);
+  if (!sentences.length) {
+    return null;
+  }
+  const complete = sentences.filter(entry => sentenceHasCompleteRegistration(dailyEntries, entry.id));
+  const preferred = complete.length ? complete : sentences;
+
+  const withoutExcluded = excludeId ? preferred.filter(entry => entry.id !== excludeId) : preferred;
+  if (withoutExcluded.length) {
+    return withoutExcluded[Math.floor(random() * withoutExcluded.length)];
+  }
+
+  const fallbackWithoutExcluded = excludeId ? sentences.filter(entry => entry.id !== excludeId) : sentences;
+  const pool = fallbackWithoutExcluded.length ? fallbackWithoutExcluded : sentences;
+  return pool[Math.floor(random() * pool.length)];
+}
+
+// Selectable page sizes for the 설정 tab's "페이지당 항목 수" control, plus
+// the per-view defaults used when the user picks 기본값 (no override).
+export const LIST_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+
+export const DEFAULT_LIST_PAGE_SIZES = {
+  sentences: 10,
+  words: 20,
+  grammar: 12,
+  expression: 12,
+  kanji: 24
+};
+
+// Pure resolver so the settings-driven page size is unit-testable without
+// touching the DOM/localStorage: `override` is either a number from
+// LIST_PAGE_SIZE_OPTIONS (applies to every view uniformly) or a falsy
+// value meaning "기본값" (use this view's own default).
+export function resolveListPageSize(view, override, defaults = DEFAULT_LIST_PAGE_SIZES) {
+  if (override) {
+    return override;
+  }
+  return defaults[view] || defaults.words;
 }
 
 export function studyStats(state = {}) {

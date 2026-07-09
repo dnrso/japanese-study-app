@@ -1,11 +1,11 @@
-export { homeWelcomePanel, renderHomePage, renderQuickFiltersPage, renderTasksPage } from "./home.js";
+export { homeSentencePanel, homeWelcomePanel, renderHomePage, renderHomeSentencePanel, renderQuickFiltersPage, renderTasksPage } from "./home.js";
 export { renderCalendarPage, renderLearnedSectionsPage, renderTodayPage, sentenceEntryPanel } from "./today.js";
 export { renderSourcesPage, safeSourceUrl } from "./sources.js";
 export { renderSentencesPage } from "./sentences.js";
 export { renderTaxonomyPage, renderWordsPage } from "./words.js";
 export { renderStudyCardsPage } from "./studyCards.js";
 export { renderKanjiPage } from "./kanji.js";
-export { renderKanjiQuizPage, renderWordQuizPage } from "./quiz.js";
+export { renderKanjiQuizPage, renderSentenceQuizPage, renderWordQuizPage } from "./quiz.js";
 export { renderReviewPage } from "./review.js";
 export { renderStatsPage } from "./stats.js";
 export { renderQuizSettingsPage, renderStoragePathsPage } from "./settings.js";

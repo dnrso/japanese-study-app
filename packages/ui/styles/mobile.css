@@ -70,9 +70,11 @@
   }
 
   /* Sidebar contains both nav (toc list / quick filters) and info widgets;
-     stack it below main content in normal flow rather than hiding it. */
+     stack it below main content in normal flow rather than hiding it.
+     order: 3 leaves a slot at order: 2 (see .mobile-ad-slot below) for the
+     temporary ad placeholder to sit between main content and the sidebar. */
   .sidebar {
-    order: 2;
+    order: 3;
     position: static;
     top: auto;
     height: auto;
@@ -86,6 +88,26 @@
     order: 1;
     padding: 12px;
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  /* Temporary horizontal ad placeholder, shown only on mobile, sitting
+     between the stacked .main (order: 1) and .sidebar (order: 3) via the
+     same `order` mechanism used for the rest of the stacked layout. */
+  .mobile-ad-slot {
+    order: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 60px;
+    margin: 0 12px 12px;
+    border: 1px dashed var(--muted);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
   }
 
   /* Grid collapses */
@@ -191,6 +213,27 @@
     height: 40px;
   }
 
+  /* 오늘의 문장 refresh button stays 24x24 on mobile too, explicitly
+     restated here for clarity even though the id selector in pages.css
+     already outranks the .icon-btn class rules above on specificity
+     (id > class) regardless of source order or this media query. */
+  #homeSentenceRefreshBtn {
+    min-height: 24px;
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Card delete/edit/review actions (daily-entry cards, study cards) stay
+     compact on mobile instead of being bumped to the 40px generic touch
+     target above - a small secondary/destructive action reads better at
+     ~32px here, which is still an acceptable touch target. Same
+     specificity as the rule above (single class), so source order
+     (later wins) is what makes this take effect. */
+  .tiny-action-btn {
+    min-height: 26px;
+    padding: 4px 8px;
+  }
+
   /* Calendar header buttons stay compact on mobile too, overriding the
      generic touch-target bump above. The header itself already wraps
      width-driven (see pages.css); on narrow screens the actions group
@@ -206,6 +249,59 @@
     min-height: 30px;
     width: 30px;
     height: 30px;
+  }
+
+  /* 한자 tab: desktop's minmax(164px, 1fr) only fits a single column at
+     375px (~321px of usable width once .main/.panel padding is
+     subtracted), making each ~250px-tall card take a whole screen row by
+     itself. Two narrower, shorter columns roughly double the cards
+     visible per screen while keeping the glyph itself large-ish - only
+     the surrounding metadata/padding/buttons shrink. Desktop is
+     untouched (this block only applies ≤768px). */
+  .kanji-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .kanji-card {
+    min-height: 0;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .kanji-char {
+    font-size: 44px;
+  }
+
+  .kanji-card-top {
+    min-height: 22px;
+  }
+
+  .kanji-info {
+    min-height: 0;
+    gap: 2px;
+  }
+
+  .kanji-info strong {
+    font-size: 12px;
+  }
+
+  .kanji-info p {
+    font-size: 10px;
+  }
+
+  .kanji-card .card-actions {
+    gap: 4px;
+  }
+
+  /* Beats the generic .ghost-btn touch-target bump above via a higher
+     specificity compound selector (3 classes vs. 1), regardless of
+     source order - same technique as #homeSentenceRefreshBtn (id vs.
+     class) elsewhere in this file. */
+  .kanji-card .card-actions .ghost-btn {
+    min-height: 26px;
+    padding: 4px 6px;
+    font-size: 10px;
   }
 
   input,

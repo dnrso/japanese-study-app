@@ -1,8 +1,10 @@
 import {
+  homeSentencePanel,
   homeWelcomePanel,
   manualEntryPlaceholders,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
+import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -74,6 +76,15 @@ export function renderAppShell(byId) {
           </div>
         </aside>
 
+        <!-- Temporary mobile-only ad placeholder (see mobile.css). Shared
+             across every tab since the layout shell renders once; hidden
+             on desktop and positioned between main content and the
+             sidebar/TOC via CSS order once the layout stacks on narrow
+             screens. Single content-free element so a future AdMob/ad
+             network integration can swap in real content without
+             touching the shell markup. -->
+        <div id="mobileAdSlot" class="mobile-ad-slot" aria-hidden="true">광고</div>
+
         <main class="main">
           ${homePageTemplate()}
           ${todayPageTemplate()}
@@ -98,6 +109,7 @@ export function homePageTemplate() {
     <section class="page" id="home">
       <div class="hero" id="home-overview">
         ${homeWelcomePanel()}
+        ${homeSentencePanel()}
       </div>
 
       <div class="stat-grid" id="home-stats">
@@ -228,6 +240,7 @@ export function sentencesPageTemplate() {
           <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
         </div>
         <div class="cards daily-entry-list" id="sentenceCards"></div>
+        <div id="sentencePagination"></div>
       </section>
     </section>
   `;
@@ -264,6 +277,7 @@ export function wordsPageTemplate() {
             <tbody id="wordRows"></tbody>
           </table>
         </div>
+        <div id="wordsPagination"></div>
       </section>
 
       <section class="taxonomy-section" id="words-taxonomy">
@@ -286,6 +300,7 @@ export function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, 
           <button class="primary-btn" type="button" data-kind="${kind}" data-add-item>${buttonLabel}</button>
         </div>
         <div class="cards" id="${targetId}"></div>
+        <div id="${kind}Pagination"></div>
       </section>
     </section>
   `;
@@ -300,6 +315,7 @@ export function kanjiPageTemplate() {
           <button class="primary-btn" type="button" data-kind="kanji" data-add-item>+ 한자 추가</button>
         </div>
         <div class="kanji-grid" id="kanjiCards"></div>
+        <div id="kanjiPagination"></div>
       </section>
     </section>
   `;
@@ -337,10 +353,13 @@ export function quizPageTemplate() {
             </div>
             <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="kanji">시작</button>
           </article>
+          <button class="quiz-card" type="button" data-quiz-kind="sentence-meaning"><span class="badge purple">문장</span><strong>문장 뜻 고르기</strong><span>4지선다</span></button>
+          <button class="quiz-card" type="button" data-quiz-kind="sentence-listen"><span class="badge purple">문장</span><strong>듣고 문장 고르기</strong><span>4지선다</span></button>
         </div>
         <p class="muted quiz-status" id="quizStatus">샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.</p>
         <div class="word-quiz-panel" id="wordQuizPanel" hidden></div>
         <div class="word-quiz-panel kanji-quiz-panel" id="kanjiQuizPanel" hidden></div>
+        <div class="word-quiz-panel sentence-quiz-panel" id="sentenceQuizPanel" hidden></div>
       </section>
     </section>
   `;
@@ -373,6 +392,24 @@ export function statsPageTemplate() {
         </div>
       </section>
     </section>
+  `;
+}
+
+// One labeled <select> per paginated list view, for the 설정 tab's
+// "목록 표시" section - each view gets its own override (기본값 falls back
+// to that view's constant from packages/core's DEFAULT_LIST_PAGE_SIZES).
+// Wired up in apps/web/src/main.js via the shared data-list-page-size-view
+// attribute (see bindEvents()).
+function listPageSizeSelect(view, label) {
+  const defaultValue = DEFAULT_LIST_PAGE_SIZES[view];
+  const options = LIST_PAGE_SIZE_OPTIONS.map(size => `<option value="${size}">${size}</option>`).join("");
+  return `
+    <label>${escapeHtml(label)}
+      <select id="listPageSize-${view}" data-list-page-size-view="${view}">
+        <option value="">기본값 (${defaultValue})</option>
+        ${options}
+      </select>
+    </label>
   `;
 }
 
@@ -415,6 +452,18 @@ export function settingsPageTemplate() {
           <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
         </div>
         <p class="muted" id="accountStatus"></p>
+      </section>
+
+      <section class="panel section" id="settings-list-page-size">
+        <div class="panel-header"><h2 class="panel-title">목록 표시</h2></div>
+        <div class="settings-grid">
+          ${listPageSizeSelect("sentences", "문장 페이지당 항목 수")}
+          ${listPageSizeSelect("words", "단어 페이지당 항목 수")}
+          ${listPageSizeSelect("grammar", "문법 페이지당 항목 수")}
+          ${listPageSizeSelect("expression", "표현 페이지당 항목 수")}
+          ${listPageSizeSelect("kanji", "한자 페이지당 항목 수")}
+        </div>
+        <p class="muted">문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 따로 적용됩니다.</p>
       </section>
 
       <section class="panel section" id="settings-quiz">

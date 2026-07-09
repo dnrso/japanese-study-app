@@ -43,6 +43,20 @@
   display: none;
 }
 
+/* 오늘의 문장 refresh button: a lightweight re-roll action next to the
+   panel title, intentionally smaller than the default .icon-btn sizing
+   (32px). Targeted by id so it wins over the shared .icon-btn rules
+   regardless of source order (mobile.css also re-scopes this by id to
+   beat its own touch-target bump for .icon-btn). */
+#homeSentenceRefreshBtn {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .today-top-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.85fr) minmax(300px, 0.8fr);
@@ -89,6 +103,14 @@
 .calendar-day strong {
   display: block;
   font-size: 12px;
+  line-height: 1;
+}
+
+.calendar-day-flag {
+  margin-left: 2px;
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 900;
   line-height: 1;
 }
 
@@ -461,9 +483,17 @@
   gap: 5px;
 }
 
+/* Compact inline action for card headers/action rows (삭제/수정/복습 etc.) -
+   these sit alongside badges or in a dense action row and should read as
+   small inline actions rather than full-size form buttons. Overrides the
+   base .primary-btn/.ghost-btn/.danger-btn sizing from layout.css via
+   source-order (pages.css loads after layout.css; both are single-class
+   selectors of equal specificity). See mobile.css for the ≤768px
+   override that keeps this compact even after the generic touch-target
+   bump. */
 .tiny-action-btn {
-  min-height: 22px;
-  padding: 2px 6px;
+  min-height: 26px;
+  padding: 4px 8px;
   border-radius: 6px;
   font-size: 11px;
 }

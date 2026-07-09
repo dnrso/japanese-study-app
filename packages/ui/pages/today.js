@@ -39,7 +39,7 @@ export function renderTodayPage({ selectedDate, sentenceEntries, helpers }) {
   };
 }
 
-export function renderCalendarPage({ calendarMonth, selectedDate, studyDays, toDateKey }) {
+export function renderCalendarPage({ calendarMonth, selectedDate, studyDays, toDateKey, unregisteredDates }) {
   const days = new Map((studyDays || []).map(day => [day.studyDate, day]));
   const [year, month] = calendarMonth.split("-").map(Number);
   const first = new Date(year, month - 1, 1);
@@ -58,9 +58,10 @@ export function renderCalendarPage({ calendarMonth, selectedDate, studyDays, toD
         const day = days.get(key);
         const isSelected = key === selectedDate;
         const isOtherMonth = date.getMonth() !== month - 1;
+        const needsRegistration = Boolean(unregisteredDates && unregisteredDates.has(key));
         return `
           <button class="calendar-day ${isSelected ? "selected" : ""} ${isOtherMonth ? "other-month" : ""}" data-calendar-date="${key}">
-            <strong>${date.getDate()}</strong>
+            <strong>${date.getDate()}${needsRegistration ? `<sup class="calendar-day-flag" title="등록 필요">!</sup>` : ""}</strong>
             ${day ? `<span>${day.minutes || 0}분 · ${day.entryCount || 0}개</span>` : ""}
           </button>
         `;
@@ -89,6 +90,12 @@ function dailyEntryCard(entry, helpers) {
   const childWords = helpers.linkedEntriesForSentence("word", entry.id);
   const childGrammar = helpers.linkedEntriesForSentence("grammar", entry.id);
   const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
+  const children = [...childWords, ...childGrammar, ...childExpressions];
+  // A sentence's own `registered` flag never flips to true (only its
+  // word/grammar/expression children are ever registered - see
+  // storage-idb's registerDailyEntries) - so the "needs registration" mark
+  // on a sentence card is a rollup over its children, not entry.registered.
+  const needsRegistration = children.length ? children.some(child => helpers.core.entryNeedsRegistration(child)) : false;
   const leftCandidates = childWords.length ? `
     <section class="candidate-section">
       <div class="candidate-title">새 단어</div>
@@ -120,7 +127,11 @@ function dailyEntryCard(entry, helpers) {
       <div class="daily-entry-card-head">
         <div class="daily-entry-tags">
           <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind] || entry.kind}</span>
-          ${entry.registered ? `<span class="badge green">전체 등록됨</span>` : `<span class="badge yellow">오늘 기록</span>`}
+          ${needsRegistration
+            ? `<span class="badge red">등록 필요</span>`
+            : children.length
+              ? `<span class="badge green">전체 등록됨</span>`
+              : `<span class="badge yellow">오늘 기록</span>`}
           <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${entry.id}">삭제</button>
         </div>
       </div>
@@ -152,7 +163,7 @@ function learnedCard(entry, helpers) {
       <div class="learned-card-head">
         <div class="learned-card-tags">
           <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind]}</span>
-          ${entry.registered ? `<span class="badge green">등록됨</span>` : `<span class="badge yellow">대기</span>`}
+          ${entry.registered ? `<span class="badge green">등록됨</span>` : `<span class="badge red">등록 필요</span>`}
           <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${entry.id}">삭제</button>
         </div>
       </div>
@@ -170,7 +181,7 @@ function learnedCard(entry, helpers) {
   `;
 }
 
-function wordCandidate(word, helpers) {
+export function wordCandidate(word, helpers) {
   return `
     <div class="word-candidate">
       <div class="word-candidate-main">
@@ -190,7 +201,7 @@ function wordCandidate(word, helpers) {
   `;
 }
 
-function grammarCandidate(item, helpers) {
+export function grammarCandidate(item, helpers) {
   return `
     <article class="grammar-candidate">
       <div class="grammar-candidate-head">

@@ -1,4 +1,5 @@
 import { empty, speakerButton } from "../components/index.js";
+import { grammarCandidate, wordCandidate } from "./today.js";
 
 export function renderSentencesPage({ sentences, caption, helpers }) {
   return {
@@ -14,14 +15,42 @@ export function renderSentencesPage({ sentences, caption, helpers }) {
 }
 
 function sentenceCard(entry, helpers) {
-  const words = helpers.linkedEntriesForSentence("word", entry.id);
-  const grammar = helpers.linkedEntriesForSentence("grammar", entry.id);
-  const expressions = helpers.linkedEntriesForSentence("expression", entry.id);
-  const summary = [
-    words.length ? `단어 ${words.length}` : "",
-    grammar.length ? `문법 ${grammar.length}` : "",
-    expressions.length ? `표현 ${expressions.length}` : ""
-  ].filter(Boolean).join(" · ");
+  const childWords = helpers.linkedEntriesForSentence("word", entry.id);
+  const childGrammar = helpers.linkedEntriesForSentence("grammar", entry.id);
+  const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
+  const children = [...childWords, ...childGrammar, ...childExpressions];
+  // Same rollup as today.js's dailyEntryCard: a sentence's own `registered`
+  // flag never flips to true (only its word/grammar/expression children are
+  // ever registered - see storage-idb's registerDailyEntries), so the
+  // "needs registration" mark here is a rollup over its children.
+  const needsRegistration = children.length ? children.some(child => helpers.core.entryNeedsRegistration(child)) : false;
+
+  const leftCandidates = childWords.length ? `
+    <section class="candidate-section">
+      <div class="candidate-title">단어</div>
+      <div class="word-candidate-grid">${childWords.map(helpers.entryToCandidate).map(word => wordCandidate(word, helpers)).join("")}</div>
+    </section>
+  ` : "";
+  const rightCandidates = [
+    childGrammar.length ? `
+      <section class="candidate-section">
+        <div class="candidate-title">문법</div>
+        <div class="grammar-candidate-list">${childGrammar.map(item => grammarCandidate(item, helpers)).join("")}</div>
+      </section>
+    ` : "",
+    childExpressions.length ? `
+      <section class="candidate-section">
+        <div class="candidate-title">표현</div>
+        <div class="grammar-candidate-list">${childExpressions.map(item => grammarCandidate(item, helpers)).join("")}</div>
+      </section>
+    ` : ""
+  ].join("");
+  const candidateLayout = leftCandidates || rightCandidates ? `
+    <div class="daily-candidate-layout">
+      ${leftCandidates ? `<div class="daily-candidate-column">${leftCandidates}</div>` : ""}
+      ${rightCandidates ? `<div class="daily-candidate-column">${rightCandidates}</div>` : ""}
+    </div>
+  ` : "";
 
   return `
     <article class="study-card daily-entry-card sentence-card" id="sentence-card-${helpers.escapeHtml(entry.id)}" data-daily-entry-id="${helpers.escapeHtml(entry.id)}">
@@ -29,7 +58,11 @@ function sentenceCard(entry, helpers) {
         <div class="daily-entry-tags">
           <span class="badge ${helpers.badgeClassByKind.sentence || "purple"}">문장</span>
           <span class="badge yellow">${helpers.escapeHtml(entry.studyDate || "")}</span>
-          ${entry.registered ? `<span class="badge green">등록됨</span>` : ""}
+          ${needsRegistration
+            ? `<span class="badge red">등록 필요</span>`
+            : children.length
+              ? `<span class="badge green">전체 등록됨</span>`
+              : ""}
         </div>
         <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
       </div>
@@ -44,8 +77,9 @@ function sentenceCard(entry, helpers) {
           <p>${helpers.highlight(entry.meaning || "-")}</p>
         </section>
       </div>
+      ${candidateLayout}
       <div class="card-actions">
-        ${summary ? `<span class="source-link muted">${helpers.escapeHtml(summary)}</span>` : `<span class="source-link muted">연결된 새 항목 없음</span>`}
+        ${children.length ? "" : `<span class="source-link muted">연결된 항목 없음</span>`}
         <button class="ghost-btn" data-jump-sentence="${helpers.escapeHtml(entry.id)}" data-source-date="${helpers.escapeHtml(entry.studyDate || "")}">오늘 공부에서 보기</button>
       </div>
     </article>

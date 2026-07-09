@@ -12,11 +12,16 @@ import { kindLabels } from "@nihongo-study/ui";
 //   byId, state (getter via ctx.getState()), store, selectedDate (getter),
 //   wordQuizMode, kanjiQuizMode, quizReviewOnCorrect, quizCorrectReview,
 //   getWordQuiz, setWordQuiz, getKanjiQuiz, setKanjiQuiz,
-//   renderWordQuiz, renderKanjiQuiz, renderStats, renderQuickFilters
+//   getSentenceQuiz, setSentenceQuiz, speak,
+//   renderWordQuiz, renderKanjiQuiz, renderSentenceQuiz, renderStats, renderQuickFilters
 // }
 
 export function emptyQuiz() {
   return { question: null, answered: false, selectedAnswer: "", result: null };
+}
+
+export function emptySentenceQuiz() {
+  return { question: null, answered: false, selectedAnswer: "", result: null, insufficientData: false, score: { correct: 0, wrong: 0 } };
 }
 
 export function startQuiz(kind, ctx) {
@@ -43,9 +48,11 @@ export function startQuiz(kind, ctx) {
     ctx.setWordQuiz(nextQuiz);
     ctx.setKanjiQuiz(emptyQuiz());
   }
+  ctx.setSentenceQuiz(emptySentenceQuiz());
   byId("quizStatus").textContent = question ? "정답을 선택하세요." : "퀴즈를 만들려면 같은 유형의 항목과 보기 후보가 4개 이상 필요합니다.";
   ctx.renderWordQuiz();
   ctx.renderKanjiQuiz();
+  ctx.renderSentenceQuiz();
 
   if (question) {
     const panelId = isKanji ? "kanjiQuizPanel" : "wordQuizPanel";
@@ -59,10 +66,78 @@ export function exitQuizSession(ctx) {
   const { byId } = ctx;
   ctx.setWordQuiz(emptyQuiz());
   ctx.setKanjiQuiz(emptyQuiz());
+  ctx.setSentenceQuiz(emptySentenceQuiz());
   byId("quizStatus").textContent = "샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.";
   ctx.renderWordQuiz();
   ctx.renderKanjiQuiz();
+  ctx.renderSentenceQuiz();
   byId("quiz-select").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Sentence quiz session logic. `mode` is "meaning" (Mode A: show the
+// Japanese sentence, choose its Korean meaning) or "listen" (Mode B: play
+// the sentence audio, choose the matching Japanese sentence, then reveal
+// the sentence + meaning). Sentence entries are daily-entry-shaped, not
+// review items, so this never calls store.submitWordQuizAnswer and never
+// stamps lastReviewedAt / touches SRS state — it's practice-only, tracked
+// with an in-session score instead of the persisted per-item quiz stats
+// that word/kanji quizzes use.
+export function startSentenceQuiz(mode, ctx) {
+  const { byId } = ctx;
+  const previous = ctx.getSentenceQuiz();
+  const sameMode = previous.question?.mode === mode;
+  const entries = ctx.getState().allDailyEntries || ctx.getState().dailyEntries || [];
+  const question = core.buildSentenceQuizQuestion({
+    entries,
+    mode,
+    excludeItemId: previous.question?.item?.id || ""
+  });
+
+  const nextQuiz = {
+    question,
+    answered: false,
+    selectedAnswer: "",
+    result: null,
+    insufficientData: !question,
+    score: sameMode ? previous.score : { correct: 0, wrong: 0 }
+  };
+  ctx.setSentenceQuiz(nextQuiz);
+  ctx.setWordQuiz(emptyQuiz());
+  ctx.setKanjiQuiz(emptyQuiz());
+
+  byId("quizStatus").textContent = question ? "정답을 선택하세요." : "문장 퀴즈를 만들려면 문장이 4개 이상 필요합니다.";
+  ctx.renderWordQuiz();
+  ctx.renderKanjiQuiz();
+  ctx.renderSentenceQuiz();
+
+  if (question) {
+    window.setTimeout(() => {
+      byId("sentenceQuizPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+    if (mode === "listen") {
+      ctx.speak(question.item.title);
+    }
+  }
+}
+
+export function submitSentenceQuizChoice(selectedAnswer, ctx) {
+  const quiz = ctx.getSentenceQuiz();
+  if (!quiz.question || quiz.answered) {
+    return;
+  }
+  const correct = selectedAnswer === quiz.question.correctAnswer;
+  const nextQuiz = {
+    ...quiz,
+    answered: true,
+    selectedAnswer,
+    result: { correct, correctAnswer: quiz.question.correctAnswer },
+    score: {
+      correct: quiz.score.correct + (correct ? 1 : 0),
+      wrong: quiz.score.wrong + (correct ? 0 : 1)
+    }
+  };
+  ctx.setSentenceQuiz(nextQuiz);
+  ctx.renderSentenceQuiz();
 }
 
 export async function submitQuizChoice(kind, selectedAnswer, ctx) {
