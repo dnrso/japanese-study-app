@@ -75,6 +75,15 @@ export function renderAppShell(byId) {
           </div>
         </aside>
 
+        <!-- Temporary mobile-only ad placeholder (see mobile.css). Shared
+             across every tab since the layout shell renders once; hidden
+             on desktop and positioned between main content and the
+             sidebar/TOC via CSS order once the layout stacks on narrow
+             screens. Single content-free element so a future AdMob/ad
+             network integration can swap in real content without
+             touching the shell markup. -->
+        <div id="mobileAdSlot" class="mobile-ad-slot" aria-hidden="true">광고</div>
+
         <main class="main">
           ${homePageTemplate()}
           ${todayPageTemplate()}

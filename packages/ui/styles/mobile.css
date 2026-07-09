@@ -70,9 +70,11 @@
   }
 
   /* Sidebar contains both nav (toc list / quick filters) and info widgets;
-     stack it below main content in normal flow rather than hiding it. */
+     stack it below main content in normal flow rather than hiding it.
+     order: 3 leaves a slot at order: 2 (see .mobile-ad-slot below) for the
+     temporary ad placeholder to sit between main content and the sidebar. */
   .sidebar {
-    order: 2;
+    order: 3;
     position: static;
     top: auto;
     height: auto;
@@ -86,6 +88,27 @@
     order: 1;
     padding: 12px;
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  /* Temporary horizontal ad placeholder, shown only on mobile, sitting
+     between the stacked .main (order: 1) and .sidebar (order: 3) via the
+     same `order` mechanism used for the rest of the stacked layout. */
+  .mobile-ad-slot {
+    order: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
+    height: 60px;
+    margin: 0 12px 12px;
+    border: 1px dashed var(--muted);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
   }
 
   /* Grid collapses */

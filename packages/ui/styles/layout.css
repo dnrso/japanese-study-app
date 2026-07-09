@@ -175,6 +175,13 @@
   min-height: 0;
 }
 
+/* Temporary mobile-only ad placeholder slot (see mobile.css for the
+   ≤768px layout that shows it between the stacked main content and
+   sidebar/TOC). Hidden by default on desktop/tablet widths. */
+.mobile-ad-slot {
+  display: none;
+}
+
 .sidebar {
   border-right: 1px solid var(--line);
   background: rgba(255, 253, 250, 0.72);
