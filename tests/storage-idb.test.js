@@ -99,4 +99,51 @@ describe("storage-idb (fake-indexeddb)", () => {
     const exportedItem = exportedItems.data.items.find(candidate => candidate.id === item.id);
     expect(exportedItem?.deletedAt).toBeTruthy();
   });
+
+  it("importFullBackup tolerates a legacy sqlite-shaped dailyEntry (parsedJson string only) without losing the parsed breakdown", async () => {
+    const storage = createIdbStorage({ dbName });
+    await storage.initDatabase();
+
+    const legacyParsed = {
+      title: "レガシー",
+      reading: "れがしー",
+      meaning: "legacy entry",
+      kind: "word",
+      words: [],
+      grammar: [],
+      expressions: []
+    };
+    const legacyEntry = {
+      id: "legacy-entry-1",
+      studyDate,
+      parentId: "",
+      kind: "word",
+      title: "レガシー",
+      reading: "れがしー",
+      meaning: "legacy entry",
+      rawText: "",
+      // Legacy sqlite exportData() shape: only a serialized `parsedJson`
+      // string, no structured `parsed` object.
+      parsedJson: JSON.stringify(legacyParsed),
+      registered: false,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      deletedAt: null
+    };
+
+    const state = await storage.importFullBackup({
+      data: {
+        selectedDate: studyDate,
+        studyDays: [],
+        allDailyEntries: [legacyEntry],
+        dailyEntryLinks: [],
+        tasks: [],
+        items: []
+      }
+    });
+
+    const imported = state.allDailyEntries.find(entry => entry.id === "legacy-entry-1");
+    expect(imported).toBeTruthy();
+    expect(imported.parsed).toEqual(legacyParsed);
+  });
 });

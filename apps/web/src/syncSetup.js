@@ -1,4 +1,7 @@
 import { createSupabaseSync } from "@nihongo-study/sync";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { App } from "@capacitor/app";
 
 // Sync/account integration. These functions close over mutable state that
 // lives in main.js (accountSession, aiSentenceAnalysisEnabled, etc.), so
@@ -13,6 +16,18 @@ import { createSupabaseSync } from "@nihongo-study/sync";
 //   getAiSentenceAnalysisEnabled, setAiSentenceAnalysisEnabled,
 //   updateDailyEntryPlaceholder
 // }
+
+// Custom URL scheme Supabase redirects back to after Google OAuth completes
+// on native (Android) builds. Must match:
+//  - the intent-filter in apps/web/android/app/src/main/AndroidManifest.xml
+//  - an entry in the Supabase project's Auth > URL Configuration >
+//    "Redirect URLs" allowlist
+// scheme = appId (see apps/web/capacitor.config.json), host = "auth-callback".
+export const NATIVE_AUTH_CALLBACK_URL = "io.github.dnrso.nihongostudy://auth-callback";
+
+function isNativePlatform() {
+  return Boolean(Capacitor?.isNativePlatform?.());
+}
 
 export function createSync({ storage, mergeSnapshots }) {
   return createSupabaseSync({ storage, mergeSnapshots });
@@ -50,7 +65,21 @@ export async function signInWithGoogle(ctx) {
   const { byId, sync } = ctx;
   let result;
   try {
-    result = await sync.signInWithGoogle();
+    if (isNativePlatform()) {
+      // Native: skip Supabase's default WebView redirect and instead open
+      // the returned OAuth URL in the system browser, which can complete the
+      // Google login and deep-link back into the app via the custom scheme
+      // intent-filter (handled by wireAuthCallback/App "appUrlOpen").
+      result = await sync.signInWithGoogle({
+        redirectTo: NATIVE_AUTH_CALLBACK_URL,
+        skipBrowserRedirect: true
+      });
+      if (!result?.skipped && result?.data?.url) {
+        await Browser.open({ url: result.data.url });
+      }
+    } else {
+      result = await sync.signInWithGoogle();
+    }
   } catch (error) {
     console.error("Google 로그인 처리 중 예외 발생:", error);
     const message = `Google 로그인 실패: ${error?.message || error}`;
@@ -105,4 +134,35 @@ export function wireAuthChange(ctx) {
       ctx.renderAll();
     }
   });
+}
+
+// Native-only: listens for the OAuth redirect deep link (Capacitor's
+// "appUrlOpen" event, fired when the system browser hands control back to
+// MainActivity via the custom-scheme intent-filter) and forwards matching
+// URLs to sync.handleAuthCallback so it can complete the PKCE code exchange.
+// A no-op on web, where the OAuth redirect is a normal page load handled by
+// supabase-js itself. `ctx` needs: sync.
+export function wireAuthCallback(ctx) {
+  if (!isNativePlatform()) {
+    return () => {};
+  }
+
+  const { sync } = ctx;
+  let listenerHandle;
+  App.addListener("appUrlOpen", async ({ url }) => {
+    if (!url || !url.startsWith(NATIVE_AUTH_CALLBACK_URL)) {
+      return;
+    }
+    try {
+      await sync.handleAuthCallback(url);
+    } catch (error) {
+      console.error("OAuth 콜백 처리 중 예외 발생:", error);
+    }
+  }).then(handle => {
+    listenerHandle = handle;
+  });
+
+  return () => {
+    listenerHandle?.remove();
+  };
 }

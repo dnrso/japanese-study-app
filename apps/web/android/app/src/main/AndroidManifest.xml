@@ -22,6 +22,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Supabase OAuth redirect deep link: io.github.dnrso.nihongostudy://auth-callback -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="io.github.dnrso.nihongostudy"
+                    android:host="auth-callback" />
+            </intent-filter>
+
         </activity>
 
         <provider

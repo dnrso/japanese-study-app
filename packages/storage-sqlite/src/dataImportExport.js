@@ -31,7 +31,9 @@ function createDataImportExport(deps) {
     toNumber,
     text,
     createId,
-    migrateParentLinks
+    migrateParentLinks,
+    safeJson,
+    allDailyEntryLinksMap
   } = deps;
   const { appDataDir, exportsDir, backupsDir, dbPath } = paths;
 
@@ -44,14 +46,45 @@ function allStudyDaysRaw() {
   `).all();
 }
 
+// Canonical exchange shape for dailyEntries: matches storage-idb's field set
+// exactly (structured `parsed` object, `parentTitle`, `sourceSentences`,
+// boolean `registered`) so backups round-trip losslessly between platforms.
+// `parsed`/`sourceSentences`/`parentTitle` are all derived here from sqlite's
+// own columns (parsed_json, parent_id join, daily_entry_links) rather than
+// stored directly, since sqlite recomputes them fresh on every read/export.
 function allDailyEntriesRaw() {
-  return getDb().prepare(`
-    SELECT id, study_date AS studyDate, parent_id AS parentId, kind, title, reading, meaning,
-      raw_text AS rawText, parsed_json AS parsedJson, registered,
-      created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
-    FROM daily_entries
-    ORDER BY study_date DESC, datetime(created_at) DESC
+  const rows = getDb().prepare(`
+    SELECT child.id, child.study_date AS studyDate, child.parent_id AS parentId,
+      parent.title AS parentTitle, child.kind, child.title, child.reading, child.meaning,
+      child.raw_text AS rawText, child.parsed_json AS parsedJson, child.registered,
+      child.created_at AS createdAt, child.updated_at AS updatedAt, child.deleted_at AS deletedAt
+    FROM daily_entries child
+    LEFT JOIN daily_entries parent ON parent.id = child.parent_id
+    ORDER BY child.study_date DESC, datetime(child.created_at) DESC
   `).all();
+
+  const linksMap = allDailyEntryLinksMap();
+  return rows.map(entry => {
+    const sourceSentences = linksMap.get(entry.id) || [];
+    const parentTitle = entry.parentTitle || (sourceSentences.length > 0 ? sourceSentences[0].title : "");
+    return {
+      id: entry.id,
+      studyDate: entry.studyDate,
+      parentId: entry.parentId,
+      parentTitle,
+      kind: entry.kind,
+      title: entry.title,
+      reading: entry.reading,
+      meaning: entry.meaning,
+      rawText: entry.rawText,
+      parsed: safeJson(entry.parsedJson),
+      registered: Boolean(entry.registered),
+      sourceSentences,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      deletedAt: entry.deletedAt
+    };
+  });
 }
 
 function allDailyEntryLinksRaw() {
@@ -65,7 +98,7 @@ function allDailyEntryLinksRaw() {
 
 function allTasksRaw() {
   return getDb().prepare(`
-    SELECT id, title, note, tag, done,
+    SELECT id, title, note, tag, done, study_date AS studyDate,
       created_at AS createdAt, updated_at AS updatedAt, deleted_at AS deletedAt
     FROM tasks
     ORDER BY datetime(created_at) DESC, rowid DESC
@@ -101,11 +134,15 @@ function exportData() {
     dailyEntries: state.dailyEntries
   }));
 
+  // dailyEntries and allDailyEntries intentionally share the same rows here,
+  // mirroring storage-idb's exportData() where both fields dump the entire
+  // store (not just the selected day).
+  const dailyEntriesExport = pruneStaleTombstones(allDailyEntriesRaw());
   const data = {
     selectedDate: state.selectedDate,
     studyDays: pruneStaleTombstones(allStudyDaysRaw()),
-    dailyEntries: pruneStaleTombstones(allDailyEntriesRaw()),
-    allDailyEntries: pruneStaleTombstones(allDailyEntriesRaw()),
+    dailyEntries: dailyEntriesExport,
+    allDailyEntries: dailyEntriesExport,
     dailyEntryLinks: pruneStaleTombstones(allDailyEntryLinksRaw()),
     tasks: pruneStaleTombstones(allTasksRaw()),
     items: pruneStaleTombstones(allItemsRaw())
@@ -162,8 +199,8 @@ function replaceBackup(backup) {
     VALUES (@id, @entryId, @sentenceId, @createdAt, @updatedAt, @deletedAt)
   `);
   const insertTask = getDb().prepare(`
-    INSERT INTO tasks (id, title, note, tag, done, deleted_at)
-    VALUES (@id, @title, @note, @tag, @done, @deletedAt)
+    INSERT INTO tasks (id, title, note, tag, done, study_date, deleted_at)
+    VALUES (@id, @title, @note, @tag, @done, @studyDate, @deletedAt)
   `);
   const insertItem = getDb().prepare(`
     INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at, last_reviewed_at, deleted_at)

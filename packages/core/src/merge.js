@@ -1,5 +1,5 @@
-// Pure backup-merge logic: no DOM, no storage access. Kept dependency-free so
-// it could later move to packages/core (not done in this pass).
+// Pure backup-merge logic: no DOM, no storage access. Dependency-free so it
+// can be shared between the web and desktop apps.
 
 export function parseBackupFile(text) {
   let backup;

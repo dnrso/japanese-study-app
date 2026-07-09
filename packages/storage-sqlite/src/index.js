@@ -85,6 +85,7 @@ function initDatabase() {
   ensureColumn("study_days", "created_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
   ensureColumn("study_days", "deleted_at", "TEXT");
   ensureColumn("tasks", "deleted_at", "TEXT");
+  ensureColumn("tasks", "study_date", "TEXT NOT NULL DEFAULT ''");
   db.exec("CREATE INDEX IF NOT EXISTS idx_daily_entries_parent ON daily_entries(parent_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_items_review_due_date ON items(review_due_date);");
   migrateReviewDueDates();
@@ -203,7 +204,7 @@ function getState(studyDate = todayKey()) {
   promoteDueReviews();
   const selectedDate = normalizeDate(studyDate);
   const studyLog = getStudyLog(selectedDate);
-  const tasks = db.prepare("SELECT id, title, note, tag, done FROM tasks WHERE deleted_at IS NULL ORDER BY datetime(created_at) DESC, rowid DESC").all()
+  const tasks = db.prepare("SELECT id, title, note, tag, done, study_date AS studyDate FROM tasks WHERE deleted_at IS NULL ORDER BY datetime(created_at) DESC, rowid DESC").all()
     .map(task => ({ ...task, done: Boolean(task.done) }));
   const items = db.prepare(`
     SELECT id, kind, title, reading, meaning, level, part, script, review,
@@ -262,6 +263,31 @@ function dailyEntryLinks(studyDate) {
       AND sentence.deleted_at IS NULL
     ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
   `).all(studyDate);
+
+  return rows.reduce((map, row) => {
+    if (!map.has(row.entryId)) {
+      map.set(row.entryId, []);
+    }
+    const links = map.get(row.entryId);
+    if (!links.some(link => sameSourceSentence(link, row))) {
+      links.push({ id: row.id, studyDate: row.studyDate, title: row.title });
+    }
+    return map;
+  }, new Map());
+}
+
+// Same shape as dailyEntryLinks(studyDate) but across every study date, for
+// use by exportData() when reconstructing the idb-shaped `sourceSentences`
+// field for the full entry set (not just one day's worth).
+function allDailyEntryLinksMap() {
+  const rows = db.prepare(`
+    SELECT DISTINCT link.entry_id AS entryId, sentence.id, sentence.study_date AS studyDate, sentence.title
+    FROM daily_entry_links link
+    JOIN daily_entries sentence ON sentence.id = link.sentence_id
+    WHERE link.deleted_at IS NULL
+      AND sentence.deleted_at IS NULL
+    ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
+  `).all();
 
   return rows.reduce((map, row) => {
     if (!map.has(row.entryId)) {
@@ -584,8 +610,8 @@ function registerDailyEntries(ids, studyDate) {
 
 function addTask(task) {
   db.prepare(`
-    INSERT INTO tasks (id, title, note, tag, done, deleted_at)
-    VALUES (@id, @title, @note, @tag, @done, @deletedAt)
+    INSERT INTO tasks (id, title, note, tag, done, study_date, deleted_at)
+    VALUES (@id, @title, @note, @tag, @done, @studyDate, @deletedAt)
   `).run(normalizeTask({ ...task, id: task.id || createId() }));
   return getState(task.studyDate);
 }
@@ -841,7 +867,14 @@ function ensureStudyDay(studyDate) {
   `).run(studyDate);
 }
 
+// Accepts either the canonical exchange shape (structured `parsed` object,
+// as emitted by storage-idb and by this module's own exportData) or the
+// legacy sqlite-only shape (`parsedJson`/`parsed_json` string), so backup
+// files written before this change keep importing correctly.
 function normalizeDailyEntry(entry) {
+  const parsedJson = entry.parsed && typeof entry.parsed === "object"
+    ? JSON.stringify(entry.parsed)
+    : text(entry.parsedJson || entry.parsed_json || "{}");
   return {
     id: text(entry.id || createId()),
     studyDate: normalizeDate(entry.studyDate || entry.study_date),
@@ -851,7 +884,7 @@ function normalizeDailyEntry(entry) {
     reading: text(entry.reading),
     meaning: text(entry.meaning),
     rawText: text(entry.rawText || entry.raw_text),
-    parsedJson: text(entry.parsedJson || entry.parsed_json || "{}"),
+    parsedJson,
     registered: entry.registered ? 1 : 0,
     deletedAt: normalizeDeletedAt(entry.deletedAt ?? entry.deleted_at)
   };
@@ -873,6 +906,7 @@ function normalizeTask(task) {
     note: text(task.note),
     tag: text(task.tag),
     done: task.done ? 1 : 0,
+    studyDate: normalizeDate(task.studyDate ?? task.study_date),
     deletedAt: normalizeDeletedAt(task.deletedAt ?? task.deleted_at)
   };
 }
@@ -974,7 +1008,9 @@ const importExport = createDataImportExport({
   toNumber,
   text,
   createId,
-  migrateParentLinks
+  migrateParentLinks,
+  safeJson,
+  allDailyEntryLinksMap
 });
 
 const { exportData, importCsvExports, importFullBackup } = importExport;

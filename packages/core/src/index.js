@@ -1,3 +1,5 @@
+export * from "./merge.js";
+
 const REVIEW_QUEUE_INTERVALS = {
   "내일": 1,
   "3일 후": 3,
