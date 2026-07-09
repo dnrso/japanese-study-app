@@ -191,6 +191,16 @@
     height: 40px;
   }
 
+  /* 오늘의 문장 refresh button stays 24x24 on mobile too, explicitly
+     restated here for clarity even though the id selector in pages.css
+     already outranks the .icon-btn class rules above on specificity
+     (id > class) regardless of source order or this media query. */
+  #homeSentenceRefreshBtn {
+    min-height: 24px;
+    width: 24px;
+    height: 24px;
+  }
+
   /* Card delete/edit/review actions (daily-entry cards, study cards) stay
      compact on mobile instead of being bumped to the 40px generic touch
      target above - a small secondary/destructive action reads better at
