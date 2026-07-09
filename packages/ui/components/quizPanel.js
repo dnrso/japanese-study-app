@@ -1,21 +1,24 @@
+import { badgeClassByKind } from "../config.js";
+
 export function quizPanel({ quiz, badge, promptText, promptHtml, choiceAttribute, nextAttribute }, helpers) {
   if (!quiz.question) {
     return { hidden: true, html: "" };
   }
 
   const { item, choices } = quiz.question;
+  const score = quiz.score || { correct: Number(item.quizCorrectCount || 0), wrong: Number(item.quizWrongCount || 0) };
   return {
     hidden: false,
     html: `
       <div class="word-quiz-question">
         <div>
-          <span class="badge ${item.kind === "kanji" ? "yellow" : "red"}">${badge}</span>
+          <span class="badge ${badgeClassByKind[item.kind] || "red"}">${badge}</span>
           <p class="word-quiz-prompt-label">${promptText(quiz.question)}</p>
-          ${promptHtml(quiz.question)}
+          ${promptHtml(quiz.question, quiz)}
         </div>
         <div class="word-quiz-score">
-          <span>정답 ${Number(item.quizCorrectCount || 0)}</span>
-          <span>오답 ${Number(item.quizWrongCount || 0)}</span>
+          <span>정답 ${score.correct}</span>
+          <span>오답 ${score.wrong}</span>
         </div>
       </div>
       <div class="word-quiz-choices">

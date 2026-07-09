@@ -202,6 +202,45 @@ export function buildQuizQuestion({
   };
 }
 
+// Sentence quiz question builder. Unlike buildQuizQuestion, `entries` are
+// daily-entry-shaped sentence records (title = 원문, meaning = 해석), not
+// review items, so there is no quizCorrectCount weighting and answering a
+// sentence question never touches SRS/review state.
+export function buildSentenceQuizQuestion({
+  entries = [],
+  mode = "meaning",
+  random = Math.random,
+  excludeItemId = ""
+} = {}) {
+  const candidates = entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
+  const answerType = mode === "listen" ? "title" : "meaning";
+  const uniqueAnswers = [...new Set(candidates.map(entry => entry[answerType]))];
+  if (candidates.length < 4 || uniqueAnswers.length < 4) {
+    return null;
+  }
+
+  const pool = excludeItemId ? candidates.filter(entry => entry.id !== excludeItemId) : candidates;
+  const item = randomItem(pool.length ? pool : candidates, random);
+  const correctAnswer = item[answerType];
+  const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
+    .map(candidate => candidate[answerType])
+    .filter((answer, index, list) => answer && list.indexOf(answer) === index)
+    .slice(0, 3);
+
+  if (distractors.length < 3) {
+    return null;
+  }
+
+  return {
+    item,
+    kind: "sentence",
+    mode,
+    answerType,
+    correctAnswer,
+    choices: shuffle([correctAnswer, ...distractors], random)
+  };
+}
+
 export function reviewItems(items = [], searchTerm = "") {
   return items.filter(item => isReviewQueueItem(item) && matchesSearch(item, searchTerm));
 }

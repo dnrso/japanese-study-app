@@ -337,10 +337,13 @@ export function quizPageTemplate() {
             </div>
             <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="kanji">시작</button>
           </article>
+          <button class="quiz-card" type="button" data-quiz-kind="sentence-meaning"><span class="badge purple">문장</span><strong>문장 뜻 고르기</strong><span>4지선다</span></button>
+          <button class="quiz-card" type="button" data-quiz-kind="sentence-listen"><span class="badge purple">문장</span><strong>듣고 문장 고르기</strong><span>4지선다</span></button>
         </div>
         <p class="muted quiz-status" id="quizStatus">샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.</p>
         <div class="word-quiz-panel" id="wordQuizPanel" hidden></div>
         <div class="word-quiz-panel kanji-quiz-panel" id="kanjiQuizPanel" hidden></div>
+        <div class="word-quiz-panel sentence-quiz-panel" id="sentenceQuizPanel" hidden></div>
       </section>
     </section>
   `;

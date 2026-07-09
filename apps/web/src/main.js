@@ -15,6 +15,7 @@ import {
   renderQuickFiltersPage,
   renderQuizSettingsPage,
   renderReviewPage,
+  renderSentenceQuizPage,
   renderSentencesPage,
   safeSourceUrl,
   renderSourcesPage,
@@ -32,7 +33,15 @@ import {
 } from "@nihongo-study/ui";
 import { createSampleState } from "./sampleState.js";
 import { escapeHtml, renderAppShell } from "./templates.js";
-import { emptyQuiz, startQuiz as startQuizSession, exitQuizSession as exitQuizSessionImpl, submitQuizChoice as submitQuizChoiceImpl } from "./quiz.js";
+import {
+  emptyQuiz,
+  emptySentenceQuiz,
+  startQuiz as startQuizSession,
+  startSentenceQuiz as startSentenceQuizSession,
+  exitQuizSession as exitQuizSessionImpl,
+  submitQuizChoice as submitQuizChoiceImpl,
+  submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
+} from "./quiz.js";
 import {
   createSync,
   renderAccountStatus as renderAccountStatusImpl,
@@ -69,6 +78,7 @@ let wordQuizMode = "random";
 let kanjiQuizMode = "random";
 let wordQuiz = emptyQuiz();
 let kanjiQuiz = emptyQuiz();
+let sentenceQuiz = emptySentenceQuiz();
 let reviewQueueDrafts = new Map();
 let quizQuestionFontSize = 32;
 let quizReviewOnCorrect = true;
@@ -209,6 +219,12 @@ function bindEvents() {
       return;
     }
 
+    const sentenceChoice = event.target.closest("[data-sentence-quiz-choice]");
+    if (sentenceChoice && sentenceQuiz.question && !sentenceQuiz.answered) {
+      submitSentenceQuizChoiceImpl(sentenceChoice.dataset.sentenceQuizChoice, quizCtx());
+      return;
+    }
+
     if (event.target.closest("[data-next-word-quiz]")) {
       startQuiz("word");
       return;
@@ -216,6 +232,11 @@ function bindEvents() {
 
     if (event.target.closest("[data-next-kanji-quiz]")) {
       startQuiz("kanji");
+      return;
+    }
+
+    if (event.target.closest("[data-next-sentence-quiz]")) {
+      startSentenceQuizSession(sentenceQuiz.question?.mode || "meaning", quizCtx());
     }
   });
 
@@ -351,6 +372,7 @@ function renderAll() {
   renderKanji();
   renderWordQuiz();
   renderKanjiQuiz();
+  renderSentenceQuiz();
   renderReview();
   renderStats();
   renderTaxonomy();
@@ -508,13 +530,21 @@ function renderKanjiQuiz() {
   updateQuizSessionView();
 }
 
+function renderSentenceQuiz() {
+  applyPagePatch(renderSentenceQuizPage({
+    quiz: sentenceQuiz,
+    helpers: renderHelpers()
+  }));
+  updateQuizSessionView();
+}
+
 function updateQuizSessionView() {
   const grid = byId("quizSelectGrid");
   const exitBtn = byId("quizExitBtn");
   if (!grid || !exitBtn) {
     return;
   }
-  const sessionActive = Boolean(wordQuiz.question || kanjiQuiz.question);
+  const sessionActive = Boolean(wordQuiz.question || kanjiQuiz.question || sentenceQuiz.question);
   grid.hidden = sessionActive;
   exitBtn.hidden = !sessionActive;
 }
@@ -997,6 +1027,10 @@ async function cycleReview(id) {
 }
 
 function startQuiz(kind) {
+  if (kind === "sentence-meaning" || kind === "sentence-listen") {
+    startSentenceQuizSession(kind === "sentence-listen" ? "listen" : "meaning", quizCtx());
+    return;
+  }
   startQuizSession(kind, quizCtx());
 }
 
@@ -1277,8 +1311,12 @@ function quizCtx() {
     setWordQuiz: nextQuiz => { wordQuiz = nextQuiz; },
     getKanjiQuiz: () => kanjiQuiz,
     setKanjiQuiz: nextQuiz => { kanjiQuiz = nextQuiz; },
+    getSentenceQuiz: () => sentenceQuiz,
+    setSentenceQuiz: nextQuiz => { sentenceQuiz = nextQuiz; },
+    speak,
     renderWordQuiz,
     renderKanjiQuiz,
+    renderSentenceQuiz,
     renderStats,
     renderQuickFilters
   };

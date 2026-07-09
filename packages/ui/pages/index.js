@@ -5,7 +5,7 @@ export { renderSentencesPage } from "./sentences.js";
 export { renderTaxonomyPage, renderWordsPage } from "./words.js";
 export { renderStudyCardsPage } from "./studyCards.js";
 export { renderKanjiPage } from "./kanji.js";
-export { renderKanjiQuizPage, renderWordQuizPage } from "./quiz.js";
+export { renderKanjiQuizPage, renderSentenceQuizPage, renderWordQuizPage } from "./quiz.js";
 export { renderReviewPage } from "./review.js";
 export { renderStatsPage } from "./stats.js";
 export { renderQuizSettingsPage, renderStoragePathsPage } from "./settings.js";
