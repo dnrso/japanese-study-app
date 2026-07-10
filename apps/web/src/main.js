@@ -63,7 +63,11 @@ const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
 
 const aiSentenceAnalysisPlaceholder = "한국어 또는 일본어 문장을 입력하세요 *AI 문장 분석 사용";
-const aiSentenceAnalysisMaxLength = 300;
+// core.AI_ANALYSIS_LIMITS is the single client-reachable copy of the
+// server-enforced AI usage limits (rate/day/length) - reused here instead
+// of a separate literal so this and the checkbox's limits message can't
+// drift apart.
+const aiSentenceAnalysisMaxLength = core.AI_ANALYSIS_LIMITS.maxChars;
 const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 주세요.";
 
 // Client-side pagination: per-view page sizes default to
@@ -394,7 +398,14 @@ function bindEvents() {
     aiSentenceAnalysisEnabled = event.target.checked;
     updateDailyEntryPlaceholder();
     updateDailyEntryMaxLength();
-    setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled ? "AI 문장 분석이 켜졌습니다." : "");
+    // The "click" handler above already blocks turning this on without a
+    // session (it prevents the checkbox from ever reaching `checked` in
+    // that case), but the accountSession check is kept here too so this
+    // info line only ever appears when the toggle is actually on and
+    // allowed - not e.g. from a stray "change" event. This message is only
+    // set at toggle-on time; per-request status updates (분석 중/오류/etc.
+    // in addDailyEntryFromInput) take over during submission as before.
+    setAiSentenceAnalysisStatus(aiSentenceAnalysisEnabled && accountSession ? aiAnalysisLimitsMessage() : "");
   });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
   byId("registerLearnedBtn").addEventListener("click", registerLearnedEntries);
@@ -1044,6 +1055,11 @@ function setAiSentenceAnalysisStatus(message) {
   if (element) {
     element.textContent = message;
   }
+}
+
+function aiAnalysisLimitsMessage() {
+  const { perMinute, perDay, maxChars } = core.AI_ANALYSIS_LIMITS;
+  return `AI 문장 분석 사용 중 — 제한: 분당 ${perMinute}회 · 하루 ${perDay}회 · 최대 ${maxChars}자`;
 }
 
 async function addManualEntryFromInput() {

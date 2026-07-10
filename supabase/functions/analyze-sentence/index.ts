@@ -6,6 +6,11 @@ import {
 } from "../_shared/ai.js";
 
 // Rate limit constants: 1 request/minute and 100 requests/day per user.
+// These are the values actually ENFORCED (server-side, source of truth).
+// packages/core/src/index.js's AI_ANALYSIS_LIMITS is a display-only copy
+// shown next to the client's AI 문장 분석 checkbox - keep both in sync by
+// hand if these ever change (this function can't import from that
+// workspace package at runtime).
 const RATE_LIMIT_PER_MINUTE_MS = 60_000;
 const DAILY_LIMIT = 100;
 

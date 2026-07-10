@@ -1,6 +1,10 @@
 export const defaultGeminiModel = "gemini-3.1-flash-lite";
 export const geminiInteractionsEndpoint = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
+// Enforced input length cap (source of truth, copied verbatim into
+// supabase/functions/_shared/ai.js for the edge function). packages/core's
+// AI_ANALYSIS_LIMITS.maxChars is a display-only copy shown next to the
+// client's AI 문장 분석 checkbox - keep all three in sync by hand.
 export const maxSentenceLength = 300;
 
 export const aiSentenceAnalysisMessages = Object.freeze({
