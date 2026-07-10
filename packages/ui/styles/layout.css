@@ -177,7 +177,12 @@
 
 /* Temporary mobile-only ad placeholder slot (see mobile.css for the
    ≤768px layout that shows it between the stacked main content and
-   sidebar/TOC). Hidden by default on desktop/tablet widths. */
+   sidebar/TOC, gated behind .mobile-ad-slot--enabled). This unconditional
+   `display: none` is what keeps the slot fully hidden at every width -
+   including on mobile - unless apps/web/src/main.js adds the --enabled
+   class (only when VITE_SHOW_AD_PLACEHOLDER=true was set at build time).
+   Release builds ship this element in the markup but never make it
+   visible. */
 .mobile-ad-slot {
   display: none;
 }

@@ -1518,8 +1518,34 @@ function syncCtx() {
   };
 }
 
+// Build-time gate for the temporary #mobileAdSlot placeholder (see
+// packages/ui/styles/mobile.css / layout.css) - the element always ships
+// in the shell markup, but mobile.css only shows it for
+// .mobile-ad-slot--enabled, and that class is only added here when
+// VITE_SHOW_AD_PLACEHOLDER=true was set at build time. Absent/false (the
+// default, and every release build unless explicitly opted in) leaves the
+// slot with layout.css's unconditional `display: none`, i.e. completely
+// hidden at every width. Guards access to import.meta.env the same way
+// packages/sync/src/config.js's readEnv() does, so this stays safe to call
+// in any environment (tests, SSR, etc.) that doesn't define import.meta.env.
+function showAdPlaceholderEnabled() {
+  try {
+    if (typeof import.meta !== "undefined" && import.meta.env) {
+      return String(import.meta.env.VITE_SHOW_AD_PLACEHOLDER || "").trim().toLowerCase() === "true";
+    }
+  } catch {
+    // ignore - fall through to disabled
+  }
+  return false;
+}
+
+function applyMobileAdSlotVisibility() {
+  byId("mobileAdSlot")?.classList.toggle("mobile-ad-slot--enabled", showAdPlaceholderEnabled());
+}
+
 async function start() {
   renderAppShell(byId);
+  applyMobileAdSlotVisibility();
   bindEvents();
   try {
     await store.initDatabase();
