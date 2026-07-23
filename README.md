@@ -49,6 +49,53 @@ npm.cmd run web:preview
 의존성을 추가하거나 workspace 패키지를 새로 추가하는 경우에만 `package-lock.json`을 함께 갱신합니다.
 
 
+안드로이드 앱 빌드
+-----------------
+
+`apps/web`은 Capacitor로 감싸 안드로이드 네이티브 앱으로 빌드합니다. 네이티브 프로젝트는 `apps/web/android/`에 있습니다.
+
+### 사전 준비
+
+- Android Studio (최신 stable) — Android SDK, Platform Tools 포함
+- JDK 21
+- Gradle/AGP는 프로젝트에 고정되어 있어 별도 설치 불필요 (Gradle 8.14.3, AGP 8.13.0, wrapper가 자동 다운로드)
+- `compileSdk`/`targetSdk` 36, `minSdk` 24 (`apps/web/android/variables.gradle`)
+
+### 환경변수 설정 (빌드 전 필수)
+
+Supabase 연동(`packages/sync`)을 쓰려면 `apps/web/.env`를 만들고 `apps/web/.env.example`을 참고해 값을 채웁니다.
+
+```
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+```
+
+Vite는 빌드 시점에 이 값을 번들에 굽습니다. 안드로이드 앱은 **빌드할 때 사용한 값으로 고정**되므로, 값을 바꾸면 웹 빌드부터 다시 해야 합니다.
+
+### 빌드 & 동기화
+
+```powershell
+npm.cmd install
+npm.cmd run web:build
+npm.cmd --workspace @nihongo-study/web run cap:sync
+```
+
+`cap:sync`는 `apps/web/dist`(Vite 빌드 결과물)를 `android/app/src/main/assets/public`으로 복사하고 Capacitor 플러그인을 안드로이드 프로젝트에 반영합니다. 웹 코드를 고칠 때마다 `web:build` → `cap:sync` 순서를 다시 실행해야 합니다(핫리로드 없음).
+
+### Android Studio에서 실행
+
+```powershell
+npm.cmd --workspace @nihongo-study/web run cap:open
+```
+
+또는 Android Studio에서 `apps/web/android` 폴더를 직접 엽니다. 최초로 열면 `local.properties`가 자동 생성되어 로컬 SDK 경로(`sdk.dir`)가 채워집니다(gitignore 처리, 커밋되지 않음). 이후 에뮬레이터나 USB 디버깅 기기를 연결해 Run 하면 됩니다.
+
+### 참고
+
+- `google-services.json`은 선택 사항입니다. 없어도 정상 빌드되며, 있으면 Google Services 플러그인이 자동 적용됩니다(현재 Push Notifications 등 관련 기능은 미사용이라 불필요).
+- 현재 release 빌드 타입에는 서명 설정(signingConfig)이 없어 **서명되지 않은 빌드**입니다. 배포용 서명 빌드가 필요해지면 keystore 생성과 signingConfig 추가가 별도로 필요합니다(`*.keystore`/`*.jks`는 이미 `.gitignore`에 등록되어 있음).
+
+
 프로젝트 구조
 -------------
 
@@ -102,6 +149,7 @@ Vanilla JS + Vite 웹 앱입니다.
 - `src/sampleState.js`: 최초 IndexedDB 초기화용 샘플 데이터
 - `vite.config.js`: GitHub Pages 호환을 위해 `base: "./"` 사용
 - `dist/`: `npm run web:build` 산출물
+- `android/`: Capacitor 안드로이드 네이티브 프로젝트 (Android Studio로 열어 빌드)
 
 웹 앱은 `packages/core`, `packages/ui`, `packages/storage-idb`, `packages/ai`를 사용합니다. 현재는 브라우저 IndexedDB에 데이터를 저장하며, GitHub Pages 배포 workflow는 `apps/web/dist`를 업로드합니다.
 
@@ -286,9 +334,7 @@ GitHub Pages 배포
 확장 후보
 ---------
 
-- `apps/android` 추가
-- `packages/storage-cloud` 추가
-- AI 기능을 재도입할 경우 서버/클라우드 함수로 호출을 프록시해 브라우저 API 키 저장을 피하기
+- 안드로이드 릴리스 서명(signingConfig) 및 스토어 배포 파이프라인 구성
 - 문법/표현 퀴즈 구현
 - SRS 알고리즘 고도화
 - 중복 항목 처리 UI 개선
