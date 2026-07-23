@@ -986,7 +986,7 @@ async function addDailyEntryFromInput() {
   }
   if (aiSentenceAnalysisEnabled) {
     if (!accountSession) {
-      setAiSentenceAnalysisStatus("로그인 유저만 사용 가능합니다.");
+      setAiSentenceAnalysisStatus("로그인 유저만 사용 가능합니다. (설정탭)");
       return;
     }
     if (rawInput.length > aiSentenceAnalysisMaxLength) {
