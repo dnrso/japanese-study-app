@@ -1,5 +1,22 @@
 export * from "./merge.js";
 
+// Display-only copy of the AI 문장 분석 usage limits, for the client to show
+// alongside the AI checkbox (see apps/web/src/main.js). The limits are
+// actually ENFORCED server-side and are NOT read from here at runtime -
+// keep these three numbers in sync by hand with:
+//   - supabase/functions/analyze-sentence/index.ts's RATE_LIMIT_PER_MINUTE_MS
+//     (60_000ms = 1/min) and DAILY_LIMIT (100)
+//   - supabase/functions/_shared/ai.js / packages/ai/src/index.js's
+//     maxSentenceLength (300)
+// The edge function can't import from this workspace package at runtime
+// (it's a separately-deployed Deno function), so a cross-reference comment
+// here and at each of those constants is the honest sync mechanism.
+export const AI_ANALYSIS_LIMITS = {
+  perMinute: 1,
+  perDay: 100,
+  maxChars: 300
+};
+
 const REVIEW_QUEUE_INTERVALS = {
   "내일": 1,
   "3일 후": 3,
