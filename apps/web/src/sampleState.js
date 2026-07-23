@@ -29,9 +29,9 @@ export function createSampleState(todayKey) {
       {
         id: "sentence-onboarding",
         kind: "sentence",
-        title: "오늘 공부 탭에서 공부할 문장 추가를 하고 등록해주세요",
-        reading: "",
-        meaning: "위 입력창에 예시 구조로 문장을 붙여넣으면 단어장까지 자동 정리됩니다.",
+        title: "「今日の勉強」タブから、勉強する文章を追加して登録してください。",
+        reading: "「きょうのべんきょう」タブから、べんきょうするぶんしょうをついかしてとうろくしてください。",
+        meaning: "오늘 공부 탭에서 공부할 문장 추가를 하고 등록해주세요",
         studyDate: today
       }
     ],
