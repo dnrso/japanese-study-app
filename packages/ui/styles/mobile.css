@@ -92,8 +92,14 @@
 
   /* Temporary horizontal ad placeholder, shown only on mobile, sitting
      between the stacked .main (order: 1) and .sidebar (order: 3) via the
-     same `order` mechanism used for the rest of the stacked layout. */
-  .mobile-ad-slot {
+     same `order` mechanism used for the rest of the stacked layout.
+     Gated behind .mobile-ad-slot--enabled (added by apps/web/src/main.js
+     only when VITE_SHOW_AD_PLACEHOLDER=true was set at build time) so
+     release builds keep the element in the shell markup but it stays
+     hidden - layout.css's unconditional `.mobile-ad-slot { display: none }`
+     applies at every width unless this more specific enabled selector
+     matches. */
+  .mobile-ad-slot.mobile-ad-slot--enabled {
     order: 2;
     display: flex;
     align-items: center;
