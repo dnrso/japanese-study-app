@@ -11,6 +11,7 @@ on:
       - "packages/ui/**"
       - "packages/ai/**"
       - "packages/storage-idb/**"
+      - "packages/sync/**"
       - ".github/workflows/static.yml"
       - "package*.json"
 
