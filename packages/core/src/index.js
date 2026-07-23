@@ -48,21 +48,48 @@ export function clampQuizQuestionFontSize(value) {
 // hasValidSentenceBlockStructure: the raw text must open with a "# "
 // heading line and contain at least a 읽기 line and a 해석 line. Used to
 // reject conversational AI replies (no structured block) before they are
-// ever saved as a sentence card.
-export function hasValidSentenceBlockStructure(rawText) {
+// ever saved as a sentence card, and (via diagnoseSentenceBlockStructure)
+// to tell a user manually typing a block which part they're missing.
+//
+// diagnoseSentenceBlockStructure is the source of truth for both checks -
+// hasValidSentenceBlockStructure is implemented in terms of it so the two
+// can't drift apart.
+export function diagnoseSentenceBlockStructure(rawText) {
   const lines = String(rawText || "")
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean);
-  if (!lines.length) {
-    return false;
+  const missing = [];
+  if (!lines.length || !lines[0].startsWith("# ")) {
+    missing.push("원문(#으로 시작)");
   }
-  if (!lines[0].startsWith("# ")) {
-    return false;
+  if (!lines.some(line => line.startsWith("읽기"))) {
+    missing.push("읽기");
   }
-  const hasReading = lines.some(line => line.startsWith("읽기"));
-  const hasMeaning = lines.some(line => line.startsWith("해석"));
-  return hasReading && hasMeaning;
+  if (!lines.some(line => line.startsWith("해석"))) {
+    missing.push("해석");
+  }
+  return { valid: missing.length === 0, missing };
+}
+
+export function hasValidSentenceBlockStructure(rawText) {
+  return diagnoseSentenceBlockStructure(rawText).valid;
+}
+
+// Lenient pre-check used only to decide whether the manual 문장 추가 flow
+// should bother validating at all: parseSentenceBlock (packages/storage-idb)
+// happily accepts plain single-line/free text with no "#"/읽기/해석 markers
+// at all - it just becomes a sentence card titled with that text and empty
+// reading/meaning. That's a legitimate, long-standing quick-entry style and
+// must not be rejected. Only text that actually looks like an attempted
+// structured block (a "#" heading line, or a 읽기/해석 line) is worth
+// diagnosing/blocking on save.
+export function looksLikeSentenceBlockAttempt(rawText) {
+  const lines = String(rawText || "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  return lines.some(line => line.startsWith("#") || line.startsWith("읽기") || line.startsWith("해석"));
 }
 
 export function resolveQuizCorrectReview(value, scheduledReviewOptions) {

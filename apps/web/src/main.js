@@ -970,6 +970,20 @@ async function addDailyEntryFromInput() {
   }
 
   let rawText = rawInput;
+  if (!aiSentenceAnalysisEnabled && core.looksLikeSentenceBlockAttempt(rawInput)) {
+    // Only gate text that actually looks like an attempted structured
+    // block (a "#" line, or a 읽기/해석 line) - plain single-line free text
+    // is a legitimate existing quick-entry style handled fine by
+    // parseSentenceBlock (see core.looksLikeSentenceBlockAttempt) and must
+    // keep saving as before. The AI path is validated separately below
+    // (server + core.hasValidSentenceBlockStructure on the AI's own
+    // output), so this only runs for the manual/non-AI path.
+    const diagnosis = core.diagnoseSentenceBlockStructure(rawInput);
+    if (!diagnosis.valid) {
+      setAiSentenceAnalysisStatus(`문장 형식이 올바르지 않습니다. 누락: ${diagnosis.missing.join(", ")}`);
+      return;
+    }
+  }
   if (aiSentenceAnalysisEnabled) {
     if (!accountSession) {
       setAiSentenceAnalysisStatus("로그인 유저만 사용 가능합니다.");
