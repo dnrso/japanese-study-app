@@ -13,6 +13,9 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Local source icon (not versioned; only the generated Android mipmaps are)
+/appicon.png
+
 # Claude Code local project config (not synced to GitHub)
 .claude/
 
