@@ -1,4 +1,4 @@
-export const defaultGeminiModel = "gemini-3.1-flash-lite";
+export const defaultGeminiModel = "gemini-3.5-flash-lite";
 export const geminiInteractionsEndpoint = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
 // Enforced input length cap (source of truth, copied verbatim into
