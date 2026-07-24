@@ -1,6 +1,8 @@
 import "@nihongo-study/ui/styles";
 import * as core from "@nihongo-study/core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
+import { Capacitor } from "@capacitor/core";
+import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import {
   applyPagePatch as applySharedPagePatch,
   badgeClassByKind,
@@ -1390,12 +1392,47 @@ function jumpToSentence(id, sourceDate) {
   }, 0);
 }
 
+// Same technique as syncSetup.js's isNativePlatform() (used there for the
+// Google login flow): Capacitor.isNativePlatform() is true only inside the
+// Android app shell, never in a regular browser tab.
+function isNativePlatform() {
+  return Boolean(Capacitor?.isNativePlatform?.());
+}
+
+// Root cause of TTS silently doing nothing in the Android app: the system
+// WebView Capacitor runs in doesn't implement the Web Speech synthesis API
+// (window.speechSynthesis is undefined there), so the browser branch below
+// was always a no-op on native. Native builds now go through the
+// @capacitor-community/text-to-speech plugin instead, which wraps each
+// platform's real TTS engine (Android TextToSpeech / iOS AVSpeechSynthesizer).
+//
+// Every current caller ([data-speak-text] click delegation below, and the
+// sentence quiz's listen-mode auto-play via quizCtx().speak) only ever
+// passes a word/sentence/grammar/expression *title* - see the speakerButton()
+// call sites in packages/ui/pages - which is always Japanese in this app's
+// data model (only reading/meaning fields ever hold hiragana/Korean text,
+// and neither is ever spoken). So a single hardcoded "ja-JP" is correct for
+// every call site; there is no Korean text path through speak().
 function speak(text) {
-  if (!window.speechSynthesis || !text) {
+  const targetText = String(text || "").trim();
+  if (!targetText) {
+    return;
+  }
+
+  if (isNativePlatform()) {
+    TextToSpeech.speak({ text: targetText, lang: "ja-JP", rate: 0.95 }).catch(error => {
+      // e.g. no TTS engine or no Japanese voice installed on the device -
+      // degrade to silence instead of crashing the UI.
+      console.warn("네이티브 TTS 재생에 실패했습니다:", error);
+    });
+    return;
+  }
+
+  if (!window.speechSynthesis) {
     return;
   }
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(targetText);
   utterance.lang = "ja-JP";
   window.speechSynthesis.speak(utterance);
 }
