@@ -16,6 +16,7 @@
     "web:preview": "npm --workspace @nihongo-study/web run preview --",
     "android:sync": "npm run web:build && npm --workspace @nihongo-study/web run cap:sync",
     "android:open": "npm --workspace @nihongo-study/web run cap:open",
+    "sync:ai": "node scripts/sync-ai.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
