@@ -2,45 +2,21 @@
 //
 // ABI CAVEAT: better-sqlite3 in this repo may be compiled against Electron's
 // NODE_MODULE_VERSION (the desktop app rebuilds it via electron-rebuild),
-// which will not load under a plain Node runtime. We attempt to load the
-// native binding at module init; if it doesn't match this Node ABI, the
-// whole suite is skipped with a console.warn explaining how to fix it
-// locally (npm rebuild better-sqlite3). CI runs a fresh `npm ci`, which
-// builds the native addon for plain Node, so it should run there.
+// which will not load under a plain Node runtime. loadSqliteAdapter() probes
+// the native binding; describeStorageSuite() then skips this suite in LOCAL
+// dev only (with a console.warn explaining `npm rebuild better-sqlite3`) and
+// turns the same situation into a HARD FAILURE when CI is set - a silent
+// describe.skip here used to make these 12 tests vanish while CI stayed green.
 import { describe, it, expect, afterAll } from "vitest";
-import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import YAML from "yaml";
 import "fake-indexeddb/auto";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
+import { loadSqliteAdapter, describeStorageSuite } from "./helpers/storage-adapters.js";
 
-const require = createRequire(import.meta.url);
-
-let Database;
-let createSqliteStorage;
-let abiError = null;
-
-try {
-  Database = require("better-sqlite3");
-  const probe = new Database(":memory:");
-  probe.close();
-  ({ createSqliteStorage } = require("../packages/storage-sqlite/src/index.js"));
-} catch (error) {
-  abiError = error;
-}
-
-if (abiError) {
-  console.warn(
-    "[storage-sqlite.test.js] Skipping suite: better-sqlite3 native binding does not match " +
-    "this Node ABI (likely built for Electron instead of plain Node). Run " +
-    "`npm rebuild better-sqlite3` to run this suite locally. Original error: " +
-    abiError.message
-  );
-}
-
-const describeMaybe = abiError ? describe.skip : describe;
+const { Database, createSqliteStorage, loadError: abiError } = loadSqliteAdapter();
 
 const tmpDirs = [];
 function tmpDataDir(suffix) {
@@ -64,7 +40,7 @@ afterAll(() => {
   }
 });
 
-describeMaybe("storage-sqlite (better-sqlite3, temp DBs)", () => {
+describeStorageSuite("storage-sqlite (better-sqlite3, temp DBs)", abiError, () => {
   const studyDate = "2026-07-06";
   let dir1;
   let store1;
