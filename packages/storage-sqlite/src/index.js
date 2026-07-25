@@ -955,9 +955,16 @@ function normalizeOptionalDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : "";
 }
 
+// An empty review is meaningful and must stay empty: source items carry
+// review "" by design, and the quiz's "변경 안 함" option sends "" to mean
+// "leave the review untouched" (see submitWordQuizAnswer's `&& nextReview`
+// guard). Only non-empty unknown values fall back to "대기".
 function normalizeReview(value) {
   const review = text(value);
-  return reviewStates.includes(review) ? review : review;
+  if (!review) {
+    return "";
+  }
+  return reviewStates.includes(review) ? review : "대기";
 }
 
 function reviewDueDateFor(review, baseDate = todayKey()) {

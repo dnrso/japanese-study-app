@@ -333,6 +333,41 @@ describeMaybe("storage-sqlite (better-sqlite3, temp DBs)", () => {
     expect(exportedTask?.studyDate).toBe(studyDate);
   });
 
+  it("Case8b: an unknown review string is never persisted as-is (falls back to 대기, empty stays empty)", () => {
+    const dir = tmpDataDir("invalid-review");
+    const store = createSqliteStorage({ appDataDir: dir });
+    store.initDatabase();
+
+    const state = store.upsertItem({
+      kind: "word",
+      title: "잘못된복습",
+      reading: "",
+      meaning: "bad review value",
+      review: "존재하지않는상태",
+      studyDate
+    });
+    const item = state.items.find(candidate => candidate.title === "잘못된복습");
+    expect(item).toBeTruthy();
+    expect(item.review).not.toBe("존재하지않는상태");
+    expect(item.review).toBe("대기");
+
+    // The raw column must not contain the garbage value either.
+    const rawDb = new Database(path.join(dir, "nihongo.sqlite"));
+    const rawItem = rawDb.prepare("SELECT review FROM items WHERE id = ?").get(item.id);
+    rawDb.close();
+    expect(rawItem.review).toBe("대기");
+
+    // updateItemReview shares the same normalizer.
+    const updated = store.updateItemReview(item.id, "완전히다른값", studyDate);
+    expect(updated.items.find(candidate => candidate.id === item.id)?.review).toBe("대기");
+
+    // Empty must stay empty: source items rely on it (as does the quiz's
+    // "변경 안 함" option, which sends "" to mean "leave the review alone").
+    const sourceState = store.upsertItem({ kind: "source", title: "출처자료", meaning: "", studyDate });
+    const sourceItem = sourceState.items.find(candidate => candidate.title === "출처자료");
+    expect(sourceItem?.review).toBe("");
+  });
+
   it("Case9: round-trip - idb exportData -> sqlite importFullBackup -> sqlite exportData preserves parsed structure, sourceSentences, and tasks.studyDate", async () => {
     const dbName = `sqlite-parity-idb-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const idbStore = createIdbStorage({ dbName });

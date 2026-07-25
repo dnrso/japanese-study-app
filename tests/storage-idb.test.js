@@ -10,6 +10,14 @@ import { createIdbStorage } from "@nihongo-study/storage-idb";
 
 const studyDate = "2026-07-06";
 
+function todayKey() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 describe("storage-idb (fake-indexeddb)", () => {
   let dbName;
 
@@ -98,6 +106,54 @@ describe("storage-idb (fake-indexeddb)", () => {
     const exportedItems = await storage4.exportData();
     const exportedItem = exportedItems.data.items.find(candidate => candidate.id === item.id);
     expect(exportedItem?.deletedAt).toBeTruthy();
+  });
+
+  it("schedules review due dates from today, not from a past studyDate being browsed", async () => {
+    const storage = createIdbStorage({ dbName });
+    await storage.initDatabase();
+
+    // The user is browsing an old study day; anything scheduled now must
+    // still land in the future, otherwise promoteDueReviews() (which runs on
+    // every getState) instantly flips it back to "오늘".
+    const pastDate = "2020-01-05";
+    const today = todayKey();
+
+    const upserted = await storage.upsertItem({
+      kind: "word",
+      title: "과거복습",
+      reading: "",
+      meaning: "past study date",
+      studyDate: pastDate
+    });
+    const item = upserted.items.find(candidate => candidate.title === "과거복습");
+    expect(item).toBeTruthy();
+
+    // Cycling the review (word list "복습" button) while a past date is active.
+    const afterCycle = await storage.updateItemReview(item.id, "한달", pastDate);
+    const cycled = afterCycle.items.find(candidate => candidate.id === item.id);
+    expect(cycled.review).toBe("한달");
+    expect(cycled.reviewDueDate > today).toBe(true);
+
+    // Completing a review from the review queue, same situation.
+    const afterComplete = await storage.completeReview([{ id: item.id, review: "일주일" }], pastDate);
+    const completed = afterComplete.items.find(candidate => candidate.id === item.id);
+    expect(completed.review).toBe("일주일");
+    expect(completed.reviewDueDate > today).toBe(true);
+
+    // And via the quiz path (correct answer + updateReviewOnCorrect).
+    const quizResult = await storage.submitWordQuizAnswer({
+      itemId: item.id,
+      quizKind: "word",
+      answerType: "meaning",
+      selectedAnswer: "past study date",
+      updateReviewOnCorrect: true,
+      correctReview: "3일 후",
+      studyDate: pastDate
+    });
+    expect(quizResult.result.correct).toBe(true);
+    const quizzed = quizResult.state.items.find(candidate => candidate.id === item.id);
+    expect(quizzed.review).toBe("3일 후");
+    expect(quizzed.reviewDueDate > today).toBe(true);
   });
 
   it("importFullBackup tolerates a legacy sqlite-shaped dailyEntry (parsedJson string only) without losing the parsed breakdown", async () => {
