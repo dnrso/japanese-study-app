@@ -13,7 +13,75 @@ export function parseBackupFile(text) {
   if (!isBackupData(data)) {
     throw new Error("일본어 공부노트 백업 파일 형식이 아닙니다.");
   }
+  assertSafeRecordIds(data);
   return backup;
+}
+
+// Record ids end up inside HTML attributes in the UI layer (data-item-id,
+// data-delete-item, data-daily-entry-id, ...), and every id in a backup file
+// or a pulled sync snapshot is foreign input. The UI escapes ids at render
+// time; this is the other half of the defense - an id that isn't shaped like
+// one of the ids this app generates never reaches storage at all.
+//
+// Every id the app produces fits SAFE_RECORD_ID:
+//   - crypto.randomUUID()                                  hex + "-"
+//     (packages/storage-idb + storage-sqlite createId())
+//   - `${kind}-${randomUUID()}` (apps/web nextId)           letters + "-" + hex
+//   - `${Date.now()}-${Math.random().toString(16).slice(2)}` (the nextId /
+//     createId fallback when crypto.randomUUID is unavailable)
+//   - `${entryId}::${sentenceId}` (dailyEntryLinks ids)     adds ":"
+// "_" and "." are allowed on top of that to cover older/hand-written ids
+// (repo fixtures like "item-1" / "w1" / "s5" also pass).
+//
+// Offending records are REJECTED, not sanitized: rewriting an id would
+// silently orphan every reference pointing at it (dailyEntry.parentId,
+// dailyEntryLinks.entryId/sentenceId, item.sourceSentences[].id), which is a
+// worse failure than refusing the import. Only the imported/foreign side is
+// checked - already-stored local rows are left alone so a single bad legacy
+// row can't permanently wedge sync.
+const SAFE_RECORD_ID = /^[A-Za-z0-9._:-]{1,200}$/;
+
+// Every field in a backup row that holds a record id. Empty/missing values
+// are legitimate ("no parent", "no link"); only non-empty malformed ones are
+// rejected.
+const RECORD_ID_FIELDS = ["id", "parentId", "entryId", "entry_id", "sentenceId", "sentence_id"];
+
+const ID_BEARING_COLLECTIONS = ["dailyEntries", "allDailyEntries", "dailyEntryLinks", "tasks", "items"];
+
+export function isSafeRecordId(id) {
+  return SAFE_RECORD_ID.test(String(id ?? ""));
+}
+
+export function unsafeRecordIds(data) {
+  const found = new Set();
+  const check = value => {
+    const id = String(value ?? "");
+    if (id && !isSafeRecordId(id)) {
+      found.add(id);
+    }
+  };
+  ID_BEARING_COLLECTIONS.forEach(name => {
+    rows(data?.[name]).forEach(row => {
+      if (!row || typeof row !== "object") {
+        return;
+      }
+      RECORD_ID_FIELDS.forEach(field => check(row[field]));
+      rows(row.sourceSentences).forEach(sentence => check(sentence?.id));
+    });
+  });
+  return [...found];
+}
+
+export function assertSafeRecordIds(data) {
+  const unsafe = unsafeRecordIds(data);
+  if (unsafe.length) {
+    // The offending ids are deliberately kept out of the message: it is
+    // rendered back to the user, and echoing attacker-controlled text into a
+    // status line would reintroduce the very problem this check exists for.
+    // Callers that need detail can call unsafeRecordIds() themselves.
+    throw new Error(`사용할 수 없는 문자가 포함된 ID가 ${unsafe.length}개 있어 가져오기를 중단했습니다.`);
+  }
+  return data;
 }
 
 export function backupData(backup) {
@@ -32,6 +100,10 @@ export function isBackupData(data) {
 }
 
 export function mergeBackupData(currentData, importedData, fallbackDate) {
+  // Covers the Supabase sync path too: syncNow() pulls a remote snapshot and
+  // hands it straight to this function as `importedData` without ever going
+  // through parseBackupFile.
+  assertSafeRecordIds(importedData);
   const idMap = new Map();
   const studyDays = mergeUniqueRows(
     rows(currentData.studyDays),

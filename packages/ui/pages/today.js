@@ -123,16 +123,16 @@ function dailyEntryCard(entry, helpers) {
     </div>
   ` : "";
   return `
-    <article class="study-card daily-entry-card" id="daily-entry-${entry.id}" data-daily-entry-id="${entry.id}">
+    <article class="study-card daily-entry-card" id="daily-entry-${helpers.escapeHtml(entry.id)}" data-daily-entry-id="${helpers.escapeHtml(entry.id)}">
       <div class="daily-entry-card-head">
         <div class="daily-entry-tags">
-          <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind] || entry.kind}</span>
+          <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind] || helpers.escapeHtml(entry.kind)}</span>
           ${needsRegistration
             ? `<span class="badge red">등록 필요</span>`
             : children.length
               ? `<span class="badge green">전체 등록됨</span>`
               : `<span class="badge yellow">오늘 기록</span>`}
-          <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${entry.id}">삭제</button>
+          <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
         </div>
       </div>
       <h3 class="daily-sentence-title">${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span></h3>
@@ -159,12 +159,12 @@ function learnedCard(entry, helpers) {
       ? [{ id: entry.parentId, title: entry.parentTitle || "문장 보기" }]
       : [];
   return `
-    <article class="learned-card" data-daily-entry-id="${entry.id}">
+    <article class="learned-card" data-daily-entry-id="${helpers.escapeHtml(entry.id)}">
       <div class="learned-card-head">
         <div class="learned-card-tags">
           <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind]}</span>
           ${entry.registered ? `<span class="badge green">등록됨</span>` : `<span class="badge red">등록 필요</span>`}
-          <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${entry.id}">삭제</button>
+          <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
         </div>
       </div>
       <h4>${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span>${entry.reading ? `<span class="learned-inline-reading">${helpers.highlight(entry.reading)}</span>` : ""}</h4>
@@ -175,7 +175,7 @@ function learnedCard(entry, helpers) {
         ${parsed.script ? `<span>문자 ${helpers.highlight(parsed.script)}</span>` : ""}
       </div>` : ""}
       ${sourceSentences.length ? `<div class="source-link-list">
-        ${sourceSentences.map(sentence => `<button class="source-link" data-jump-sentence="${sentence.id}">사용 문장: ${helpers.highlight(sentence.title || "문장 보기")}</button>`).join("")}
+        ${sourceSentences.map(sentence => `<button class="source-link" data-jump-sentence="${helpers.escapeHtml(sentence.id)}">사용 문장: ${helpers.highlight(sentence.title || "문장 보기")}</button>`).join("")}
       </div>` : `<span class="source-link muted">직접 추가</span>`}
     </article>
   `;
