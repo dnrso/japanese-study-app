@@ -1,19 +1,14 @@
 const fs = require("fs");
 const path = require("path");
 const YAML = require("yaml");
-
-const tombstoneTtlMs = 90 * 24 * 60 * 60 * 1000;
-
-function pruneStaleTombstones(records) {
-  const cutoff = Date.now() - tombstoneTtlMs;
-  return records.filter(record => {
-    if (!record.deletedAt) {
-      return true;
-    }
-    const deletedAtMs = Date.parse(record.deletedAt);
-    return !Number.isFinite(deletedAtMs) || deletedAtMs >= cutoff;
-  });
-}
+// Resolved by relative path, not by the "@nihongo-study/storage-core" bare
+// specifier: the Electron build ships `packages/**/*` into app.asar (see the
+// electron-builder `files` list in the root package.json) but the workspace
+// symlinks under root node_modules/@nihongo-study/ are not root dependencies
+// and are not copied in, so a bare specifier would fail to resolve at runtime
+// in the packaged app. apps/desktop/src/dataStore.js already uses this
+// convention for the adapters themselves.
+const { pruneStaleTombstones } = require("../../storage-core/src/index.js");
 
 function createDataImportExport(deps) {
   const {

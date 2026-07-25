@@ -4,5 +4,8 @@
   "private": true,
   "description": "SQLite storage adapter for NihonGo Study",
   "main": "src/index.js",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@nihongo-study/storage-core": "0.1.0"
+  }
 }

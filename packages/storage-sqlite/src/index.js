@@ -4,7 +4,31 @@ const crypto = require("crypto");
 const Database = require("better-sqlite3");
 const { databaseSchema } = require("./dataSchema");
 const { createDataImportExport } = require("./dataImportExport");
-const { parseDailyEntry, dailyEntryToItems, withKanjiItems, itemToRawText } = require("./dailyEntryParser");
+// Resolved by relative path, not by the "@nihongo-study/storage-core" bare
+// specifier: the Electron build ships `packages/**/*` into app.asar (see the
+// electron-builder `files` list in the root package.json) but the workspace
+// symlinks under root node_modules/@nihongo-study/ are not root dependencies
+// and are not copied in, so a bare specifier would fail to resolve at runtime
+// in the packaged app. apps/desktop/src/dataStore.js already uses this
+// convention for the adapters themselves.
+const {
+  addDays,
+  dailyEntryToItems,
+  itemToRawText,
+  kindLabel,
+  normalizeDailyKind,
+  normalizeDate,
+  normalizeDeletedAt,
+  normalizeOptionalDate,
+  normalizeReview,
+  normalizeReviewCompletionTargets,
+  parseDailyEntry,
+  reviewIntervals,
+  text,
+  todayKey,
+  toNumber,
+  withKanjiItems
+} = require("../../storage-core/src/index.js");
 
 const csvFilesByKind = {
   word: "words.csv",
@@ -14,16 +38,6 @@ const csvFilesByKind = {
   source: "sources.csv",
   sentence: "sentences.csv"
 };
-
-const reviewIntervals = {
-  "내일": 1,
-  "3일 후": 3,
-  "일주일": 7,
-  "2주일": 14,
-  "한달": 30
-};
-
-const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
 
 function resolveAppDataDir(options = {}) {
   return options.appDataDir || process.env.NIHONGO_APP_DATA_DIR || path.join(process.cwd(), "app-data");
@@ -39,24 +53,6 @@ let db;
 
 function createId() {
   return crypto.randomUUID();
-}
-
-function todayKey() {
-  return dateKey(new Date());
-}
-
-function dateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addDays(dateValue, days) {
-  const [year, month, day] = normalizeDate(dateValue).split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + days);
-  return dateKey(date);
 }
 
 function ensureDirectories() {
@@ -768,34 +764,6 @@ function completeReview(ids, studyDate) {
   return getState(studyDate);
 }
 
-function normalizeReviewCompletionTargets(targets) {
-  if (!Array.isArray(targets)) {
-    return [];
-  }
-  return targets
-    .map(target => {
-      if (target && typeof target === "object") {
-        return {
-          id: text(target.id),
-          review: normalizeCompletionReview(target.review)
-        };
-      }
-      return {
-        id: text(target),
-        review: "3일 후"
-      };
-    })
-    .filter(target => target.id && target.review);
-}
-
-function normalizeCompletionReview(value) {
-  const review = normalizeReview(value);
-  if (review === "오늘") {
-    return "3일 후";
-  }
-  return reviewIntervals[review] ? review : "";
-}
-
 function submitWordQuizAnswer(payload = {}) {
   const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
   const item = db.prepare("SELECT id, title, meaning FROM items WHERE id = ? AND kind = ? AND deleted_at IS NULL").get(text(payload.itemId), quizKind);
@@ -939,34 +907,6 @@ function normalizeItem(item) {
   };
 }
 
-function normalizeDeletedAt(value) {
-  return value ? text(value) : null;
-}
-
-function normalizeDailyKind(kind) {
-  return ["sentence", "word", "grammar", "expression"].includes(kind) ? kind : "sentence";
-}
-
-function normalizeDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : todayKey();
-}
-
-function normalizeOptionalDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : "";
-}
-
-// An empty review is meaningful and must stay empty: source items carry
-// review "" by design, and the quiz's "변경 안 함" option sends "" to mean
-// "leave the review untouched" (see submitWordQuizAnswer's `&& nextReview`
-// guard). Only non-empty unknown values fall back to "대기".
-function normalizeReview(value) {
-  const review = text(value);
-  if (!review) {
-    return "";
-  }
-  return reviewStates.includes(review) ? review : "대기";
-}
-
 function reviewDueDateFor(review, baseDate = todayKey()) {
   const days = reviewIntervals[review];
   return days ? addDays(baseDate, days) : "";
@@ -978,26 +918,6 @@ function safeJson(value) {
   } catch {
     return {};
   }
-}
-
-function kindLabel(kind) {
-  return {
-    sentence: "문장",
-    word: "단어",
-    grammar: "문법",
-    expression: "표현",
-    kanji: "한자",
-    source: "자료"
-  }[kind] || kind;
-}
-
-function text(value) {
-  return String(value ?? "");
-}
-
-function toNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
 }
 
 const importExport = createDataImportExport({

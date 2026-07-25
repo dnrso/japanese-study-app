@@ -1,3 +1,8 @@
+// Single definition of the SRS intervals lives in @nihongo-study/storage-core,
+// which both storage adapters also read, so the review queue's due-date
+// arithmetic can never drift from the intervals the adapters actually persist.
+import { reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
+
 export * from "./merge.js";
 
 // Display-only copy of the AI 문장 분석 usage limits, for the client to show
@@ -15,14 +20,6 @@ export const AI_ANALYSIS_LIMITS = {
   perMinute: 1,
   perDay: 100,
   maxChars: 300
-};
-
-const REVIEW_QUEUE_INTERVALS = {
-  "내일": 1,
-  "3일 후": 3,
-  "일주일": 7,
-  "2주일": 14,
-  "한달": 30
 };
 
 const SEARCH_FIELDS = [
