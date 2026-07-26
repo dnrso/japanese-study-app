@@ -18,12 +18,12 @@
 //   registerDailyEntries    (ids, studyDate) -> { state, result }       (ids = [], studyDate = today) -> { state, result }
 //   addTask                 (task) -> state       [throws if omitted]   (task = {}) -> state
 //   updateTaskDone          (id, done, studyDate) -> state              (id, done, studyDate = today) -> state
-//   upsertItem              (item) -> state   [FULL REPLACE, see D6]    (item = {}) -> state   [MERGE, see D6]
+//   upsertItem              (item) -> state   [MERGE]                   (item = {}) -> state   [MERGE]
 //   deleteItem              (id, studyDate) -> state                    (id, studyDate = today) -> state
 //   updateItemReview        (id, review, studyDate) -> state            (id, review, studyDate = today) -> state
 //   completeReview          (targets, studyDate) -> state               (targets = [], studyDate = today) -> state
 //   submitWordQuizAnswer    (payload = {}) -> { state, result }         (payload = {}) -> { state, result }
-//   resetSampleData         () -> state   [alias of clearAllData]       () -> state   [clears, then re-seeds, see D19]
+//   resetSampleData         () -> state   [clears, then re-seeds]       () -> state   [clears, then re-seeds]
 //   clearAllData            () -> state   [hard DELETE, no tombstones]  () -> state   [store.clear(), no tombstones]
 //   exportData              () -> envelope + writes CSV/YAML to disk    () -> envelope, nothing written to disk
 //   importCsvExports        (studyDate) -> state  [reads exports/*.csv] (backup = null, studyDate = today) -> state
@@ -32,18 +32,22 @@
 // Divergences are NOT papered over: each is asserted per-adapter through the
 // `expected` table on the adapter descriptors below, tagged
 // `KNOWN DIVERGENCE D<n>` with the offending file:line and what the unified
-// behavior should be. The table is the debt ledger; D1..D19 are all live today.
+// behavior should be. The table is the debt ledger; D1..D19 are live today
+// except D6, D10 and D18, which have been resolved (sqlite now merges; both
+// adapters derive 한자 items while registering; both restore the same sample
+// data) and are asserted as shared behaviors instead of per-adapter
+// divergences.
 //
 //   D1  getState().allDailyEntries          idb only (apps/web/src/main.js:549 needs it)
 //   D2  exportData().data.allDailyEntries   sqlite only (inverse of D1)
 //   D3  exportData() envelope keys          sqlite/files vs dbPath
 //   D4  getState() record projection        audit columns + parsedJson
 //   D5  getState().studyDays row shape      sqlite drops `note`
-//   D6  partial upsertItem()                merge (idb) vs destructive replace (sqlite)
+//   D6  partial upsertItem()                RESOLVED - both adapters merge now
 //   D7  upsertItem() 한자 derivation        sqlite only
 //   D8  registered item provenance          level/source hard-coded on idb
 //   D9  registering a sentence entry        no-op on idb, 문장 item on sqlite
-//   D10 register 한자 derivation            sqlite only
+//   D10 register 한자 derivation            RESOLVED - both adapters derive now
 //   D11 unknown entry id                    reported as a duplicate on sqlite only
 //   D12 result.linked                       hard-coded [] on idb
 //   D13 result.errors                       unreachable catch on idb
@@ -51,7 +55,7 @@
 //   D15 importCsvExports(backup, date)      object form ignored on sqlite
 //   D16 quiz result.nextReview              leaks a value on sqlite
 //   D17 repeated sentence candidates        merged on sqlite, duplicated on idb
-//   D18 seedState / resetSampleData         sample data only exists on idb
+//   D18 seedState / resetSampleData         RESOLVED - one shared sample seed
 //   D19 missing arguments                   defaulted on idb, TypeError on sqlite
 //
 // The rawText parsers used to be a 20th entry here (two separate
@@ -62,6 +66,7 @@ import "fake-indexeddb/auto";
 import { describe, it, expect, afterAll } from "vitest";
 import { createRequire } from "node:module";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
+import { createSampleState } from "@nihongo-study/storage-core";
 import { loadSqliteAdapter, describeStorageSuite, createTmpDirs } from "./helpers/storage-adapters.js";
 
 const require = createRequire(import.meta.url);
@@ -188,15 +193,9 @@ const adapters = [
       // returns the full day record. UNIFY: include note - the study-day note
       // is editable in both UIs.
       studyDayKeys: ["studyDate", "minutes", "summary", "note", "createdAt", "updatedAt", "deletedAt", "entryCount"],
-      // KNOWN DIVERGENCE D6: upsertItem merge semantics, and the worst of the
-      // bunch. idb merges into the existing record
-      // (packages/storage-idb/src/index.js:241-247); sqlite rebuilds the row
-      // from the payload alone (packages/storage-sqlite/src/index.js:621), so a
-      // partial update blanks reading/meaning/level/part/script/note/source and
-      // silently downgrades review to "대기" (clearing the due date with it).
-      // Any caller that PATCHes an item loses data on desktop.
-      // UNIFY: merge-with-existing on both.
-      partialUpsertMerges: true,
+      // D6 (RESOLVED): sqlite used to rebuild the row from the payload alone,
+      // blanking every omitted field. It now merges like idb does, so partial
+      // upserts are covered by a shared assertion below instead of a flag.
       // KNOWN DIVERGENCE D7: sqlite's upsertItem also derives 한자 items from
       // item.kanji (packages/storage-sqlite/src/index.js:682); idb never does.
       // UNIFY: derive in both (shared helper) or in neither.
@@ -215,11 +214,10 @@ const adapters = [
       // packages/storage-core/src/dailyEntryParser.js). UNIFY: decide whether
       // sentences are collection items at all, then do it on both.
       registersSentenceEntries: false,
-      // KNOWN DIVERGENCE D10: sqlite derives 한자 items while registering
-      // (withKanjiItems, packages/storage-sqlite/src/index.js:544); idb never
-      // does, so the web 한자 collection can never fill from daily entries.
-      // UNIFY: derive on both.
-      registerDerivesKanjiItems: false,
+      // D10 (RESOLVED): sqlite derived 한자 items while registering and idb did
+      // not, so the web/Android 한자 collection could never fill from daily
+      // entries. Both adapters now run the shared withKanjiItems helper from
+      // @nihongo-study/storage-core, so this is a shared assertion below.
       // KNOWN DIVERGENCE D11: an unknown id reports
       // duplicates:["항목을 찾을 수 없습니다."] on sqlite
       // (packages/storage-sqlite/src/index.js:540) and nothing at all on idb.
@@ -270,13 +268,13 @@ const adapters = [
       // tolerates sqlite's call shape through a `typeof importData === "string"`
       // shim. UNIFY: same argument list on both.
       importCsvExportsAcceptsObject: true,
-      // KNOWN DIVERGENCE D18: the `seedState` factory option - and therefore
-      // "sample data" at all - only exists on idb
-      // (packages/storage-idb/src/index.js:56,355-363); sqlite's
-      // resetSampleData is a plain alias of clearAllData
-      // (packages/storage-sqlite/src/index.js:826), so the desktop "샘플 데이터"
-      // reset just wipes the database. UNIFY: one seed source for both.
-      honorsSeedStateOption: true,
+      // D18 (RESOLVED): the `seedState` factory option - and therefore "sample
+      // data" at all - used to exist only on idb, while sqlite's
+      // resetSampleData was a plain alias of clearAllData, so the desktop
+      // "샘플 데이터" button just wiped the database. Both adapters now honor
+      // `seedState` and both fall back to the one shared seed
+      // (createSampleState in @nihongo-study/storage-core); shared assertions
+      // below.
       // KNOWN DIVERGENCE D19: idb defaults every record argument to {} / [];
       // sqlite has no defaults and throws a TypeError on a missing argument
       // (packages/storage-sqlite/src/index.js:861 dereferences studyLog).
@@ -300,12 +298,10 @@ const adapters = [
       stateExposesAuditColumns: false, // D4
       stateExposesParsedJson: true, // D4
       studyDayKeys: ["studyDate", "minutes", "summary", "entryCount"], // D5
-      partialUpsertMerges: false, // D6
       upsertDerivesKanjiItems: true, // D7
       registeredItemLevel: "", // D8
       registeredItemSource: "", // D8
       registersSentenceEntries: true, // D9
-      registerDerivesKanjiItems: true, // D10
       unknownIdDuplicates: ["항목을 찾을 수 없습니다."], // D11
       reportsLinkedOnRelink: true, // D12
       reportsPerIdErrors: true, // D13
@@ -313,7 +309,6 @@ const adapters = [
       dedupesRepeatedCandidates: true, // D17
       importFullBackupAcceptsObject: false, // D14
       importCsvExportsAcceptsObject: false, // D15
-      honorsSeedStateOption: false, // D18
       defaultsMissingArguments: false // D19
     }
   }
@@ -479,6 +474,53 @@ function defineConformanceTests(adapter) {
     expect(same[0].quizCorrectCount).toBe(1);
     expect(same[0].lastQuizzedAt).toBeTruthy();
     expect(updated.items.filter(candidate => candidate.kind === "word")).toHaveLength(1);
+  });
+
+  it("upsertItem() PATCHes an existing row: omitted keys survive, present keys win even when empty", async () => {
+    // Was D6 (sqlite rebuilt the row from the payload alone and blanked every
+    // omitted field, downgrading review to 대기 and dropping the due date).
+    // Both adapters merge now, so this is a shared contract assertion.
+    const store = await freshStore();
+    const created = await store.upsertItem({
+      kind: "word",
+      title: "부분수정",
+      reading: "もと",
+      meaning: "origin",
+      level: "N3",
+      part: "명사",
+      script: "한자+히라가나",
+      source: "교재",
+      note: "메모",
+      review: "일주일"
+    });
+    const item = byTitle(created.items, "부분수정");
+    expect(item.reviewDueDate > todayKey()).toBe(true);
+
+    const patched = await store.upsertItem({ id: item.id, kind: "word", title: "부분수정2" });
+    const after = patched.items.find(candidate => candidate.id === item.id);
+
+    expect(after.title).toBe("부분수정2");
+    expect(after.reading).toBe("もと");
+    expect(after.meaning).toBe("origin");
+    expect(after.level).toBe("N3");
+    expect(after.part).toBe("명사");
+    expect(after.script).toBe("한자+히라가나");
+    expect(after.source).toBe("교재");
+    expect(after.note).toBe("메모");
+    // An unrelated partial update must not touch the review schedule.
+    expect(after.review).toBe("일주일");
+    expect(after.reviewDueDate).toBe(item.reviewDueDate);
+
+    // Present-but-empty still clears: the edit dialog wipes a note by sending "".
+    const cleared = await store.upsertItem({ id: item.id, note: "", meaning: "" });
+    const blanked = cleared.items.find(candidate => candidate.id === item.id);
+
+    expect(blanked.note).toBe("");
+    expect(blanked.meaning).toBe("");
+    expect(blanked.title).toBe("부분수정2");
+    expect(blanked.reading).toBe("もと");
+    expect(blanked.review).toBe("일주일");
+    expect(blanked.reviewDueDate).toBe(item.reviewDueDate);
   });
 
   it("normalizes review values on write: empty stays empty, unknown becomes 대기", async () => {
@@ -792,6 +834,63 @@ function defineConformanceTests(adapter) {
     expect(second.state.items.filter(item => item.kind === "word" && item.title === "単語")).toHaveLength(1);
   });
 
+  // Was KNOWN DIVERGENCE D10: sqlite ran withKanjiItems while registering and
+  // idb did not, so the web/Android 한자 collection could never fill from daily
+  // entries at all. Both adapters now call the same shared helper from
+  // @nihongo-study/storage-core, so this is one assertion for both. The fix is
+  // forward-only: entries registered before it stay as they were.
+  it("registerDailyEntries() derives one 한자 item per character of the word's 한자 field", async () => {
+    const { store, child } = await storeWithSentence();
+    const wordEntry = child("word");
+    expect(wordEntry.parsed.kanji).toBe("単(single),語(word)");
+
+    const first = await store.registerDailyEntries([wordEntry.id], studyDate);
+    const kanjiItems = first.state.items.filter(item => item.kind === "kanji");
+    expect(kanjiItems.map(item => item.title).sort()).toEqual(["単", "語"]);
+    expect(first.result.registered).toEqual(expect.arrayContaining(["한자: 単", "한자: 語"]));
+
+    // Every field withKanjiItems fills is identical on both adapters. `level`
+    // is the one exception: it is inherited from the parent word item, which
+    // still carries each adapter's own provenance (D8).
+    const single = byTitle(kanjiItems, "単");
+    expect(single.meaning).toBe("single");
+    expect(single.part).toBe("한자");
+    expect(single.script).toBe("한자");
+    expect(single.source).toBe("単語");
+    expect(single.note).toBe("単語 (たんご)");
+    expect(single.review).toBe("대기");
+    expect(single.reviewDueDate).toBe("");
+    expect(single.level).toBe(expected.registeredItemLevel);
+
+    // Re-registering the same entry creates nothing: the derived items go
+    // through the same duplicate check as the word itself.
+    const second = await store.registerDailyEntries([wordEntry.id], studyDate);
+    expect(second.result.registered).toEqual([]);
+    expect(second.result.duplicates).toEqual(expect.arrayContaining(["한자: 単", "한자: 語"]));
+    expect(second.state.items.filter(item => item.kind === "kanji")).toHaveLength(2);
+  });
+
+  it("registerDailyEntries() derives a shared 한자 item once for a batch of words that both use it", async () => {
+    const { store, sentence } = await storeWithSentence();
+    const withSecondWord = await store.addDailyEntry({
+      studyDate,
+      kind: "word",
+      rawText: "`単位`(たんい)|품사=명사|한자=単(single),位(rank)",
+      parentId: sentence.id
+    });
+    const ids = withSecondWord.dailyEntries
+      .filter(entry => entry.kind === "word")
+      .map(entry => entry.id);
+    expect(ids).toHaveLength(2);
+
+    const registered = await store.registerDailyEntries(ids, studyDate);
+    const kanjiTitles = registered.state.items.filter(item => item.kind === "kanji").map(item => item.title).sort();
+
+    expect(kanjiTitles).toEqual(["位", "単", "語"]);
+    expect(registered.result.registered.filter(entry => entry === "한자: 単")).toHaveLength(1);
+    expect(registered.result.duplicates).toContain("한자: 単");
+  });
+
   // ------------------------------------------------------- reset / clear / export
 
   it("clearAllData() empties every collection, tombstones included", async () => {
@@ -832,15 +931,56 @@ function defineConformanceTests(adapter) {
     expect(exported.data.dailyEntries.some(entry => entry.id === sentence.id && entry.deletedAt)).toBe(true);
   });
 
-  it("resetSampleData() leaves an unseeded store empty", async () => {
+  // Was KNOWN DIVERGENCE D18: sqlite's resetSampleData was a plain alias of
+  // clearAllData, so the desktop "샘플 데이터" button wiped the database and put
+  // nothing back, while web cleared and re-seeded. Both adapters now restore
+  // the one shared seed from @nihongo-study/storage-core, which is what this
+  // asserts against - the same constant on both sides is the parity guard.
+  it("resetSampleData() clears the store and restores the shared sample data", async () => {
     const { store } = await storeWithSentence();
     await store.upsertItem({ kind: "word", title: "리셋", meaning: "reset" });
+    await store.addTask({ title: "지워질할일", note: "", tag: "", done: false, studyDate });
+    await store.saveStudyLog({ studyDate, minutes: 10, summary: "", note: "" });
 
     const reset = await store.resetSampleData();
-    expect(reset.items).toHaveLength(0);
+    const sample = createSampleState();
+
+    expect(reset.selectedDate).toBe(sample.selectedDate);
+    expect(reset.items).toEqual([]);
+    expect(reset.tasks).toEqual([]);
+    // Not empty, and not the old contents either: the onboarding sentence card.
+    expect(reset.dailyEntries).toHaveLength(sample.dailyEntries.length);
+    sample.dailyEntries.forEach((seeded, index) => {
+      const entry = reset.dailyEntries[index];
+      expect(entry.id).toBe(seeded.id);
+      expect(entry.kind).toBe(seeded.kind);
+      expect(entry.title).toBe(seeded.title);
+      expect(entry.reading).toBe(seeded.reading);
+      expect(entry.meaning).toBe(seeded.meaning);
+      expect(entry.studyDate).toBe(seeded.studyDate);
+      expect(entry.registered).toBe(false);
+    });
+
+    expect(reset.studyDays).toHaveLength(1);
+    const day = reset.studyDays.find(candidate => candidate.studyDate === sample.selectedDate);
+    expect(day.minutes).toBe(0);
+    expect(day.entryCount).toBe(sample.dailyEntries.length);
+    expect(reset.studyLog).toEqual({ minutes: 0, summary: "", note: "", totalMinutes: 0 });
+  });
+
+  it("honors an injected seedState on first run and on resetSampleData", async () => {
+    const store = await freshStore({ seedState: sampleSeed });
+    const seeded = await store.getState(studyDate);
+    expect(byTitle(seeded.items, "샘플단어")).toBeTruthy();
+
+    await store.clearAllData();
+    const reset = await store.resetSampleData();
+
+    // The injected seed replaces the shared default outright, and the returned
+    // state is scoped to the seed's own selectedDate on both adapters.
+    expect(byTitle(reset.items, "샘플단어")).toBeTruthy();
+    expect(reset.selectedDate).toBe(studyDate);
     expect(reset.dailyEntries).toHaveLength(0);
-    expect(reset.tasks).toHaveLength(0);
-    expect(reset.studyDays).toHaveLength(0);
   });
 
   it("importCsvExports() accepts a studyDate string on both adapters", async () => {
@@ -887,44 +1027,6 @@ function defineConformanceTests(adapter) {
     expect(Object.keys(state.studyDays[0]).sort()).toEqual([...expected.studyDayKeys].sort());
   });
 
-  it("KNOWN DIVERGENCE D6: a partial upsertItem() merges on idb but replaces the whole row on sqlite", async () => {
-    const store = await freshStore();
-    const created = await store.upsertItem({
-      kind: "word",
-      title: "부분수정",
-      reading: "もと",
-      meaning: "origin",
-      level: "N3",
-      part: "명사",
-      note: "메모",
-      review: "일주일"
-    });
-    const item = byTitle(created.items, "부분수정");
-    expect(item.reviewDueDate > todayKey()).toBe(true);
-
-    const patched = await store.upsertItem({ id: item.id, kind: "word", title: "부분수정2" });
-    const after = patched.items.find(candidate => candidate.id === item.id);
-
-    expect(after.title).toBe("부분수정2");
-    if (expected.partialUpsertMerges) {
-      expect(after.reading).toBe("もと");
-      expect(after.meaning).toBe("origin");
-      expect(after.level).toBe("N3");
-      expect(after.note).toBe("메모");
-      expect(after.review).toBe("일주일");
-      expect(after.reviewDueDate).toBe(item.reviewDueDate);
-    } else {
-      // Data loss: everything the caller omitted is blanked and the review is
-      // silently downgraded to 대기 (which also clears the due date).
-      expect(after.reading).toBe("");
-      expect(after.meaning).toBe("");
-      expect(after.level).toBe("");
-      expect(after.note).toBe("");
-      expect(after.review).toBe("대기");
-      expect(after.reviewDueDate).toBe("");
-    }
-  });
-
   it("KNOWN DIVERGENCE D7: upsertItem() derives 한자 items from item.kanji on sqlite only", async () => {
     const store = await freshStore();
     const state = await store.upsertItem({ kind: "word", title: "漢字語", meaning: "kanji word", kanji: "漢(china)" });
@@ -959,23 +1061,6 @@ function defineConformanceTests(adapter) {
     } else {
       expect(registered.result.registered).toEqual([]);
       expect(sentenceItems).toHaveLength(0);
-    }
-  });
-
-  it("KNOWN DIVERGENCE D10: registerDailyEntries() derives 한자 items on sqlite only", async () => {
-    const { store, child } = await storeWithSentence();
-    const wordEntry = child("word");
-    expect(wordEntry.parsed.kanji).toBe("単(single),語(word)");
-
-    const registered = await store.registerDailyEntries([wordEntry.id], studyDate);
-    const kanjiTitles = registered.state.items.filter(item => item.kind === "kanji").map(item => item.title).sort();
-
-    if (expected.registerDerivesKanjiItems) {
-      expect(kanjiTitles).toEqual(["単", "語"]);
-      expect(registered.result.registered).toEqual(expect.arrayContaining(["한자: 単", "한자: 語"]));
-    } else {
-      expect(kanjiTitles).toEqual([]);
-      expect(registered.result.registered).toEqual(["단어: 単語"]);
     }
   });
 
@@ -1084,22 +1169,6 @@ function defineConformanceTests(adapter) {
     } else {
       expect(wordEntries).toHaveLength(2);
       expect(state.dailyEntries).toHaveLength(8);
-    }
-  });
-
-  it("KNOWN DIVERGENCE D18: only idb honors the seedState option, so resetSampleData() restores samples there", async () => {
-    const store = await freshStore({ seedState: sampleSeed });
-    const seeded = await store.getState(studyDate);
-    const reset = await store.resetSampleData();
-
-    if (expected.honorsSeedStateOption) {
-      expect(byTitle(seeded.items, "샘플단어")).toBeTruthy();
-      expect(byTitle(reset.items, "샘플단어")).toBeTruthy();
-    } else {
-      // resetSampleData is a plain alias of clearAllData here: the desktop
-      // "샘플 데이터" button just wipes the database.
-      expect(seeded.items).toHaveLength(0);
-      expect(reset.items).toHaveLength(0);
     }
   });
 

@@ -5,6 +5,7 @@
 // form is the one that works everywhere. Vite handles it fine too.
 import {
   addDays,
+  createSampleState,
   itemToRawText,
   kindLabel,
   normalizeDailyKind,
@@ -18,7 +19,8 @@ import {
   reviewIntervals,
   text,
   todayKey,
-  toNumber
+  toNumber,
+  withKanjiItems
 } from "../../storage-core/src/index.js";
 
 const databaseVersion = 2;
@@ -58,7 +60,13 @@ const stores = storeDefinitions.map(store => store.name);
 
 export function createIdbStorage(options = {}) {
   const dbName = options.dbName || "nihongo-study";
+  // First-run seeding stays opt-in (the host has to ask for it), but
+  // resetSampleData() - the "샘플 데이터" button - always restores sample data,
+  // falling back to the shared seed in @nihongo-study/storage-core when the
+  // host injected none. storage-sqlite does exactly the same, so the button
+  // behaves identically on desktop and web.
   const seedState = typeof options.seedState === "function" ? options.seedState : null;
+  const sampleState = seedState || createSampleState;
   let dbPromise = null;
 
   const paths = {
@@ -203,19 +211,31 @@ export function createIdbStorage(options = {}) {
     const duplicates = [];
     const linked = [];
     const errors = [];
+    // kind::title of everything already collected. Seeded from the snapshot
+    // read above and extended as rows are written, because an IDB write is
+    // not readable again inside the same transaction: without it a batch that
+    // derives the same 한자 twice (two words sharing a character, or a word
+    // whose 한자 is also being registered) would insert it twice.
+    const existingKeys = new Set(items.map(item => `${item.kind}::${item.title}`));
 
     await runTransaction(["dailyEntries", "items"], "readwrite", transaction => {
       const entryStore = transaction.objectStore("dailyEntries");
       const itemStore = transaction.objectStore("items");
       targets.forEach(entry => {
         try {
-          const exists = items.some(item => item.kind === entry.kind && item.title === entry.title);
-          if (exists) {
-            duplicates.push(`${kindLabel(entry.kind)}: ${entry.title}`);
-          } else {
-            itemStore.put(itemFromDailyEntry(entry));
-            registered.push(`${kindLabel(entry.kind)}: ${entry.title}`);
-          }
+          itemsFromDailyEntry(entry).forEach(candidate => {
+            if (!candidate.title) {
+              return;
+            }
+            const key = `${candidate.kind}::${candidate.title}`;
+            if (existingKeys.has(key)) {
+              duplicates.push(`${kindLabel(candidate.kind)}: ${candidate.title}`);
+              return;
+            }
+            existingKeys.add(key);
+            itemStore.put(candidate);
+            registered.push(`${kindLabel(candidate.kind)}: ${candidate.title}`);
+          });
           entryStore.put({ ...entry, registered: true, updatedAt: now() });
         } catch (error) {
           errors.push(error.message || String(error));
@@ -358,15 +378,13 @@ export function createIdbStorage(options = {}) {
   }
 
   async function resetSampleData() {
-    await runTransaction(stores, "readwrite", transaction => {
-      stores.forEach(name => transaction.objectStore(name).clear());
-    });
-    if (seedState) {
-      await seedDatabase(seedState());
-    } else {
-      await putValue("meta", { key: "initialized", value: true });
-    }
-    return getState();
+    const seed = sampleState();
+    // seedDatabase() clears every store (and re-stamps the "initialized" meta
+    // flag) inside the same transaction before it writes the seed.
+    await seedDatabase(seed);
+    // The seed's own date, not today: identical for the shared sample (which
+    // is built around today) and correct for an injected seed that is not.
+    return getState(normalizeDate(seed.selectedDate));
   }
 
   async function exportData() {
@@ -727,8 +745,18 @@ function putDailyCandidate(transaction, sentence, kind, item) {
   transaction.objectStore("dailyEntryLinks").put(linkPayload(entry.id, sentence.id));
 }
 
-function itemFromDailyEntry(entry) {
-  return normalizeItem({
+// Every collection item a single daily entry registers into: the entry itself
+// plus, for a word carrying 한자=..., one 한자 item per character.
+//
+// The 한자 derivation is withKanjiItems from @nihongo-study/storage-core - the
+// same shared helper storage-sqlite has always run here (and in upsertItem).
+// It used to be desktop-only, so the web/Android 한자 collection could never
+// fill from daily entries at all (D10 in tests/storage-conformance.test.js).
+// It is forward-only: entries registered before this change are untouched, and
+// re-registering one is a no-op because the duplicate check below already
+// covers the derived items.
+function itemsFromDailyEntry(entry) {
+  const item = {
     kind: entry.kind,
     title: entry.title,
     reading: entry.reading,
@@ -741,7 +769,12 @@ function itemFromDailyEntry(entry) {
     source: entry.parentTitle || "오늘 공부",
     note: entry.parsed?.note || "",
     sourceSentences: entry.sourceSentences || []
-  });
+  };
+  // Derived from the un-normalized shape on purpose: withKanjiItems reads
+  // kind/kanji/level/title/reading straight off it, and the derived items
+  // inherit this adapter's provenance (level "웹" - see D8) the same way the
+  // sqlite ones inherit its empty level.
+  return withKanjiItems([item]).map(normalizeItem);
 }
 
 // Accepts either the canonical exchange shape (structured `parsed` object)
@@ -840,7 +873,7 @@ function parseLegacyParsedJson(value) {
 //
 // The only adapter-specific bit left: for word/grammar/expression entries this
 // adapter persists 품사/문자/한자 as flat fields on the entry's `parsed` blob
-// and reads them back in itemFromDailyEntry when registering. The canonical
+// and reads them back in itemsFromDailyEntry when registering. The canonical
 // parser exposes them per-bullet in `parsed.words`, so lift the first inline
 // match up exactly the way the sqlite adapter's dailyEntryToItems does
 // (parsed.note is the trimmed raw text `parsed.words` was parsed from, so
