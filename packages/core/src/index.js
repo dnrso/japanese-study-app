@@ -1,7 +1,13 @@
-// Single definition of the SRS intervals lives in @nihongo-study/storage-core,
-// which both storage adapters also read, so the review queue's due-date
-// arithmetic can never drift from the intervals the adapters actually persist.
-import { reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
+// Single definition of the SRS intervals lives in packages/storage-core, which
+// both storage adapters also read, so the review queue's due-date arithmetic
+// can never drift from the intervals the adapters actually persist.
+//
+// Imported by relative path, not by package name: the desktop renderer loads
+// this file as a plain ES module over file:// (apps/desktop/src/renderer/
+// state.js does `import("../../../../packages/core/src/index.js")`), and with
+// no bundler in that path a bare specifier fails with "Failed to resolve
+// module specifier". Vite resolves the relative form just as happily.
+import { reviewIntervals as REVIEW_QUEUE_INTERVALS } from "../../storage-core/src/index.js";
 
 export * from "./merge.js";
 

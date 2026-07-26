@@ -1,3 +1,8 @@
+// Imported by relative path, not by package name: nothing in this repo
+// resolves bare @nihongo-study specifiers at runtime. The desktop renderer
+// loads shared packages as plain ES modules with no bundler, and the packaged
+// app.asar carries no @nihongo-study scope in node_modules, so the relative
+// form is the one that works everywhere. Vite handles it fine too.
 import {
   addDays,
   itemToRawText,
@@ -14,7 +19,7 @@ import {
   text,
   todayKey,
   toNumber
-} from "@nihongo-study/storage-core";
+} from "../../storage-core/src/index.js";
 
 const databaseVersion = 2;
 
