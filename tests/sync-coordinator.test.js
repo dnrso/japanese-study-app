@@ -128,6 +128,33 @@ describe("createSyncCoordinator", () => {
     expect(coordinator.schedule()).toMatchObject({ scheduled: false, reason: "no-session" });
     expect(sync.syncNow).toHaveBeenCalledTimes(1);
   });
+
+  it("ignores an in-flight result after the user signs out", async () => {
+    const inFlight = deferred();
+    const onSyncSuccess = vi.fn();
+    const sync = {
+      isEnabled: true,
+      syncNow: vi.fn().mockImplementation(() => inFlight.promise)
+    };
+    const coordinator = createSyncCoordinator({ sync, onSyncSuccess });
+    coordinator.setSession(session());
+
+    const running = coordinator.syncNow();
+    await vi.waitFor(() => expect(sync.syncNow).toHaveBeenCalledTimes(1));
+    coordinator.setSession(null);
+    inFlight.resolve(successfulResult({ selectedDate: "2026-07-28" }));
+
+    await expect(running).resolves.toMatchObject({
+      skipped: true,
+      reason: "session-changed"
+    });
+    expect(onSyncSuccess).not.toHaveBeenCalled();
+    expect(coordinator.getState()).toMatchObject({
+      status: "idle",
+      authenticated: false,
+      lastSuccessAt: null
+    });
+  });
 });
 
 describe("createSyncingStorage", () => {

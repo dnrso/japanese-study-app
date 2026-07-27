@@ -68,6 +68,10 @@ export function createSyncCoordinator({
     return Boolean(sync.isEnabled && session);
   }
 
+  function currentUserId() {
+    return session?.user?.id || null;
+  }
+
   function cancelTimer() {
     if (timer !== null) {
       clearTimer(timer);
@@ -101,11 +105,21 @@ export function createSyncCoordinator({
     do {
       followUpRequested = false;
       publish({ status: "syncing", error: null });
+      const runUserId = currentUserId();
 
       try {
         lastResult = await sync.syncNow();
       } catch (error) {
+        if (!canSync() || currentUserId() !== runUserId) {
+          lastResult = skippedResult("session-changed");
+          continue;
+        }
         lastResult = reportError(error);
+      }
+
+      if (!canSync() || currentUserId() !== runUserId) {
+        lastResult = skippedResult("session-changed");
+        continue;
       }
 
       if (lastResult?.skipped) {
