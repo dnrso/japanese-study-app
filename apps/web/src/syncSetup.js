@@ -1,4 +1,8 @@
-import { createSupabaseSync } from "@nihongo-study/sync";
+import {
+  createSupabaseSync,
+  createSyncCoordinator as createSyncCoordinatorImpl,
+  createSyncingStorage as createSyncingStorageImpl
+} from "@nihongo-study/sync";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
@@ -11,7 +15,7 @@ import { App } from "@capacitor/app";
 //
 // Expected `ctx` shape:
 // {
-//   byId, sync,
+//   byId, sync, syncCoordinator,
 //   getAccountSession, setAccountSession,
 //   getAiSentenceAnalysisEnabled, setAiSentenceAnalysisEnabled,
 //   updateDailyEntryPlaceholder
@@ -33,6 +37,14 @@ export function createSync({ storage, mergeSnapshots }) {
   return createSupabaseSync({ storage, mergeSnapshots });
 }
 
+export function createSyncCoordinator(options) {
+  return createSyncCoordinatorImpl(options);
+}
+
+export function createSyncingStorage(storage, options) {
+  return createSyncingStorageImpl(storage, options);
+}
+
 export function renderAccountStatus(ctx) {
   const { byId } = ctx;
   if (!ctx.getAccountSession() && ctx.getAiSentenceAnalysisEnabled()) {
@@ -47,6 +59,9 @@ export function renderAccountStatus(ctx) {
   const signInBtn = byId("googleSignInBtn");
   const signOutBtn = byId("googleSignOutBtn");
   const status = byId("accountStatus");
+  const syncStatus = byId("syncStatus");
+  const lastSuccess = byId("syncLastSuccess");
+  const retryBtn = byId("syncRetryBtn");
   if (!signInBtn || !signOutBtn || !status) {
     return;
   }
@@ -59,6 +74,38 @@ export function renderAccountStatus(ctx) {
     : ctx.sync.isEnabled
       ? "로그인되어 있지 않습니다."
       : "Supabase 환경변수가 설정되지 않아 로그인을 사용할 수 없습니다.";
+
+  const coordinatorState = ctx.syncCoordinator.getState();
+  const canSync = Boolean(ctx.sync.isEnabled && accountSession && coordinatorState.authenticated);
+  if (syncStatus) {
+    if (!ctx.sync.isEnabled) {
+      syncStatus.textContent = "동기화 비활성";
+    } else if (!accountSession) {
+      syncStatus.textContent = "동기화 대기";
+    } else if (!coordinatorState.authenticated) {
+      syncStatus.textContent = "동기화 세션 만료";
+    } else if (coordinatorState.status === "syncing") {
+      syncStatus.textContent = "동기화 중";
+    } else if (coordinatorState.status === "success") {
+      syncStatus.textContent = "동기화 완료";
+    } else if (coordinatorState.status === "error") {
+      syncStatus.textContent = `동기화 실패: ${coordinatorState.error?.message || coordinatorState.error || "알 수 없는 오류"}`;
+    } else {
+      syncStatus.textContent = "동기화 대기";
+    }
+  }
+  if (lastSuccess) {
+    const date = coordinatorState.lastSuccessAt ? new Date(coordinatorState.lastSuccessAt) : null;
+    lastSuccess.textContent = date && !Number.isNaN(date.getTime())
+      ? `마지막 성공: ${new Intl.DateTimeFormat("ko-KR", {
+          dateStyle: "medium",
+          timeStyle: "medium"
+        }).format(date)}`
+      : "마지막 성공: 없음";
+  }
+  if (retryBtn) {
+    retryBtn.disabled = !canSync || coordinatorState.status === "syncing";
+  }
 }
 
 export async function signInWithGoogle(ctx) {
@@ -113,27 +160,31 @@ export async function signOutOfAccount(ctx) {
     console.error("로그아웃 처리 중 예외 발생:", error);
   }
   ctx.setAccountSession(null);
+  ctx.syncCoordinator.setSession(null);
   ctx.renderAccountStatus();
 }
 
-// Wires sync.onAuthChange to update accountSession, re-render account status,
-// and pull a fresh sync snapshot into local state when a session appears.
-// `ctx` additionally needs: getState/setState, resetTransientUiState, renderAll.
+// Wires sync.onAuthChange to update accountSession and run the coordinator's
+// initial pull/merge when a new authenticated user appears. Successful state
+// refreshes are handled by the coordinator callback configured in main.js.
 export function wireAuthChange(ctx) {
   const { sync } = ctx;
   sync.onAuthChange(async session => {
+    const previousUserId = ctx.getAccountSession()?.user?.id || null;
     ctx.setAccountSession(session);
+    ctx.syncCoordinator.setSession(session);
     ctx.renderAccountStatus();
     if (!session) {
       return;
     }
-    const result = await sync.syncNow();
-    if (result && !result.skipped) {
-      ctx.setState(result.state);
-      ctx.resetTransientUiState();
-      ctx.renderAll();
+    if (previousUserId !== session.user?.id) {
+      await ctx.syncCoordinator.syncNow();
     }
   });
+}
+
+export async function retrySync(ctx) {
+  return ctx.syncCoordinator.syncNow();
 }
 
 // Native-only: listens for the OAuth redirect deep link (Capacitor's
