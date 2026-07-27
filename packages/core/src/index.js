@@ -156,8 +156,15 @@ export function cycleReviewQueueDraft({ items = [], drafts = new Map(), id, opti
   return nextDrafts;
 }
 
-export function reviewCompletionTargets({ items = [], drafts = new Map(), searchTerm = "" }) {
-  return reviewItems(items, searchTerm)
+// "선택 복습 완료" only ever completes what the user can actually SEE: it
+// already routed through reviewItems(items, searchTerm), so the global
+// search narrows it, and `kindFilter` narrows it the same way. A draft set
+// on a card that the current filter hides therefore stays a draft instead
+// of being silently committed - and it is NOT discarded either, since
+// pruneReviewQueueDrafts deliberately keeps drafts for every queue item
+// regardless of the view filter.
+export function reviewCompletionTargets({ items = [], drafts = new Map(), searchTerm = "", kindFilter = "" }) {
+  return reviewItems(items, searchTerm, kindFilter)
     .map(item => ({ id: item.id, review: reviewQueueReview(item, drafts) }))
     .filter(item => item.review !== "대기");
 }
@@ -288,8 +295,33 @@ export function buildSentenceQuizQuestion({
   };
 }
 
-export function reviewItems(items = [], searchTerm = "") {
-  return items.filter(item => isReviewQueueItem(item) && matchesSearch(item, searchTerm));
+// Kinds offered by the 복습 큐 page's 종류 filter, in the order the control
+// lists them. "" is the 전체 sentinel (no kind narrowing).
+//
+// Every kind that can reach the queue gets an option: isReviewQueueItem only
+// excludes kind === "source", so 문장 and 한자 items are queue members like
+// the rest and are filterable individually.
+export const REVIEW_KIND_FILTER_OPTIONS = ["word", "expression", "grammar", "sentence", "kanji"];
+
+// Anything unrecognised (stale value, hand-edited DOM) degrades to 전체
+// rather than filtering the queue down to nothing.
+export function normalizeReviewKindFilter(kindFilter) {
+  return REVIEW_KIND_FILTER_OPTIONS.includes(kindFilter) ? kindFilter : "";
+}
+
+export function matchesReviewKindFilter(item, kindFilter = "") {
+  const kind = normalizeReviewKindFilter(kindFilter);
+  return !kind || item?.kind === kind;
+}
+
+// `kindFilter` composes with (never replaces) the global search term: an
+// item has to clear both to stay in the queue.
+export function reviewItems(items = [], searchTerm = "", kindFilter = "") {
+  return items.filter(item =>
+    isReviewQueueItem(item) &&
+    matchesSearch(item, searchTerm) &&
+    matchesReviewKindFilter(item, kindFilter)
+  );
 }
 
 export function dailyEntriesByKind(dailyEntries = [], kind) {
@@ -323,14 +355,15 @@ export function uniqueSourceSentences(sourceSentences = []) {
   );
 }
 
-// Only word/grammar/expression daily entries ever get promoted into the
-// permanent study collections (see storage-idb's registerDailyEntries,
-// which filters to exactly these kinds). Sentence entries are never a
-// target of that call, so entry.registered stays false forever for a
-// sentence and isn't a meaningful "needs action" signal by itself - a
-// sentence "needs registration" only in the sense that it still has
-// unregistered word/grammar/expression children.
-const REGISTERABLE_DAILY_KINDS = ["word", "grammar", "expression"];
+// Every daily entry kind gets promoted into the permanent study collections
+// by registerDailyEntries: word/grammar/expression become items of their own
+// kind (plus derived 한자 items), and a sentence becomes a 문장 item
+// (part=문장, script=혼합 - D9 in tests/storage-conformance.test.js). So a
+// sentence's own `registered` flag IS a meaningful "needs action" signal, and
+// the 전체 등록 button targets sentences too: a sentence card "needs
+// registration" when the sentence itself or any of its
+// word/grammar/expression children is still unregistered.
+const REGISTERABLE_DAILY_KINDS = ["word", "grammar", "expression", "sentence"];
 
 export function entryNeedsRegistration(entry) {
   return REGISTERABLE_DAILY_KINDS.includes(entry?.kind) && !entry?.registered;
@@ -349,8 +382,11 @@ export function unregisteredStudyDates(dailyEntries = []) {
 }
 
 // A sentence has "complete" registration once every word/grammar/expression
-// entry linked to it (its children) has been registered - mirrors the
-// rollup used by the sentence cards on the 오늘 공부/문장 tabs.
+// entry linked to it (its children) has been registered. This is deliberately
+// only about the children - it answers "is this sentence's vocabulary fully
+// collected?" for the home tab's 오늘의 문장 pick, and ignores the sentence's
+// own `registered` flag. The sentence cards' 등록 필요 badge is a wider rollup
+// (children + the sentence itself), so the two no longer match exactly.
 export function sentenceHasCompleteRegistration(dailyEntries = [], sentenceId) {
   const children = ["word", "grammar", "expression"].flatMap(kind =>
     linkedEntriesForSentence(dailyEntries, kind, sentenceId)

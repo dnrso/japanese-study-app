@@ -159,6 +159,9 @@ function bindEvents() {
     renderTaxonomy();
   });
   byId("wordReviewFilter").addEventListener("change", renderWords);
+  // Only the 복습 큐 re-renders: the sidebar 복습 필요 count and the home
+  // 복습 항목 stat intentionally stay whole-queue numbers.
+  byId("reviewKindFilter").addEventListener("change", renderReview);
 
   byId("quickAddBtn").addEventListener("click", () => openDialog("word"));
 
@@ -232,12 +235,13 @@ function bindEvents() {
   });
 
   byId("registerLearnedBtn").addEventListener("click", async () => {
-    const targets = (state.dailyEntries || []).filter(entry =>
-      ["word", "grammar", "expression"].includes(entry.kind)
-    );
+    // Sentences are registerable too (they become 문장 items - D9), and
+    // already-registered entries are skipped: re-submitting them collected
+    // nothing and only reported every existing item back as a 중복.
+    const targets = (state.dailyEntries || []).filter(entry => core.entryNeedsRegistration(entry));
 
     if (!targets.length) {
-      window.alert("등록할 새 단어, 새 문법, 새 표현이 없습니다.");
+      window.alert("등록할 문장, 새 단어, 새 문법, 새 표현이 없습니다.");
       return;
     }
 

@@ -375,6 +375,9 @@ function bindEvents() {
     resetPageIndex("words");
     renderWords();
   });
+  // Only the 복습 큐 needs re-rendering: the sidebar 복습 필요 count and the
+  // home 복습 항목 stat intentionally stay whole-queue numbers.
+  byId("reviewKindFilter").addEventListener("change", renderReview);
 
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
@@ -735,13 +738,26 @@ function exitQuizSession() {
   exitQuizSessionImpl(quizCtx());
 }
 
+// The 종류 filter is a view filter, not a setting, so it lives in the
+// <select> itself exactly like the 단어 page's wordPartFilter/wordScriptFilter/
+// wordReviewFilter - no module-level state and (unlike the 설정-tab
+// listPageSizeOverrides) nothing written to localStorage.
+function reviewKindFilterValue() {
+  return core.normalizeReviewKindFilter(byId("reviewKindFilter")?.value || "");
+}
+
 function renderReview() {
+  // Not narrowed by the kind filter: hiding a card must not throw away the
+  // draft the user already set on it.
   reviewQueueDrafts = core.pruneReviewQueueDrafts({
     items: state.items,
     drafts: reviewQueueDrafts
   });
+  const kindFilter = reviewKindFilterValue();
   applyPagePatch(renderReviewPage({
-    reviewItems: core.reviewItems(state.items, searchTerm),
+    reviewItems: core.reviewItems(state.items, searchTerm, kindFilter),
+    kindFilter,
+    kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
     helpers: renderHelpers()
   }));
 }
@@ -1090,19 +1106,31 @@ async function addManualEntryFromInput() {
 }
 
 async function registerLearnedEntries() {
-  const targets = dailyEntriesForSelectedDate().filter(entry =>
-    ["word", "grammar", "expression"].includes(entry.kind) && !entry.registered
-  );
+  // Sentences are registerable too (they become 문장 items - D9), so the
+  // button collects unregistered entries of every kind, not just the
+  // word/grammar/expression children.
+  const targets = dailyEntriesForSelectedDate().filter(entry => core.entryNeedsRegistration(entry));
   if (!targets.length) {
-    window.alert("등록할 새 단어, 새 문법, 새 표현이 없습니다.");
+    window.alert("등록할 문장, 새 단어, 새 문법, 새 표현이 없습니다.");
     return;
   }
 
   const response = await store.registerDailyEntries(targets.map(entry => entry.id), selectedDate);
   state = response.state;
-  const registeredCount = response.result.registered.length;
-  const duplicateCount = response.result.duplicates.length;
-  window.alert(`등록 ${registeredCount}개${duplicateCount ? `, 중복 ${duplicateCount}개` : ""}`);
+  const registered = response.result.registered || [];
+  const linked = response.result.linked || [];
+  const duplicates = response.result.duplicates || [];
+  // errors was silently dropped here: the adapter reports per-entry failures
+  // (D13) and a missing entry id (D11), and this alert used to show only the
+  // registered/duplicate counts - so a partial failure looked like a success.
+  // Desktop already listed all four; the shape now matches.
+  const errors = response.result.errors || [];
+  window.alert([
+    registered.length ? `등록 ${registered.length}개` : "",
+    linked.length ? `원본 문장 추가 ${linked.length}개` : "",
+    duplicates.length ? `중복 ${duplicates.length}개` : "",
+    errors.length ? `오류: ${errors.join(", ")}` : ""
+  ].filter(Boolean).join("\n") || "등록된 항목이 없습니다.");
   renderAll();
 }
 
@@ -1249,7 +1277,8 @@ async function completeSelectedReview() {
   const targets = core.reviewCompletionTargets({
     items: state.items,
     drafts: reviewQueueDrafts,
-    searchTerm
+    searchTerm,
+    kindFilter: reviewKindFilterValue()
   });
   if (!targets.length) {
     window.alert("복습 완료로 변경할 항목을 먼저 선택하세요.");
