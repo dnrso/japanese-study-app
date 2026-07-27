@@ -293,9 +293,12 @@ function bindEvents() {
   });
 
   byId("resetDataBtn").addEventListener("click", async () => {
+    if (!window.confirm("샘플 데이터를 초기 상태로 되돌릴까요?")) {
+      return;
+    }
     clearReviewQueueDrafts();
     applyState(await dataApi.resetSampleData());
-    setStorageStatus("SQLite 데이터를 초기화했습니다.");
+    setStorageStatus("샘플 데이터로 초기화했습니다.");
   });
 
   byId("exportDataBtn").addEventListener("click", async () => {

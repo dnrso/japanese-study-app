@@ -19,9 +19,10 @@ function sentenceCard(entry, helpers) {
   const childGrammar = helpers.linkedEntriesForSentence("grammar", entry.id);
   const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
   const children = [...childWords, ...childGrammar, ...childExpressions];
-  // Same rollup as today.js's dailyEntryCard: a sentence's own `registered`
-  // flag never flips to true (only its word/grammar/expression children are
-  // ever registered - see storage-idb's registerDailyEntries), so the
+  // Same rollup as today.js's dailyEntryCard: the 등록 button only ever targets
+  // a sentence's word/grammar/expression children, so a sentence's own
+  // `registered` flag stays false in practice (both adapters CAN register a
+  // sentence as a 문장 item - D9 - but nothing in the UI asks them to), and the
   // "needs registration" mark here is a rollup over its children.
   const needsRegistration = children.length ? children.some(child => helpers.core.entryNeedsRegistration(child)) : false;
 

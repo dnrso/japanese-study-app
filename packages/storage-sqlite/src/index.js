@@ -13,9 +13,11 @@ const { createDataImportExport } = require("./dataImportExport");
 // convention for the adapters themselves.
 const {
   addDays,
+  createSampleState,
   dailyEntryToItems,
   itemToRawText,
   kindLabel,
+  missingDailyEntryMessage,
   normalizeDailyKind,
   normalizeDate,
   normalizeDeletedAt,
@@ -48,6 +50,12 @@ const appDataDir = resolveAppDataDir(options);
 const exportsDir = path.join(appDataDir, "exports");
 const backupsDir = path.join(appDataDir, "backups");
 const dbPath = path.join(appDataDir, "nihongo.sqlite");
+// Same contract as storage-idb: first-run seeding is opt-in (only when the
+// host injects a `seedState` factory, and only into a still-empty database),
+// while resetSampleData() - the "샘플 데이터" button - always restores sample
+// data, falling back to the shared seed in @nihongo-study/storage-core.
+const seedStateOption = typeof options.seedState === "function" ? options.seedState : null;
+const sampleState = seedStateOption || createSampleState;
 
 let db;
 
@@ -87,6 +95,26 @@ function initDatabase() {
   migrateReviewDueDates();
   migrateParentLinks();
   migrateLegacyStudyLog();
+
+  if (seedStateOption && isDatabaseEmpty()) {
+    seedFromState(seedStateOption());
+  }
+}
+
+// storage-idb gates its first-run seed on a "meta" flag; there is no meta
+// table here, and adding one would be a schema migration for a code path the
+// desktop app does not even use today, so an empty database stands in for
+// "never initialized". The two agree where it matters: a database with any
+// user data in it is never re-seeded.
+function isDatabaseEmpty() {
+  const { total } = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM daily_entries) +
+      (SELECT COUNT(*) FROM items) +
+      (SELECT COUNT(*) FROM tasks) +
+      (SELECT COUNT(*) FROM study_days) AS total
+  `).get();
+  return total === 0;
 }
 
 function ensureColumn(tableName, columnName, definition) {
@@ -534,14 +562,64 @@ function dailyCandidatePayload(parent, kind, item) {
   };
 }
 
+// The title of the sentence a daily entry came from, resolved exactly the way
+// getState() (:264) and exportData()'s allDailyEntriesRaw
+// (dataImportExport.js:64) already derive `parentTitle`: the parent row joined
+// on parent_id, else the newest sentence linked through daily_entry_links. This
+// is what registerDailyEntry writes into item.source, matching storage-idb's
+// parentSentenceTitle byte for byte (D8 in tests/storage-conformance.test.js).
+//
+// Returns "" for an entry with no sentence at all - the 단어/문법/표현 input adds
+// parentless entries on both platforms - and the caller falls back to "오늘 공부"
+// for those, which is what idb has always written.
+//
+// Known limitation, deliberate for now: this copies the title, so renaming a
+// sentence orphans the items registered from it.
+function parentSentenceTitle(entry) {
+  if (entry.parent_id) {
+    const parent = db.prepare(`
+      SELECT title FROM daily_entries WHERE id = ? AND deleted_at IS NULL
+    `).get(entry.parent_id);
+    if (parent?.title) {
+      return text(parent.title);
+    }
+  }
+  const linked = db.prepare(`
+    SELECT sentence.title
+    FROM daily_entry_links link
+    JOIN daily_entries sentence ON sentence.id = link.sentence_id
+    WHERE link.entry_id = ?
+      AND link.deleted_at IS NULL
+      AND sentence.deleted_at IS NULL
+    ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
+    LIMIT 1
+  `).get(entry.id);
+  return text(linked?.title);
+}
+
 function registerDailyEntry(id) {
   const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ? AND deleted_at IS NULL").get(id);
   if (!entry) {
-    return { state: getState(), result: { registered: [], duplicates: ["항목을 찾을 수 없습니다."], linked: [] } };
+    // D11: an id that matches no live entry is a failure, not a duplicate. It
+    // used to land in `duplicates`, where the desktop alert renders it as
+    // "중복: 항목을 찾을 수 없습니다." and the web adapter reported nothing at all;
+    // both adapters now report the shared message in `errors`.
+    return { state: getState(), result: { registered: [], duplicates: [], linked: [], errors: [missingDailyEntryMessage] } };
   }
 
   const parsed = safeJson(entry.parsed_json);
-  const candidates = withKanjiItems(dailyEntryToItems(entry.kind, parsed));
+  // D8: a registered 단어/문법/표현 item records the title of the sentence it came
+  // from. Sentence entries are skipped: a sentence has no parent sentence to
+  // name, so it keeps an empty source rather than gaining an invented one -
+  // storage-idb's itemsFromDailyEntry does the same now that it registers
+  // sentences too (D9). withKanjiItems runs AFTER the stamp so the derived 한자
+  // items keep their own source (the word's title).
+  const baseItems = dailyEntryToItems(entry.kind, parsed);
+  const candidates = withKanjiItems(
+    entry.kind === "sentence"
+      ? baseItems
+      : baseItems.map(item => ({ ...item, source: parentSentenceTitle(entry) || "오늘 공부" }))
+  );
   const duplicates = [];
   const registered = [];
   const linked = [];
@@ -593,6 +671,8 @@ function registerDailyEntries(ids, studyDate) {
       registered.push(...response.result.registered);
       duplicates.push(...response.result.duplicates);
       linked.push(...(response.result.linked || []));
+      // The unknown-id message (D11) is reported by registerDailyEntry itself.
+      errors.push(...(response.result.errors || []));
     } catch (error) {
       errors.push(error.message || String(error));
     }
@@ -617,13 +697,42 @@ function updateTaskDone(id, done, studyDate) {
   return getState(studyDate);
 }
 
+// Item columns that callers may address by either camelCase or snake_case;
+// supplying either form counts as "the caller set this column".
+const itemColumnAliases = {
+  reviewDueDate: "review_due_date",
+  quizCorrectCount: "quiz_correct_count",
+  quizWrongCount: "quiz_wrong_count",
+  lastQuizzedAt: "last_quizzed_at",
+  lastReviewedAt: "last_reviewed_at",
+  deletedAt: "deleted_at"
+};
+
+// PATCH semantics for upsertItem (matches storage-idb): only keys ABSENT from
+// the payload keep their stored value. A key that is present wins even when it
+// is "", so "user cleared the note in the edit dialog" still clears the note.
+function mergeItemPayload(existingItem, item) {
+  const merged = { ...existingItem };
+  Object.entries(itemColumnAliases).forEach(([camelKey, snakeKey]) => {
+    if (item[camelKey] === undefined && item[snakeKey] !== undefined) {
+      delete merged[camelKey];
+    }
+  });
+  Object.entries(item).forEach(([key, value]) => {
+    if (value !== undefined) {
+      merged[key] = value;
+    }
+  });
+  return merged;
+}
+
 function upsertItem(item) {
-  const payload = normalizeItem({ ...item, id: item.id || createId() });
   const existingItem = item.id
     ? db.prepare(`
-      SELECT kind, title,
+      SELECT kind, title, reading, meaning, level, part, script,
         review,
         review_due_date AS reviewDueDate,
+        kanji, source, note,
         quiz_correct_count AS quizCorrectCount,
         quiz_wrong_count AS quizWrongCount,
         last_quizzed_at AS lastQuizzedAt,
@@ -633,21 +742,19 @@ function upsertItem(item) {
       WHERE id = ?
     `).get(item.id)
     : null;
-  if (existingItem && item.quizCorrectCount === undefined && item.quiz_correct_count === undefined) {
-    payload.quizCorrectCount = existingItem.quizCorrectCount;
-    payload.quizWrongCount = existingItem.quizWrongCount;
-    payload.lastQuizzedAt = existingItem.lastQuizzedAt;
-  }
+  // Merge BEFORE normalizing: normalizeItem() defaults `review` to "대기" (and
+  // reviewDueDateFor() then blanks the due date with it), so a payload that
+  // merely omits `review` has to be carrying the stored one by this point.
+  const payload = normalizeItem({
+    ...(existingItem ? mergeItemPayload(existingItem, item) : item),
+    id: item.id || createId()
+  });
   if (existingItem && item.reviewDueDate === undefined && item.review_due_date === undefined) {
+    // The merge already carried the stored due date in; re-schedule it only
+    // when this payload actually moved the review state.
     payload.reviewDueDate = existingItem.review === payload.review
       ? existingItem.reviewDueDate
       : reviewDueDateFor(payload.review);
-  }
-  if (existingItem && item.lastReviewedAt === undefined && item.last_reviewed_at === undefined) {
-    payload.lastReviewedAt = existingItem.lastReviewedAt;
-  }
-  if (existingItem && item.deletedAt === undefined && item.deleted_at === undefined) {
-    payload.deletedAt = existingItem.deletedAt;
   }
   const insert = db.prepare(`
     INSERT INTO items (id, kind, title, reading, meaning, level, part, script, review, review_due_date, kanji, source, note, quiz_correct_count, quiz_wrong_count, last_quizzed_at, last_reviewed_at, deleted_at)
@@ -679,7 +786,11 @@ function upsertItem(item) {
     if (existingItem && (existingItem.kind !== payload.kind || existingItem.title !== payload.title)) {
       updateLinkedDailyEntryTitles(existingItem.kind, existingItem.title, payload.kind, payload.title);
     }
-    const generatedItems = payload.kind === "word" ? withKanjiItems([payload]).slice(1) : [];
+    // D7: derive 한자 sub-items from the kanji the CALLER supplied. Gating on
+    // the raw payload keeps a partial update - which now inherits the stored
+    // `kanji` through the merge - from re-deriving on every edit.
+    const derivesKanjiItems = item.kanji !== undefined;
+    const generatedItems = payload.kind === "word" && derivesKanjiItems ? withKanjiItems([payload]).slice(1) : [];
     generatedItems.forEach(kanjiItem => {
       if (!exists.get(kanjiItem.kind, kanjiItem.title)) {
         insert.run(normalizeItem({ ...kanjiItem, id: createId(), review: payload.review || "대기", reviewDueDate: payload.reviewDueDate }));
@@ -823,8 +934,58 @@ function clearAllData() {
   return getState();
 }
 
+// The desktop "샘플 데이터" button. This used to be a plain alias of
+// clearAllData(), so it wiped the database and put nothing back, while web
+// cleared and re-seeded (D18 in tests/storage-conformance.test.js). Both now
+// restore the same sample data from @nihongo-study/storage-core.
 function resetSampleData() {
-  return clearAllData();
+  const seed = sampleState();
+  db.transaction(() => {
+    clearAllData();
+    seedFromState(seed);
+  })();
+  return getState(normalizeDate(seed.selectedDate));
+}
+
+// Writes a seed state through the adapter's own write paths (ensureStudyDay +
+// insertDailyEntry with normalizeDailyEntry, then saveStudyLog / addTask /
+// upsertItem) rather than hand-rolled INSERTs, so seeded rows are normalized
+// exactly like rows the UI creates. Mirrors storage-idb's seedDatabase(), and
+// accepts the same seed shape (which is also the exportData()/backup shape).
+function seedFromState(seed = {}) {
+  const selectedDate = normalizeDate(seed.selectedDate);
+  const entries = seed.allDailyEntries || seed.dailyEntries || [];
+  const markRegistered = db.prepare("UPDATE daily_entries SET registered = 1 WHERE id = ?");
+
+  db.transaction(() => {
+    entries.forEach(entry => {
+      // `registered` is not a column insertDailyEntry writes (addDailyEntry
+      // never creates an already-registered entry), so it is stamped after.
+      const { registered, ...payload } = normalizeDailyEntry(entry);
+      ensureStudyDay(payload.studyDate);
+      insertDailyEntry(payload);
+      if (registered) {
+        markRegistered.run(payload.id);
+      }
+    });
+    migrateParentLinks();
+    (seed.studyDays || []).forEach(day => saveStudyLog(day));
+    // storage-idb's normalizeStudyDays always materializes the selected day and
+    // folds seed.studyLog into it (falling back to whatever that day already
+    // holds); same here, so both adapters end up with the same study_days rows.
+    const existingDay = db
+      .prepare("SELECT minutes, summary, note FROM study_days WHERE study_date = ?")
+      .get(selectedDate) || { minutes: 0, summary: "", note: "" };
+    const studyLog = seed.studyLog || {};
+    saveStudyLog({
+      studyDate: selectedDate,
+      minutes: studyLog.minutes ?? existingDay.minutes,
+      summary: studyLog.summary ?? existingDay.summary,
+      note: studyLog.note ?? existingDay.note
+    });
+    (seed.tasks || []).forEach(task => addTask(task));
+    (seed.items || []).forEach(item => upsertItem(item));
+  })();
 }
 
 function ensureStudyDay(studyDate) {

@@ -1129,7 +1129,9 @@ async function promptAddItem(kind) {
     title,
     reading,
     meaning,
-    level: kind === "source" ? "웹" : "N3",
+    // No `level`: this used to stamp "N3" on every new item and "웹" on every
+    // 자료, neither of which the user asked for. 레벨/난이도 is free text the user
+    // fills in from the edit dialog, so it starts empty (D8).
     part: kind === "word" ? "명사" : "",
     script: kind === "word" ? "한자+히라가나" : "",
     review: kind === "source" ? "" : "대기",

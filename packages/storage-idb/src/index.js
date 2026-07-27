@@ -5,6 +5,7 @@
 // form is the one that works everywhere. Vite handles it fine too.
 import {
   addDays,
+  createSampleState,
   itemToRawText,
   kindLabel,
   normalizeDailyKind,
@@ -13,12 +14,14 @@ import {
   normalizeOptionalDate,
   normalizeReview,
   normalizeReviewCompletionTargets,
+  missingDailyEntryMessage,
   parseDailyEntry as parseCanonicalDailyEntry,
   pruneStaleTombstones,
   reviewIntervals,
   text,
   todayKey,
-  toNumber
+  toNumber,
+  withKanjiItems
 } from "../../storage-core/src/index.js";
 
 const databaseVersion = 2;
@@ -58,7 +61,13 @@ const stores = storeDefinitions.map(store => store.name);
 
 export function createIdbStorage(options = {}) {
   const dbName = options.dbName || "nihongo-study";
+  // First-run seeding stays opt-in (the host has to ask for it), but
+  // resetSampleData() - the "샘플 데이터" button - always restores sample data,
+  // falling back to the shared seed in @nihongo-study/storage-core when the
+  // host injected none. storage-sqlite does exactly the same, so the button
+  // behaves identically on desktop and web.
   const seedState = typeof options.seedState === "function" ? options.seedState : null;
+  const sampleState = seedState || createSampleState;
   let dbPromise = null;
 
   const paths = {
@@ -195,33 +204,86 @@ export function createIdbStorage(options = {}) {
     return getState(studyDate || entry.studyDate);
   }
 
+  // ONE TRANSACTION PER ENTRY, on purpose (D13 in
+  // tests/storage-conformance.test.js). The catch used to sit inside a single
+  // runTransaction callback spanning the whole batch, where it could only ever
+  // see a synchronous throw: an IndexedDB request fails asynchronously, so a
+  // failed put aborted the transaction, rejected runTransaction's promise and
+  // rejected this function - leaving `errors` empty and the caller with nothing
+  // to show. IndexedDB gives no way to continue past a failed request inside
+  // the same transaction (an unhandled request error aborts it), so "report the
+  // failure AND keep going" requires a transaction boundary per entry. That is
+  // also exactly storage-sqlite's granularity: it wraps each id in its own
+  // db.transaction and catches per id (packages/storage-sqlite/src/index.js:667),
+  // so on both adapters a mid-batch failure leaves the entries before it
+  // committed and the entries after it still processed - atomic per entry, not
+  // per batch.
   async function registerDailyEntries(ids = [], studyDate = todayKey()) {
     const entries = await getAllActive("dailyEntries");
+    const links = await getAllActive("dailyEntryLinks");
     const items = await getAllActive("items");
-    const targets = entries.filter(entry => ids.includes(entry.id) && ["word", "grammar", "expression"].includes(entry.kind));
     const registered = [];
     const duplicates = [];
     const linked = [];
     const errors = [];
+    // kind::title of everything already collected. Seeded from the snapshot
+    // read above and extended as rows are written, because an IDB write is
+    // not readable again inside the same transaction: without it a batch that
+    // derives the same 한자 twice (two words sharing a character, or a word
+    // whose 한자 is also being registered) would insert it twice.
+    const existingKeys = new Set(items.map(item => `${item.kind}::${item.title}`));
 
-    await runTransaction(["dailyEntries", "items"], "readwrite", transaction => {
-      const entryStore = transaction.objectStore("dailyEntries");
-      const itemStore = transaction.objectStore("items");
-      targets.forEach(entry => {
-        try {
-          const exists = items.some(item => item.kind === entry.kind && item.title === entry.title);
-          if (exists) {
-            duplicates.push(`${kindLabel(entry.kind)}: ${entry.title}`);
-          } else {
-            itemStore.put(itemFromDailyEntry(entry));
-            registered.push(`${kindLabel(entry.kind)}: ${entry.title}`);
-          }
-          entryStore.put({ ...entry, registered: true, updatedAt: now() });
-        } catch (error) {
-          errors.push(error.message || String(error));
+    for (const id of ids) {
+      // Matched against the in-memory snapshot rather than a store.get(id):
+      // a non-string id (a dropped/garbled IPC argument) is not a valid IDB
+      // key and would throw DataError instead of reporting anything.
+      const entry = entries.find(candidate => candidate.id === id);
+      if (!entry) {
+        // D11: an unknown id is an error, not a duplicate. storage-sqlite
+        // reports the same string.
+        errors.push(missingDailyEntryMessage);
+        continue;
+      }
+
+      const pending = [];
+      const claimedKeys = [];
+      let duplicateCount = 0;
+      itemsFromDailyEntry(entry, parentSentenceTitle(entry, entries, links)).forEach(candidate => {
+        if (!candidate.title) {
+          return;
         }
+        const key = `${candidate.kind}::${candidate.title}`;
+        if (existingKeys.has(key)) {
+          duplicates.push(`${kindLabel(candidate.kind)}: ${candidate.title}`);
+          duplicateCount += 1;
+          return;
+        }
+        existingKeys.add(key);
+        claimedKeys.push(key);
+        pending.push(candidate);
       });
-    });
+
+      // Nothing to write and nothing to report: leave `registered` alone, the
+      // way sqlite does (it only stamps the flag when something happened).
+      if (!pending.length && !duplicateCount) {
+        continue;
+      }
+
+      try {
+        await runTransaction(["dailyEntries", "items"], "readwrite", transaction => {
+          const itemStore = transaction.objectStore("items");
+          pending.forEach(candidate => itemStore.put(candidate));
+          transaction.objectStore("dailyEntries").put({ ...entry, registered: true, updatedAt: now() });
+        });
+        pending.forEach(candidate => registered.push(`${kindLabel(candidate.kind)}: ${candidate.title}`));
+      } catch (error) {
+        errors.push(error?.message || String(error));
+        // The transaction rolled back, so nothing was collected after all: give
+        // the titles back so a later entry in the same batch can still claim
+        // them, and report nothing as registered.
+        claimedKeys.forEach(key => existingKeys.delete(key));
+      }
+    }
 
     return {
       state: await getState(studyDate),
@@ -358,15 +420,13 @@ export function createIdbStorage(options = {}) {
   }
 
   async function resetSampleData() {
-    await runTransaction(stores, "readwrite", transaction => {
-      stores.forEach(name => transaction.objectStore(name).clear());
-    });
-    if (seedState) {
-      await seedDatabase(seedState());
-    } else {
-      await putValue("meta", { key: "initialized", value: true });
-    }
-    return getState();
+    const seed = sampleState();
+    // seedDatabase() clears every store (and re-stamps the "initialized" meta
+    // flag) inside the same transaction before it writes the seed.
+    await seedDatabase(seed);
+    // The seed's own date, not today: identical for the shared sample (which
+    // is built around today) and correct for an injected seed that is not.
+    return getState(normalizeDate(seed.selectedDate));
   }
 
   async function exportData() {
@@ -727,21 +787,52 @@ function putDailyCandidate(transaction, sentence, kind, item) {
   transaction.objectStore("dailyEntryLinks").put(linkPayload(entry.id, sentence.id));
 }
 
-function itemFromDailyEntry(entry) {
-  return normalizeItem({
+// Every collection item a single daily entry registers into: the entry itself
+// plus, for a word carrying 한자=..., one 한자 item per character.
+//
+// A sentence entry registers as a `sentence` item (D9). It used to be filtered
+// out of registerDailyEntries entirely, so on web the 등록 call was a silent
+// no-op - no item, no duplicate, no error, no message - while desktop created a
+// 문장 item. The shape here is the one dailyEntryToItems' sentence branch in
+// @nihongo-study/storage-core builds for sqlite: fixed part 문장 / script 혼합,
+// note = the parsed raw text, no `source` (a sentence has no parent sentence to
+// name, so it keeps an empty one rather than gaining the "오늘 공부" fallback -
+// packages/storage-sqlite/src/index.js:619 does the same) and no 한자 items
+// (withKanjiItems only derives them from a `word`).
+//
+// The 한자 derivation is withKanjiItems from @nihongo-study/storage-core - the
+// same shared helper storage-sqlite has always run here (and in upsertItem).
+// It used to be desktop-only, so the web/Android 한자 collection could never
+// fill from daily entries at all (D10 in tests/storage-conformance.test.js).
+// It is forward-only: entries registered before this change are untouched, and
+// re-registering one is a no-op because the duplicate check below already
+// covers the derived items.
+//
+// `source` is the provenance both adapters now agree on (D8): the title of the
+// sentence this entry came from, resolved by parentSentenceTitle below and
+// passed in. `level` is deliberately NOT set - this adapter used to stamp "웹"
+// on every registered item, encoding the platform in a field the UI presents as
+// a free-text 레벨/난이도. The field stays user-editable; nothing invents a
+// value for it any more.
+function itemsFromDailyEntry(entry, parentTitle) {
+  const isSentence = entry.kind === "sentence";
+  const item = {
     kind: entry.kind,
     title: entry.title,
     reading: entry.reading,
     meaning: entry.meaning,
-    level: "웹",
-    part: entry.parsed?.part,
-    script: entry.parsed?.script,
-    kanji: entry.parsed?.kanji,
+    part: isSentence ? "문장" : entry.parsed?.part,
+    script: isSentence ? "혼합" : entry.parsed?.script,
+    kanji: isSentence ? "" : entry.parsed?.kanji,
     review: "대기",
-    source: entry.parentTitle || "오늘 공부",
+    source: isSentence ? "" : parentTitle || "오늘 공부",
     note: entry.parsed?.note || "",
     sourceSentences: entry.sourceSentences || []
-  });
+  };
+  // Derived from the un-normalized shape on purpose: withKanjiItems reads
+  // kind/kanji/level/title/reading straight off it, so the 한자 items inherit
+  // the word's (now empty) level and get source = the word's own title.
+  return withKanjiItems([item]).map(normalizeItem);
 }
 
 // Accepts either the canonical exchange shape (structured `parsed` object)
@@ -840,7 +931,7 @@ function parseLegacyParsedJson(value) {
 //
 // The only adapter-specific bit left: for word/grammar/expression entries this
 // adapter persists 품사/문자/한자 as flat fields on the entry's `parsed` blob
-// and reads them back in itemFromDailyEntry when registering. The canonical
+// and reads them back in itemsFromDailyEntry when registering. The canonical
 // parser exposes them per-bullet in `parsed.words`, so lift the first inline
 // match up exactly the way the sqlite adapter's dailyEntryToItems does
 // (parsed.note is the trimmed raw text `parsed.words` was parsed from, so
@@ -857,6 +948,32 @@ function parseDailyEntry(kind, rawText) {
     part: inlineWord?.part || "",
     script: inlineWord?.script || ""
   };
+}
+
+// The title of the sentence a word/grammar/expression entry came from - the
+// `source` every registered item gets (D8). Resolution order is the one
+// storage-sqlite uses (packages/storage-sqlite/src/index.js:264 and
+// dataImportExport.js:64), so both adapters produce the same string for the
+// same data: a stored parentTitle (only legacy desktop imports carry one), else
+// the parent entry looked up by parentId, else the first linked sentence.
+//
+// Returns "" for a manually added standalone entry (the 단어/문법/표현 input has
+// no parent sentence at all); the caller supplies the "오늘 공부" fallback.
+//
+// Known limitation, deliberate for now: this copies the title, so renaming a
+// sentence orphans the items registered from it.
+function parentSentenceTitle(entry, allEntries, links) {
+  if (entry.parentTitle) {
+    return text(entry.parentTitle);
+  }
+  if (entry.parentId) {
+    const parent = allEntries.find(candidate => candidate.id === entry.parentId);
+    if (parent?.title) {
+      return text(parent.title);
+    }
+  }
+  const [first] = sourceSentencesForEntry(entry, allEntries, links);
+  return text(first?.title);
 }
 
 function sourceSentencesForEntry(entry, allEntries, links) {

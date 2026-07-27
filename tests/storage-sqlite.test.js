@@ -344,6 +344,83 @@ describeStorageSuite("storage-sqlite (better-sqlite3, temp DBs)", abiError, () =
     expect(sourceItem?.review).toBe("");
   });
 
+  it("Case8c: a partial upsertItem() PATCHes the row instead of rebuilding it (regression: D6 data loss)", () => {
+    const dir = tmpDataDir("partial-upsert");
+    const store = createSqliteStorage({ appDataDir: dir });
+    store.initDatabase();
+    const dbFile = path.join(dir, "nihongo.sqlite");
+
+    const created = store.upsertItem({
+      kind: "word",
+      title: "부분수정",
+      reading: "ぶぶん",
+      meaning: "partial",
+      level: "N3",
+      part: "명사",
+      script: "한자+히라가나",
+      source: "교재",
+      note: "메모",
+      kanji: "部(part)",
+      review: "일주일",
+      studyDate
+    });
+    const item = created.items.find(candidate => candidate.title === "부분수정");
+    expect(item.reviewDueDate).toBeTruthy();
+    // The 한자 sub-item derived from `kanji` (see D7).
+    expect(created.items.filter(candidate => candidate.kind === "kanji").map(candidate => candidate.title)).toEqual(["部"]);
+
+    // Backdate the audit columns so "createdAt is preserved, updatedAt moves"
+    // is observable despite CURRENT_TIMESTAMP's one-second resolution.
+    const backdate = new Database(dbFile);
+    backdate.prepare("UPDATE items SET created_at = ?, updated_at = ? WHERE id = ?")
+      .run("2000-01-01 00:00:00", "2000-01-01 00:00:00", item.id);
+    backdate.close();
+
+    // The PATCH the desktop app used to lose data on: id + kind + title only.
+    const patched = store.upsertItem({ id: item.id, kind: "word", title: "부분수정2", studyDate });
+    const after = patched.items.find(candidate => candidate.id === item.id);
+
+    expect(after.title).toBe("부분수정2");
+    expect(after.reading).toBe("ぶぶん");
+    expect(after.meaning).toBe("partial");
+    expect(after.level).toBe("N3");
+    expect(after.part).toBe("명사");
+    expect(after.script).toBe("한자+히라가나");
+    expect(after.source).toBe("교재");
+    expect(after.note).toBe("메모");
+    expect(after.kanji).toBe("部(part)");
+    expect(after.review).toBe("일주일");
+    expect(after.reviewDueDate).toBe(item.reviewDueDate);
+    // The omitted `kanji` must not trigger a second derivation pass either.
+    expect(patched.items.filter(candidate => candidate.kind === "kanji")).toHaveLength(1);
+
+    const rawDb = new Database(dbFile);
+    const rawItem = rawDb.prepare(`
+      SELECT reading, meaning, level, part, script, source, note, review,
+        review_due_date AS reviewDueDate,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM items WHERE id = ?
+    `).get(item.id);
+    rawDb.close();
+
+    // Nothing was blanked on disk, createdAt survived, updatedAt advanced.
+    expect(rawItem.reading).toBe("ぶぶん");
+    expect(rawItem.note).toBe("메모");
+    expect(rawItem.review).toBe("일주일");
+    expect(rawItem.reviewDueDate).toBe(item.reviewDueDate);
+    expect(rawItem.createdAt).toBe("2000-01-01 00:00:00");
+    expect(rawItem.updatedAt).not.toBe("2000-01-01 00:00:00");
+
+    // A key that IS present wins, even when empty.
+    const cleared = store.upsertItem({ id: item.id, note: "", level: "", studyDate });
+    const blanked = cleared.items.find(candidate => candidate.id === item.id);
+    expect(blanked.note).toBe("");
+    expect(blanked.level).toBe("");
+    expect(blanked.reading).toBe("ぶぶん");
+    expect(blanked.review).toBe("일주일");
+  });
+
   it("Case9: round-trip - idb exportData -> sqlite importFullBackup -> sqlite exportData preserves parsed structure, sourceSentences, and tasks.studyDate", async () => {
     const dbName = `sqlite-parity-idb-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const idbStore = createIdbStorage({ dbName });
