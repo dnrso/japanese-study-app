@@ -163,9 +163,11 @@ export function createIdbStorage(options = {}) {
         transaction.objectStore("dailyEntryLinks").put(linkPayload(payload.id, parentId));
       }
       if (kind === "sentence") {
-        parsed.words.forEach(item => putDailyCandidate(transaction, payload, "word", item));
-        parsed.grammar.forEach(item => putDailyCandidate(transaction, payload, "grammar", item));
-        parsed.expressions.forEach(item => putDailyCandidate(transaction, payload, "expression", item));
+        putDailyCandidates(transaction, payload, [
+          ...parsed.words.map(item => ["word", item]),
+          ...parsed.grammar.map(item => ["grammar", item]),
+          ...parsed.expressions.map(item => ["expression", item])
+        ]);
       }
     });
 
@@ -763,11 +765,44 @@ function studyLogForDate(studyDays, selectedDate) {
   };
 }
 
-function putDailyCandidate(transaction, sentence, kind, item) {
-  if (!item.title) {
+function putDailyCandidates(transaction, sentence, candidates) {
+  const pending = candidates
+    .filter(([, item]) => item.title)
+    .map(([kind, item]) => dailyCandidatePayload(sentence, kind, item));
+  if (!pending.length) {
     return;
   }
-  const entry = normalizeDailyEntry({
+
+  const entryStore = transaction.objectStore("dailyEntries");
+  const linkStore = transaction.objectStore("dailyEntryLinks");
+  // One read seeds the whole batch so later candidates can see earlier merges
+  // from this sentence without opening an async gap between transactions.
+  const request = entryStore.index("studyDate").getAll(sentence.studyDate);
+  request.onsuccess = () => {
+    const existingByKey = new Map();
+    request.result
+      .filter(entry => !entry.deletedAt)
+      .sort(compareDailyCandidatePriority)
+      .forEach(entry => {
+        const key = dailyCandidateKey(entry);
+        if (!existingByKey.has(key)) {
+          existingByKey.set(key, entry);
+        }
+      });
+
+    pending.forEach(candidate => {
+      const key = dailyCandidateKey(candidate);
+      const existing = existingByKey.get(key);
+      const entry = existing ? mergeDailyCandidate(existing, candidate) : candidate;
+      entryStore.put(entry);
+      linkStore.put(linkPayload(entry.id, sentence.id));
+      existingByKey.set(key, entry);
+    });
+  };
+}
+
+function dailyCandidatePayload(sentence, kind, item) {
+  return normalizeDailyEntry({
     id: createId(),
     studyDate: sentence.studyDate,
     parentId: sentence.id,
@@ -783,8 +818,44 @@ function putDailyCandidate(transaction, sentence, kind, item) {
     registered: false,
     sourceSentences: [{ id: sentence.id, title: sentence.title, studyDate: sentence.studyDate }]
   });
-  transaction.objectStore("dailyEntries").put(entry);
-  transaction.objectStore("dailyEntryLinks").put(linkPayload(entry.id, sentence.id));
+}
+
+function dailyCandidateKey(entry) {
+  return [
+    normalizeDate(entry.studyDate),
+    normalizeDailyKind(entry.kind),
+    text(entry.title).trim().normalize("NFC")
+  ].join("::");
+}
+
+function compareDailyCandidatePriority(left, right) {
+  const parentPriority = Number(!text(left.parentId)) - Number(!text(right.parentId));
+  if (parentPriority) {
+    return parentPriority;
+  }
+  return text(left.createdAt).localeCompare(text(right.createdAt))
+    || text(left.id).localeCompare(text(right.id));
+}
+
+function mergeDailyCandidate(existing, candidate) {
+  const existingParsed = existing.parsed && typeof existing.parsed === "object" ? existing.parsed : {};
+  const candidateParsed = candidate.parsed && typeof candidate.parsed === "object" ? candidate.parsed : {};
+  const parsed = { ...candidateParsed, ...existingParsed };
+  ["reading", "meaning", "kanji", "part", "script", "note"].forEach(key => {
+    if (!text(existingParsed[key]) && text(candidateParsed[key])) {
+      parsed[key] = candidateParsed[key];
+    }
+  });
+
+  return {
+    ...candidate,
+    ...existing,
+    reading: text(existing.reading) || candidate.reading,
+    meaning: text(existing.meaning) || candidate.meaning,
+    rawText: text(existing.rawText) || candidate.rawText,
+    parsed,
+    updatedAt: now()
+  };
 }
 
 // Every collection item a single daily entry registers into: the entry itself
