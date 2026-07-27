@@ -205,6 +205,7 @@ export function createIdbStorage(options = {}) {
 
   async function registerDailyEntries(ids = [], studyDate = todayKey()) {
     const entries = await getAllActive("dailyEntries");
+    const links = await getAllActive("dailyEntryLinks");
     const items = await getAllActive("items");
     const targets = entries.filter(entry => ids.includes(entry.id) && ["word", "grammar", "expression"].includes(entry.kind));
     const registered = [];
@@ -223,7 +224,7 @@ export function createIdbStorage(options = {}) {
       const itemStore = transaction.objectStore("items");
       targets.forEach(entry => {
         try {
-          itemsFromDailyEntry(entry).forEach(candidate => {
+          itemsFromDailyEntry(entry, parentSentenceTitle(entry, entries, links)).forEach(candidate => {
             if (!candidate.title) {
               return;
             }
@@ -755,25 +756,30 @@ function putDailyCandidate(transaction, sentence, kind, item) {
 // It is forward-only: entries registered before this change are untouched, and
 // re-registering one is a no-op because the duplicate check below already
 // covers the derived items.
-function itemsFromDailyEntry(entry) {
+//
+// `source` is the provenance both adapters now agree on (D8): the title of the
+// sentence this entry came from, resolved by parentSentenceTitle below and
+// passed in. `level` is deliberately NOT set - this adapter used to stamp "웹"
+// on every registered item, encoding the platform in a field the UI presents as
+// a free-text 레벨/난이도. The field stays user-editable; nothing invents a
+// value for it any more.
+function itemsFromDailyEntry(entry, parentTitle) {
   const item = {
     kind: entry.kind,
     title: entry.title,
     reading: entry.reading,
     meaning: entry.meaning,
-    level: "웹",
     part: entry.parsed?.part,
     script: entry.parsed?.script,
     kanji: entry.parsed?.kanji,
     review: "대기",
-    source: entry.parentTitle || "오늘 공부",
+    source: parentTitle || "오늘 공부",
     note: entry.parsed?.note || "",
     sourceSentences: entry.sourceSentences || []
   };
   // Derived from the un-normalized shape on purpose: withKanjiItems reads
-  // kind/kanji/level/title/reading straight off it, and the derived items
-  // inherit this adapter's provenance (level "웹" - see D8) the same way the
-  // sqlite ones inherit its empty level.
+  // kind/kanji/level/title/reading straight off it, so the 한자 items inherit
+  // the word's (now empty) level and get source = the word's own title.
   return withKanjiItems([item]).map(normalizeItem);
 }
 
@@ -890,6 +896,32 @@ function parseDailyEntry(kind, rawText) {
     part: inlineWord?.part || "",
     script: inlineWord?.script || ""
   };
+}
+
+// The title of the sentence a word/grammar/expression entry came from - the
+// `source` every registered item gets (D8). Resolution order is the one
+// storage-sqlite uses (packages/storage-sqlite/src/index.js:264 and
+// dataImportExport.js:64), so both adapters produce the same string for the
+// same data: a stored parentTitle (only legacy desktop imports carry one), else
+// the parent entry looked up by parentId, else the first linked sentence.
+//
+// Returns "" for a manually added standalone entry (the 단어/문법/표현 input has
+// no parent sentence at all); the caller supplies the "오늘 공부" fallback.
+//
+// Known limitation, deliberate for now: this copies the title, so renaming a
+// sentence orphans the items registered from it.
+function parentSentenceTitle(entry, allEntries, links) {
+  if (entry.parentTitle) {
+    return text(entry.parentTitle);
+  }
+  if (entry.parentId) {
+    const parent = allEntries.find(candidate => candidate.id === entry.parentId);
+    if (parent?.title) {
+      return text(parent.title);
+    }
+  }
+  const [first] = sourceSentencesForEntry(entry, allEntries, links);
+  return text(first?.title);
 }
 
 function sourceSentencesForEntry(entry, allEntries, links) {

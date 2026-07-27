@@ -561,6 +561,41 @@ function dailyCandidatePayload(parent, kind, item) {
   };
 }
 
+// The title of the sentence a daily entry came from, resolved exactly the way
+// getState() (:264) and exportData()'s allDailyEntriesRaw
+// (dataImportExport.js:64) already derive `parentTitle`: the parent row joined
+// on parent_id, else the newest sentence linked through daily_entry_links. This
+// is what registerDailyEntry writes into item.source, matching storage-idb's
+// parentSentenceTitle byte for byte (D8 in tests/storage-conformance.test.js).
+//
+// Returns "" for an entry with no sentence at all - the 단어/문법/표현 input adds
+// parentless entries on both platforms - and the caller falls back to "오늘 공부"
+// for those, which is what idb has always written.
+//
+// Known limitation, deliberate for now: this copies the title, so renaming a
+// sentence orphans the items registered from it.
+function parentSentenceTitle(entry) {
+  if (entry.parent_id) {
+    const parent = db.prepare(`
+      SELECT title FROM daily_entries WHERE id = ? AND deleted_at IS NULL
+    `).get(entry.parent_id);
+    if (parent?.title) {
+      return text(parent.title);
+    }
+  }
+  const linked = db.prepare(`
+    SELECT sentence.title
+    FROM daily_entry_links link
+    JOIN daily_entries sentence ON sentence.id = link.sentence_id
+    WHERE link.entry_id = ?
+      AND link.deleted_at IS NULL
+      AND sentence.deleted_at IS NULL
+    ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
+    LIMIT 1
+  `).get(entry.id);
+  return text(linked?.title);
+}
+
 function registerDailyEntry(id) {
   const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ? AND deleted_at IS NULL").get(id);
   if (!entry) {
@@ -568,7 +603,17 @@ function registerDailyEntry(id) {
   }
 
   const parsed = safeJson(entry.parsed_json);
-  const candidates = withKanjiItems(dailyEntryToItems(entry.kind, parsed));
+  // D8: a registered 단어/문법/표현 item records the title of the sentence it came
+  // from. Sentence entries are skipped: registering one at all is sqlite-only
+  // debt (D9) and it has no parent sentence to name, so it keeps an empty
+  // source rather than gaining an invented one. withKanjiItems runs AFTER the
+  // stamp so the derived 한자 items keep their own source (the word's title).
+  const baseItems = dailyEntryToItems(entry.kind, parsed);
+  const candidates = withKanjiItems(
+    entry.kind === "sentence"
+      ? baseItems
+      : baseItems.map(item => ({ ...item, source: parentSentenceTitle(entry) || "오늘 공부" }))
+  );
   const duplicates = [];
   const registered = [];
   const linked = [];

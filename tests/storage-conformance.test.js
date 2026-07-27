@@ -33,7 +33,8 @@
 // `expected` table on the adapter descriptors below, tagged
 // `KNOWN DIVERGENCE D<n>` with the offending file:line and what the unified
 // behavior should be. The table is the debt ledger; D1..D19 are live today
-// except D6, D10 and D18, which have been resolved (sqlite now merges; both
+// except D6, D8, D10 and D18, which have been resolved (sqlite now merges; both
+// adapters write the same registered-item provenance; both
 // adapters derive 한자 items while registering; both restore the same sample
 // data) and are asserted as shared behaviors instead of per-adapter
 // divergences.
@@ -45,7 +46,8 @@
 //   D5  getState().studyDays row shape      sqlite drops `note`
 //   D6  partial upsertItem()                RESOLVED - both adapters merge now
 //   D7  upsertItem() 한자 derivation        sqlite only
-//   D8  registered item provenance          level/source hard-coded on idb
+//   D8  registered item provenance          RESOLVED - parent sentence title in
+//                                           `source`, no invented `level`
 //   D9  registering a sentence entry        no-op on idb, 문장 item on sqlite
 //   D10 register 한자 derivation            RESOLVED - both adapters derive now
 //   D11 unknown entry id                    reported as a duplicate on sqlite only
@@ -200,13 +202,10 @@ const adapters = [
       // item.kanji (packages/storage-sqlite/src/index.js:682); idb never does.
       // UNIFY: derive in both (shared helper) or in neither.
       upsertDerivesKanjiItems: false,
-      // KNOWN DIVERGENCE D8: registerDailyEntries writes different provenance.
-      // idb hard-codes level "웹" and source "오늘 공부"
-      // (packages/storage-idb/src/index.js:731,736); sqlite leaves both empty.
-      // UNIFY: one provenance convention (and stop encoding the platform in a
-      // JLPT-level field).
-      registeredItemLevel: "웹",
-      registeredItemSource: "오늘 공부",
+      // D8 (RESOLVED): idb used to stamp level "웹" plus source "오늘 공부" on
+      // every registered item while sqlite left both empty. Both adapters now
+      // record the parent sentence's title in `source` and invent no `level` at
+      // all, so this is covered by shared assertions below.
       // KNOWN DIVERGENCE D9: idb filters registration targets to
       // word/grammar/expression (packages/storage-idb/src/index.js:196), so
       // registering a sentence card is a silent no-op; sqlite creates a
@@ -299,8 +298,6 @@ const adapters = [
       stateExposesParsedJson: true, // D4
       studyDayKeys: ["studyDate", "minutes", "summary", "entryCount"], // D5
       upsertDerivesKanjiItems: true, // D7
-      registeredItemLevel: "", // D8
-      registeredItemSource: "", // D8
       registersSentenceEntries: true, // D9
       unknownIdDuplicates: ["항목을 찾을 수 없습니다."], // D11
       reportsLinkedOnRelink: true, // D12
@@ -834,6 +831,44 @@ function defineConformanceTests(adapter) {
     expect(second.state.items.filter(item => item.kind === "word" && item.title === "単語")).toHaveLength(1);
   });
 
+  // Was KNOWN DIVERGENCE D8: registered items carried different provenance -
+  // idb hard-coded level "웹" and source "오늘 공부", sqlite left both empty.
+  // Both adapters now record the title of the sentence the entry came from in
+  // `source` (resolved from parentId, else the first daily_entry_links row) and
+  // invent no `level` at all: 레벨/난이도 is free text the user fills in, and the
+  // platform name has no business in it. Forward-only - items registered on web
+  // before this change keep their "웹" level.
+  it("registerDailyEntries() records the parent sentence title as source and no level", async () => {
+    const { store, child } = await storeWithSentence();
+    const registered = await store.registerDailyEntries(
+      [child("word").id, child("grammar").id, child("expression").id],
+      studyDate
+    );
+
+    ["単語", "〜てもいい", "よろしくお願いします"].forEach(title => {
+      const item = byTitle(registered.state.items, title);
+      expect(item.source).toBe("오늘의 문장");
+      expect(item.level).toBe("");
+    });
+  });
+
+  // The one entry shape with no sentence to name: the 단어/문법/표현 manual input
+  // (apps/web/src/main.js addManualEntryFromInput, apps/desktop's
+  // addManualEntryBtn) writes an entry with no parentId and no link row. Both
+  // adapters fall back to the generic "오늘 공부" there, which is what idb wrote
+  // for every registered item before D8 was fixed.
+  it("registerDailyEntries() falls back to 오늘 공부 for a parentless entry", async () => {
+    const store = await freshStore();
+    const added = await store.addDailyEntry({ studyDate, kind: "word", rawText: "`独立`(どくりつ)" });
+    const entry = added.dailyEntries.find(candidate => candidate.title === "独立");
+
+    const registered = await store.registerDailyEntries([entry.id], studyDate);
+    const item = byTitle(registered.state.items, "独立");
+
+    expect(item.source).toBe("오늘 공부");
+    expect(item.level).toBe("");
+  });
+
   // Was KNOWN DIVERGENCE D10: sqlite ran withKanjiItems while registering and
   // idb did not, so the web/Android 한자 collection could never fill from daily
   // entries at all. Both adapters now call the same shared helper from
@@ -849,9 +884,10 @@ function defineConformanceTests(adapter) {
     expect(kanjiItems.map(item => item.title).sort()).toEqual(["単", "語"]);
     expect(first.result.registered).toEqual(expect.arrayContaining(["한자: 単", "한자: 語"]));
 
-    // Every field withKanjiItems fills is identical on both adapters. `level`
-    // is the one exception: it is inherited from the parent word item, which
-    // still carries each adapter's own provenance (D8).
+    // Every field withKanjiItems fills is identical on both adapters, `level`
+    // included now that D8 is fixed: it is inherited from the parent word item,
+    // which no longer has a fabricated one. `source` stays the word's own title
+    // rather than the sentence's, on both.
     const single = byTitle(kanjiItems, "単");
     expect(single.meaning).toBe("single");
     expect(single.part).toBe("한자");
@@ -860,7 +896,7 @@ function defineConformanceTests(adapter) {
     expect(single.note).toBe("単語 (たんご)");
     expect(single.review).toBe("대기");
     expect(single.reviewDueDate).toBe("");
-    expect(single.level).toBe(expected.registeredItemLevel);
+    expect(single.level).toBe("");
 
     // Re-registering the same entry creates nothing: the derived items go
     // through the same duplicate check as the word itself.
@@ -1039,15 +1075,6 @@ function defineConformanceTests(adapter) {
     } else {
       expect(kanjiItems).toHaveLength(0);
     }
-  });
-
-  it("KNOWN DIVERGENCE D8: registerDailyEntries() writes different provenance metadata", async () => {
-    const { store, child } = await storeWithSentence();
-    const registered = await store.registerDailyEntries([child("word").id], studyDate);
-    const item = byTitle(registered.state.items, "単語");
-
-    expect(item.level).toBe(expected.registeredItemLevel);
-    expect(item.source).toBe(expected.registeredItemSource);
   });
 
   it("KNOWN DIVERGENCE D9: registerDailyEntries() ignores sentence entries on idb, registers a 문장 item on sqlite", async () => {
