@@ -79,14 +79,10 @@ const storageMethodNames = storageContract.map(entry => entry.name);
 
 const storagePathKeys = ["appDataDir", "exportsDir", "backupsDir", "dbPath"];
 
-// Shape of the getState() envelope. `allDailyEntries` is only optional because
-// storage-sqlite does not return it yet even though apps/web/src/main.js:549
-// depends on it; it belongs in `required` once sqlite catches up. See
-// tests/storage-conformance.test.js (KNOWN DIVERGENCE D1).
 const storageStateShape = {
-  required: ["selectedDate", "studyLog", "studyDays", "dailyEntries", "tasks", "items"],
-  optional: ["allDailyEntries"],
-  arrays: ["studyDays", "dailyEntries", "tasks", "items"],
+  required: ["selectedDate", "studyLog", "studyDays", "dailyEntries", "allDailyEntries", "tasks", "items"],
+  optional: [],
+  arrays: ["studyDays", "dailyEntries", "allDailyEntries", "tasks", "items"],
   studyLogKeys: ["minutes", "summary", "note", "totalMinutes"]
 };
 
