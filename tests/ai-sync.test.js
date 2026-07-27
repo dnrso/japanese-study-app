@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SOURCE_PATH, SYNC_HEADER, TARGET_PATH } from "../scripts/sync-ai.mjs";
+import { createSyncHeader, SOURCE_PATH, TARGET_PATH } from "../scripts/sync-ai.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -16,13 +16,14 @@ describe("packages/ai <-> supabase/functions/_shared/ai.js sync", () => {
   it("is byte-identical to packages/ai/src/index.js except for the sync header", () => {
     const source = readFileSync(SOURCE_PATH, "utf8");
     const target = readFileSync(TARGET_PATH, "utf8");
+    const syncHeader = createSyncHeader(source);
 
     expect(
-      target.startsWith(SYNC_HEADER),
+      target.startsWith(syncHeader),
       `${path.relative(rootDir, TARGET_PATH)} is missing the expected sync header. Run \`npm run sync:ai\` to regenerate it from ${path.relative(rootDir, SOURCE_PATH)}.`
     ).toBe(true);
 
-    const targetBody = target.slice(SYNC_HEADER.length);
+    const targetBody = target.slice(syncHeader.length);
     expect(
       targetBody,
       `${path.relative(rootDir, TARGET_PATH)} has drifted from ${path.relative(rootDir, SOURCE_PATH)} (the source of truth). Run \`npm run sync:ai\` to bring it back in sync, then commit both files together.`

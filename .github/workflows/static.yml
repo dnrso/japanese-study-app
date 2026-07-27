@@ -11,6 +11,7 @@ on:
       - "packages/ui/**"
       - "packages/ai/**"
       - "packages/storage-idb/**"
+      - "packages/storage-core/**"
       - "packages/sync/**"
       - ".github/workflows/static.yml"
       - "package*.json"
@@ -43,10 +44,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Run tests
+        run: npm test
       - name: Build web app
         run: npm run web:build
       - name: Setup Pages
