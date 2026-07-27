@@ -102,7 +102,6 @@ export function renderQuickFiltersPage({ counts }) {
   return {
     text: {
       reviewFilterCount: counts.review,
-      n3FilterCount: counts.n3,
       sourceFilterCount: counts.source,
       pendingFilterCount: counts.pending
     }

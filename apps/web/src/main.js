@@ -918,11 +918,6 @@ function applyQuickFilter(filter) {
     openPage("review");
     return;
   }
-  if (filter === "N3") {
-    setSearch("N3");
-    openPage("words");
-    return;
-  }
   if (filter === "source") {
     setSearch("뉴스");
     openPage("words");

@@ -437,7 +437,6 @@ export function quickFilterCounts(state = {}, searchTerm = "") {
   const tasks = state.tasks || [];
   return {
     review: reviewItems(items, searchTerm).length,
-    n3: items.filter(item => item.level === "N3").length,
     source: items.filter(item => item.source && item.kind !== "source").length,
     pending: tasks.filter(task => !task.done).length
   };
