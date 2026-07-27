@@ -129,15 +129,12 @@ function exportData() {
     dailyEntries: state.dailyEntries
   }));
 
-  // dailyEntries and allDailyEntries intentionally share the same rows here,
-  // mirroring storage-idb's exportData() where both fields dump the entire
-  // store (not just the selected day).
-  const dailyEntriesExport = pruneStaleTombstones(allDailyEntriesRaw());
+  // `dailyEntries` is the canonical full-history exchange field. Import keeps
+  // accepting the legacy `allDailyEntries` alias below.
   const data = {
     selectedDate: state.selectedDate,
     studyDays: pruneStaleTombstones(allStudyDaysRaw()),
-    dailyEntries: dailyEntriesExport,
-    allDailyEntries: dailyEntriesExport,
+    dailyEntries: pruneStaleTombstones(allDailyEntriesRaw()),
     dailyEntryLinks: pruneStaleTombstones(allDailyEntryLinksRaw()),
     tasks: pruneStaleTombstones(allTasksRaw()),
     items: pruneStaleTombstones(allItemsRaw())
@@ -213,6 +210,8 @@ function replaceBackup(backup) {
       updatedAt: text(day.updatedAt || day.updated_at || new Date().toISOString()),
       deletedAt: normalizeDeletedAtValue(day.deletedAt ?? day.deleted_at)
     }));
+    // Prefer the legacy alias when present so old backups retain their
+    // historical precedence; new exports emit only `dailyEntries`.
     (backup.allDailyEntries || backup.dailyEntries || []).forEach(entry => {
       const normalized = normalizeDailyEntry(entry);
       const now = new Date().toISOString();

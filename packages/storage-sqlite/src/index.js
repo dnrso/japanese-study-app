@@ -245,27 +245,27 @@ function getState(studyDate = todayKey()) {
   items.forEach(item => {
     item.sourceSentences = itemLinks.get(`${item.kind}::${item.title}`) || [];
   });
-  const dailyEntries = db.prepare(`
+  const allDailyEntries = db.prepare(`
     SELECT child.id, child.study_date AS studyDate, child.parent_id AS parentId,
       parent.title AS parentTitle, child.kind, child.title, child.reading, child.meaning,
       child.raw_text AS rawText, child.parsed_json AS parsedJson, child.registered
     FROM daily_entries child
     LEFT JOIN daily_entries parent ON parent.id = child.parent_id
-    WHERE child.study_date = ?
-      AND child.deleted_at IS NULL
+    WHERE child.deleted_at IS NULL
     ORDER BY datetime(child.created_at) DESC, child.rowid DESC
-  `).all(selectedDate).map(entry => ({
+  `).all().map(entry => ({
     ...entry,
     parsed: safeJson(entry.parsedJson),
     registered: Boolean(entry.registered)
   }));
-  const linksByEntry = dailyEntryLinks(selectedDate);
-  dailyEntries.forEach(entry => {
+  const linksByEntry = allDailyEntryLinksMap();
+  allDailyEntries.forEach(entry => {
     entry.sourceSentences = linksByEntry.get(entry.id) || [];
     if (!entry.parentTitle && entry.sourceSentences.length > 0) {
       entry.parentTitle = entry.sourceSentences[0].title;
     }
   });
+  const dailyEntries = allDailyEntries.filter(entry => entry.studyDate === selectedDate);
   const studyDays = db.prepare(`
     SELECT study_date AS studyDate, minutes, summary,
       (SELECT COUNT(*) FROM daily_entries WHERE daily_entries.study_date = study_days.study_date AND daily_entries.deleted_at IS NULL) AS entryCount
@@ -274,35 +274,11 @@ function getState(studyDate = todayKey()) {
     ORDER BY study_date DESC
   `).all();
 
-  return { selectedDate, studyLog, studyDays, dailyEntries, tasks, items };
+  return { selectedDate, studyLog, studyDays, dailyEntries, allDailyEntries, tasks, items };
 }
 
-function dailyEntryLinks(studyDate) {
-  const rows = db.prepare(`
-    SELECT DISTINCT link.entry_id AS entryId, sentence.id, sentence.study_date AS studyDate, sentence.title
-    FROM daily_entry_links link
-    JOIN daily_entries sentence ON sentence.id = link.sentence_id
-    WHERE sentence.study_date = ?
-      AND link.deleted_at IS NULL
-      AND sentence.deleted_at IS NULL
-    ORDER BY datetime(sentence.created_at) DESC, sentence.rowid DESC
-  `).all(studyDate);
-
-  return rows.reduce((map, row) => {
-    if (!map.has(row.entryId)) {
-      map.set(row.entryId, []);
-    }
-    const links = map.get(row.entryId);
-    if (!links.some(link => sameSourceSentence(link, row))) {
-      links.push({ id: row.id, studyDate: row.studyDate, title: row.title });
-    }
-    return map;
-  }, new Map());
-}
-
-// Same shape as dailyEntryLinks(studyDate) but across every study date, for
-// use by exportData() when reconstructing the idb-shaped `sourceSentences`
-// field for the full entry set (not just one day's worth).
+// Source-sentence links across every study date, used by getState() and
+// exportData() when reconstructing the idb-shaped `sourceSentences` field.
 function allDailyEntryLinksMap() {
   const rows = db.prepare(`
     SELECT DISTINCT link.entry_id AS entryId, sentence.id, sentence.study_date AS studyDate, sentence.title
@@ -370,7 +346,7 @@ function getStudyLog(studyDate) {
   return { ...day, totalMinutes: total.totalMinutes };
 }
 
-function saveStudyLog(studyLog) {
+function saveStudyLog(studyLog = {}) {
   const payload = normalizeStudyLog(studyLog);
   db.prepare(`
     INSERT INTO study_days (study_date, minutes, summary, note, updated_at)
@@ -384,7 +360,7 @@ function saveStudyLog(studyLog) {
   return getState(payload.studyDate);
 }
 
-function addDailyEntry(entry) {
+function addDailyEntry(entry = {}) {
   const parsed = parseDailyEntry(entry.kind, entry.rawText);
   const payload = {
     id: createId(),
@@ -657,7 +633,7 @@ function registerDailyEntry(id) {
   };
 }
 
-function registerDailyEntries(ids, studyDate) {
+function registerDailyEntries(ids = [], studyDate = todayKey()) {
   const registered = [];
   const duplicates = [];
   const linked = [];
@@ -684,7 +660,7 @@ function registerDailyEntries(ids, studyDate) {
   };
 }
 
-function addTask(task) {
+function addTask(task = {}) {
   db.prepare(`
     INSERT INTO tasks (id, title, note, tag, done, study_date, deleted_at)
     VALUES (@id, @title, @note, @tag, @done, @studyDate, @deletedAt)
@@ -726,7 +702,7 @@ function mergeItemPayload(existingItem, item) {
   return merged;
 }
 
-function upsertItem(item) {
+function upsertItem(item = {}) {
   const existingItem = item.id
     ? db.prepare(`
       SELECT kind, title, reading, meaning, level, part, script,
@@ -853,7 +829,7 @@ function updateItemReview(id, review, studyDate) {
   return getState(studyDate);
 }
 
-function completeReview(ids, studyDate) {
+function completeReview(ids = [], studyDate = todayKey()) {
   const targets = normalizeReviewCompletionTargets(ids);
   if (targets.length === 0) {
     return getState(studyDate);
@@ -886,6 +862,7 @@ function submitWordQuizAnswer(payload = {}) {
   const correctAnswer = answerType === "title" ? item.title : item.meaning;
   const correct = text(payload.selectedAnswer ?? payload.selectedMeaning) === text(correctAnswer);
   const column = correct ? "quiz_correct_count" : "quiz_wrong_count";
+  const requestedReview = normalizeReview(payload.correctReview || payload.reviewAfterCorrect);
   let reviewUpdated = false;
   let nextReview = "";
   let nextReviewDueDate = "";
@@ -900,8 +877,8 @@ function submitWordQuizAnswer(payload = {}) {
       WHERE id = ?
     `).run(quizzedAt, quizzedAt, item.id);
 
-    nextReview = normalizeReview(payload.correctReview || payload.reviewAfterCorrect);
-    if (correct && payload.updateReviewOnCorrect && nextReview) {
+    if (correct && payload.updateReviewOnCorrect && requestedReview) {
+      nextReview = requestedReview;
       nextReviewDueDate = reviewDueDateFor(nextReview);
       const reviewedAt = new Date().toISOString();
       db.prepare(`
@@ -918,7 +895,14 @@ function submitWordQuizAnswer(payload = {}) {
 
   return {
     state: getState(payload.studyDate),
-    result: { correct, correctAnswer, correctMeaning: item.meaning, reviewUpdated, nextReview, nextReviewDueDate }
+    result: {
+      correct,
+      correctAnswer,
+      correctMeaning: item.meaning,
+      reviewUpdated,
+      nextReview: reviewUpdated ? nextReview : "",
+      nextReviewDueDate: reviewUpdated ? nextReviewDueDate : ""
+    }
   };
 }
 

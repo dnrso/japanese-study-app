@@ -12,16 +12,17 @@
 //   method                  storage-sqlite                              storage-idb
 //   initDatabase            () -> Database                              () -> Promise<IDBDatabase>
 //   getState                (studyDate = today) -> state                (studyDate = today) -> state
-//   saveStudyLog            (studyLog) -> state   [throws if omitted]   (studyLog = {}) -> state
-//   addDailyEntry           (entry) -> state      [throws if omitted]   (entry = {}) -> state
+//   saveStudyLog            (studyLog = {}) -> state                    (studyLog = {}) -> state
+//   addDailyEntry           (entry = {}) -> state                       (entry = {}) -> state
 //   deleteDailyEntry        (id, studyDate) -> state                    (id, studyDate = today) -> state
-//   registerDailyEntries    (ids, studyDate) -> { state, result }       (ids = [], studyDate = today) -> { state, result }
-//   addTask                 (task) -> state       [throws if omitted]   (task = {}) -> state
+//   registerDailyEntries    (ids = [], studyDate = today) -> { state, result }
+//                                                                       (ids = [], studyDate = today) -> { state, result }
+//   addTask                 (task = {}) -> state                        (task = {}) -> state
 //   updateTaskDone          (id, done, studyDate) -> state              (id, done, studyDate = today) -> state
-//   upsertItem              (item) -> state   [MERGE]                   (item = {}) -> state   [MERGE]
+//   upsertItem              (item = {}) -> state   [MERGE]              (item = {}) -> state   [MERGE]
 //   deleteItem              (id, studyDate) -> state                    (id, studyDate = today) -> state
 //   updateItemReview        (id, review, studyDate) -> state            (id, review, studyDate = today) -> state
-//   completeReview          (targets, studyDate) -> state               (targets = [], studyDate = today) -> state
+//   completeReview          (targets = [], studyDate = today) -> state  (targets = [], studyDate = today) -> state
 //   submitWordQuizAnswer    (payload = {}) -> { state, result }         (payload = {}) -> { state, result }
 //   resetSampleData         () -> state   [clears, then re-seeds]       () -> state   [clears, then re-seeds]
 //   clearAllData            () -> state   [hard DELETE, no tombstones]  () -> state   [store.clear(), no tombstones]
@@ -32,16 +33,11 @@
 // Divergences are NOT papered over: each is asserted per-adapter through the
 // `expected` table on the adapter descriptors below, tagged
 // `KNOWN DIVERGENCE D<n>` with the offending file:line and what the unified
-// behavior should be. The table is the debt ledger; D1..D19 are live today
-// except D6, D8, D9, D10, D11, D13 and D18, which have been resolved (sqlite
-// now merges; both adapters write the same registered-item provenance; both
-// register a sentence entry as a 문장 item; both derive 한자 items while
-// registering; both report an unknown entry id in `errors`; both surface a
-// per-entry failure in `errors`; both restore the same sample data) and are
+// behavior should be. The table is the debt ledger; resolved entries are
 // asserted as shared behaviors instead of per-adapter divergences.
 //
-//   D1  getState().allDailyEntries          idb only (apps/web/src/main.js:549 needs it)
-//   D2  exportData().data.allDailyEntries   sqlite only (inverse of D1)
+//   D1  getState().allDailyEntries          RESOLVED - full history on both
+//   D2  exportData daily-entry field        RESOLVED - canonical `dailyEntries`
 //   D3  exportData() envelope keys          sqlite/files vs dbPath
 //   D4  getState() record projection        audit columns + parsedJson
 //   D5  getState().studyDays row shape      sqlite drops `note`
@@ -57,10 +53,10 @@
 //                                           on both, one transaction per entry
 //   D14 importFullBackup(backup)            object form ignored on sqlite
 //   D15 importCsvExports(backup, date)      object form ignored on sqlite
-//   D16 quiz result.nextReview              leaks a value on sqlite
-//   D17 repeated sentence candidates        merged on sqlite, duplicated on idb
+//   D16 quiz result.nextReview              RESOLVED - blank unless updated
+//   D17 repeated sentence candidates        RESOLVED - merged and linked on both
 //   D18 seedState / resetSampleData         RESOLVED - one shared sample seed
-//   D19 missing arguments                   defaulted on idb, TypeError on sqlite
+//   D19 missing arguments                   RESOLVED - record/array defaults on both
 //
 // The rawText parsers used to be a 20th entry here (two separate
 // reimplementations that disagreed on every derived `meaning`); they were
@@ -165,18 +161,6 @@ const adapters = [
       return store;
     },
     expected: {
-      // KNOWN DIVERGENCE D1: getState() exposes `allDailyEntries` only on idb
-      // (packages/storage-idb/src/index.js:110). apps/web/src/main.js:549 reads
-      // it (`state.allDailyEntries || state.dailyEntries`, also :585), so the
-      // home-page random sentence silently degrades to "selected day only" on
-      // desktop. UNIFY: packages/storage-sqlite/src/index.js:249 must return
-      // allDailyEntries too, and it should move to storageStateShape.required.
-      stateHasAllDailyEntries: true,
-      // KNOWN DIVERGENCE D2: exportData().data carries `allDailyEntries` only
-      // on sqlite (packages/storage-sqlite/src/dataImportExport.js:140) - the
-      // exact inverse of D1 - so a backup written on web lacks a key sqlite's
-      // own export emits. UNIFY: emit it on both, or on neither.
-      exportDataHasAllDailyEntries: false,
       // KNOWN DIVERGENCE D3: exportData() envelope keys differ. idb returns
       // {...paths, data} incl. `dbPath` (packages/storage-idb/src/index.js:376);
       // sqlite returns `sqlite` + `files` and no `dbPath`
@@ -234,21 +218,6 @@ const adapters = [
       // opens one transaction per entry and catches around it, which is
       // sqlite's own granularity (one db.transaction per id); shared assertions
       // below.
-      // KNOWN DIVERGENCE D16: sqlite returns result.nextReview even when it did
-      // NOT touch the review (packages/storage-sqlite/src/index.js:792 assigns
-      // it unconditionally, outside the `correct && updateReviewOnCorrect`
-      // guard); idb blanks it (packages/storage-idb/src/index.js:341). A UI that
-      // trusts nextReview without checking reviewUpdated shows a bogus next
-      // review after a wrong answer on desktop.
-      // UNIFY: blank it unless reviewUpdated.
-      quizNextReviewWhenNotUpdated: "",
-      // KNOWN DIVERGENCE D17: repeated sentence candidates. sqlite merges into
-      // the existing same-date/kind/title entry and just adds a link
-      // (upsertDailyCandidate, packages/storage-sqlite/src/index.js:433); idb
-      // always inserts a fresh entry
-      // (putDailyCandidate, packages/storage-idb/src/index.js:701), so the same
-      // word appears once per sentence on web. UNIFY: dedupe on both.
-      dedupesRepeatedCandidates: false,
       // KNOWN DIVERGENCE D14: importFullBackup signature. idb takes the backup
       // object (packages/storage-idb/src/index.js:396) - which is what
       // packages/sync/src/index.js:73 and apps/web/src/main.js:1315 call -
@@ -272,12 +241,6 @@ const adapters = [
       // `seedState` and both fall back to the one shared seed
       // (createSampleState in @nihongo-study/storage-core); shared assertions
       // below.
-      // KNOWN DIVERGENCE D19: idb defaults every record argument to {} / [];
-      // sqlite has no defaults and throws a TypeError on a missing argument
-      // (packages/storage-sqlite/src/index.js:861 dereferences studyLog).
-      // A dropped IPC argument should not crash the main process.
-      // UNIFY: default on both.
-      defaultsMissingArguments: true
     }
   },
   {
@@ -289,19 +252,14 @@ const adapters = [
       return store;
     },
     expected: {
-      stateHasAllDailyEntries: false, // D1
-      exportDataHasAllDailyEntries: true, // D2
       exportEnvelopeExtraKeys: ["sqlite", "files"], // D3
       stateExposesAuditColumns: false, // D4
       stateExposesParsedJson: true, // D4
       studyDayKeys: ["studyDate", "minutes", "summary", "entryCount"], // D5
       upsertDerivesKanjiItems: true, // D7
       reportsLinkedOnRelink: true, // D12
-      quizNextReviewWhenNotUpdated: "일주일", // D16
-      dedupesRepeatedCandidates: true, // D17
       importFullBackupAcceptsObject: false, // D14
-      importCsvExportsAcceptsObject: false, // D15
-      defaultsMissingArguments: false // D19
+      importCsvExportsAcceptsObject: false // D15
     }
   }
 ];
@@ -320,6 +278,9 @@ describe("storage contract (adapter-independent)", () => {
       expect(["state", "stateResult", "export", "handle"]).toContain(entry.returns);
     });
     expect(storageStateShape.required).toContain("items");
+    expect(storageStateShape.required).toContain("allDailyEntries");
+    expect(storageStateShape.arrays).toContain("allDailyEntries");
+    expect(storageStateShape.optional).not.toContain("allDailyEntries");
     expect(storagePathKeys).toEqual(["appDataDir", "exportsDir", "backupsDir", "dbPath"]);
   });
 
@@ -642,6 +603,8 @@ function defineConformanceTests(adapter) {
     expect(result.correctAnswer).toBe("correct answer");
     expect(result.correctMeaning).toBe("correct answer");
     expect(result.reviewUpdated).toBe(false);
+    expect(result.nextReview).toBe("");
+    expect(result.nextReviewDueDate).toBe("");
     expect(quizzed.quizCorrectCount).toBe(1);
     expect(quizzed.quizWrongCount).toBe(0);
     expect(quizzed.lastQuizzedAt).toBeTruthy();
@@ -1098,6 +1061,34 @@ function defineConformanceTests(adapter) {
     expect(reset.dailyEntries).toHaveLength(0);
   });
 
+  it("accepts the legacy allDailyEntries alias when seeding", async () => {
+    const legacyEntry = {
+      id: "legacy-entry",
+      studyDate,
+      kind: "sentence",
+      title: "레거시 문장",
+      rawText: "# 레거시 문장"
+    };
+    const store = await freshStore({
+      seedState: () => ({
+        selectedDate: studyDate,
+        studyDays: [],
+        allDailyEntries: [legacyEntry],
+        dailyEntryLinks: [],
+        tasks: [],
+        items: []
+      })
+    });
+    const state = await store.getState(studyDate);
+
+    expect(state.dailyEntries).toEqual([
+      expect.objectContaining({ id: legacyEntry.id, title: legacyEntry.title })
+    ]);
+    expect(state.allDailyEntries).toEqual([
+      expect.objectContaining({ id: legacyEntry.id, title: legacyEntry.title })
+    ]);
+  });
+
   it("importCsvExports() accepts a studyDate string on both adapters", async () => {
     const store = await freshStore();
     const state = await store.importCsvExports(studyDate);
@@ -1106,20 +1097,44 @@ function defineConformanceTests(adapter) {
 
   // ------------------------------------------------------- KNOWN DIVERGENCES
 
-  it("KNOWN DIVERGENCE D1: getState().allDailyEntries exists on idb only", async () => {
-    const { state } = await storeWithSentence();
-    expect("allDailyEntries" in state).toBe(expected.stateHasAllDailyEntries);
-    if (expected.stateHasAllDailyEntries) {
-      // Whole store, not just the selected day - what apps/web/src/main.js:549 wants.
-      expect(state.allDailyEntries.length).toBeGreaterThanOrEqual(state.dailyEntries.length);
-    }
+  it("getState().allDailyEntries spans dates while dailyEntries stays selected-date-only", async () => {
+    const store = await freshStore();
+    await store.addDailyEntry({ studyDate, kind: "sentence", rawText: sentenceRawText });
+    const otherDate = "2026-07-07";
+    await store.addDailyEntry({
+      studyDate: otherDate,
+      kind: "sentence",
+      rawText: sentenceRawText.replace("# 오늘의 문장", "# 다른 날 문장")
+    });
+
+    const state = await store.getState(studyDate);
+    expect(state.dailyEntries.length).toBeGreaterThan(0);
+    expect(state.dailyEntries.every(entry => entry.studyDate === studyDate)).toBe(true);
+    expect(state.allDailyEntries.some(entry => entry.studyDate === otherDate)).toBe(true);
+
+    const linkedWord = state.allDailyEntries.find(entry =>
+      entry.studyDate === otherDate && entry.kind === "word" && entry.title === "単語"
+    );
+    expect(linkedWord.sourceSentences).toEqual([
+      expect.objectContaining({ studyDate: otherDate, title: "다른 날 문장" })
+    ]);
   });
 
-  it("KNOWN DIVERGENCE D2+D3: exportData() envelope and allDailyEntries differ per adapter", async () => {
+  it("exportData() uses dailyEntries as the sole full-history exchange field", async () => {
+    const store = await freshStore();
+    await store.addDailyEntry({ studyDate, kind: "sentence", rawText: sentenceRawText });
+    await store.addDailyEntry({ studyDate: emptyDate, kind: "word", rawText: "`다른날`" });
+    const exported = await store.exportData();
+
+    expect(exported.data.dailyEntries.some(entry => entry.studyDate === studyDate)).toBe(true);
+    expect(exported.data.dailyEntries.some(entry => entry.studyDate === emptyDate)).toBe(true);
+    expect(exported.data).not.toHaveProperty("allDailyEntries");
+  });
+
+  it("KNOWN DIVERGENCE D3: exportData() envelope differs per adapter", async () => {
     const { store } = await storeWithSentence();
     const exported = await store.exportData();
 
-    expect("allDailyEntries" in exported.data).toBe(expected.exportDataHasAllDailyEntries);
     expected.exportEnvelopeExtraKeys.forEach(key => expect(exported).toHaveProperty(key));
     const foreignKeys = adapters
       .filter(other => other.name !== adapter.name)
@@ -1203,7 +1218,7 @@ function defineConformanceTests(adapter) {
     }
   });
 
-  it("KNOWN DIVERGENCE D16: sqlite leaks result.nextReview when the review was not updated", async () => {
+  it("submitWordQuizAnswer() blanks review scheduling fields when the review was not updated", async () => {
     const store = await freshStore();
     const created = await store.upsertItem({ kind: "word", title: "누출", meaning: "leak" });
     const item = byTitle(created.items, "누출");
@@ -1222,10 +1237,10 @@ function defineConformanceTests(adapter) {
     expect(result.reviewUpdated).toBe(false);
     expect(result.nextReviewDueDate).toBe("");
     expect(byTitle(state.items, "누출").review).toBe("대기");
-    expect(result.nextReview).toBe(expected.quizNextReviewWhenNotUpdated);
+    expect(result.nextReview).toBe("");
   });
 
-  it("KNOWN DIVERGENCE D17: a repeated sentence candidate is merged on sqlite and duplicated on idb", async () => {
+  it("a repeated sentence candidate is merged and linked on both adapters", async () => {
     const store = await freshStore();
     await store.addDailyEntry({ studyDate, kind: "sentence", rawText: sentenceRawText });
     const state = await store.addDailyEntry({
@@ -1235,28 +1250,25 @@ function defineConformanceTests(adapter) {
     });
     const wordEntries = state.dailyEntries.filter(entry => entry.kind === "word" && entry.title === "単語");
 
-    if (expected.dedupesRepeatedCandidates) {
-      expect(wordEntries).toHaveLength(1);
-      expect(state.dailyEntries).toHaveLength(5);
-      expect(wordEntries[0].sourceSentences.length).toBe(2);
-    } else {
-      expect(wordEntries).toHaveLength(2);
-      expect(state.dailyEntries).toHaveLength(8);
-    }
+    expect(wordEntries).toHaveLength(1);
+    expect(state.dailyEntries).toHaveLength(5);
+    expect(wordEntries[0].sourceSentences).toHaveLength(2);
   });
 
-  it("KNOWN DIVERGENCE D19: idb defaults missing record arguments, sqlite throws", async () => {
+  it("record- and array-taking methods tolerate omitted arguments", async () => {
     const store = await freshStore();
-    const studyLogError = await caught(() => store.saveStudyLog());
-    const taskError = await caught(() => store.addTask());
+    const calls = [
+      () => store.saveStudyLog(),
+      () => store.addDailyEntry(),
+      () => store.registerDailyEntries(),
+      () => store.addTask(),
+      () => store.upsertItem(),
+      () => store.completeReview()
+    ];
 
-    if (expected.defaultsMissingArguments) {
-      expect(studyLogError).toBeNull();
-      expect(taskError).toBeNull();
-      expect((await store.getState()).selectedDate).toBe(todayKey());
-    } else {
-      expect(studyLogError).toBeInstanceOf(TypeError);
-      expect(taskError).toBeInstanceOf(TypeError);
+    for (const call of calls) {
+      expect(await caught(call)).toBeNull();
     }
+    expect((await store.getState()).selectedDate).toBe(todayKey());
   });
 }
