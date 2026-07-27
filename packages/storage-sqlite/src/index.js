@@ -17,6 +17,7 @@ const {
   dailyEntryToItems,
   itemToRawText,
   kindLabel,
+  missingDailyEntryMessage,
   normalizeDailyKind,
   normalizeDate,
   normalizeDeletedAt,
@@ -599,15 +600,20 @@ function parentSentenceTitle(entry) {
 function registerDailyEntry(id) {
   const entry = db.prepare("SELECT * FROM daily_entries WHERE id = ? AND deleted_at IS NULL").get(id);
   if (!entry) {
-    return { state: getState(), result: { registered: [], duplicates: ["항목을 찾을 수 없습니다."], linked: [] } };
+    // D11: an id that matches no live entry is a failure, not a duplicate. It
+    // used to land in `duplicates`, where the desktop alert renders it as
+    // "중복: 항목을 찾을 수 없습니다." and the web adapter reported nothing at all;
+    // both adapters now report the shared message in `errors`.
+    return { state: getState(), result: { registered: [], duplicates: [], linked: [], errors: [missingDailyEntryMessage] } };
   }
 
   const parsed = safeJson(entry.parsed_json);
   // D8: a registered 단어/문법/표현 item records the title of the sentence it came
-  // from. Sentence entries are skipped: registering one at all is sqlite-only
-  // debt (D9) and it has no parent sentence to name, so it keeps an empty
-  // source rather than gaining an invented one. withKanjiItems runs AFTER the
-  // stamp so the derived 한자 items keep their own source (the word's title).
+  // from. Sentence entries are skipped: a sentence has no parent sentence to
+  // name, so it keeps an empty source rather than gaining an invented one -
+  // storage-idb's itemsFromDailyEntry does the same now that it registers
+  // sentences too (D9). withKanjiItems runs AFTER the stamp so the derived 한자
+  // items keep their own source (the word's title).
   const baseItems = dailyEntryToItems(entry.kind, parsed);
   const candidates = withKanjiItems(
     entry.kind === "sentence"
@@ -665,6 +671,8 @@ function registerDailyEntries(ids, studyDate) {
       registered.push(...response.result.registered);
       duplicates.push(...response.result.duplicates);
       linked.push(...(response.result.linked || []));
+      // The unknown-id message (D11) is reported by registerDailyEntry itself.
+      errors.push(...(response.result.errors || []));
     } catch (error) {
       errors.push(error.message || String(error));
     }

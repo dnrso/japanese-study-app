@@ -202,4 +202,60 @@ describe("storage-idb (fake-indexeddb)", () => {
     expect(imported).toBeTruthy();
     expect(imported.parsed).toEqual(legacyParsed);
   });
+
+  // The transaction-boundary half of D13 (tests/storage-conformance.test.js),
+  // which the shared conformance test cannot reach: its invalid record never
+  // gets as far as a write, and sqlite has no IndexedDB transaction to abort.
+  // registerDailyEntries used to wrap the WHOLE batch in one runTransaction
+  // with the try/catch inside the callback, so a failing put aborted everything
+  // and rejected the returned promise with `errors` still empty. It now opens
+  // one transaction per entry, so a failure is reported, rolled back on its own,
+  // and the rest of the batch still commits.
+  it("registerDailyEntries reports a failed write in result.errors, rolls back only that entry and keeps the batch going", async () => {
+    const storage = createIdbStorage({ dbName });
+    await storage.initDatabase();
+    const state = await storage.addDailyEntry({
+      studyDate,
+      kind: "sentence",
+      rawText: [
+        "# 오늘의 문장",
+        "단어장",
+        "`単語`(たんご)|품사=명사|한자=単(single)",
+        "문법",
+        "`〜てもいい`|메모=문법 표현"
+      ].join("\n")
+    });
+    const word = state.dailyEntries.find(entry => entry.kind === "word");
+    const grammar = state.dailyEntries.find(entry => entry.kind === "grammar");
+
+    // The only way to force a genuine IndexedDB write failure here: make the
+    // item put for 単語 fail, the way a quota/DataError would in a browser.
+    const realPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (value && value.title === "単語") {
+        throw new DOMException("simulated write failure", "DataError");
+      }
+      return realPut.call(this, value, key);
+    };
+    let response;
+    try {
+      response = await storage.registerDailyEntries([word.id, grammar.id], studyDate);
+    } finally {
+      IDBObjectStore.prototype.put = realPut;
+    }
+
+    expect(response.result.errors).toHaveLength(1);
+    expect(response.result.registered).toEqual(["문법: 〜てもいい"]);
+    // The failed entry wrote nothing at all - not the word, not its 한자 - and
+    // its `registered` flag stayed false, so the card still shows 등록 필요.
+    expect(response.state.items.map(item => item.title)).toEqual(["〜てもいい"]);
+    expect(response.state.dailyEntries.find(entry => entry.id === word.id).registered).toBe(false);
+    expect(response.state.dailyEntries.find(entry => entry.id === grammar.id).registered).toBe(true);
+
+    // And the rolled-back titles are not falsely remembered as collected: the
+    // same entry registers cleanly on a retry.
+    const retry = await storage.registerDailyEntries([word.id], studyDate);
+    expect(retry.result.errors).toEqual([]);
+    expect(retry.result.registered).toEqual(expect.arrayContaining(["단어: 単語", "한자: 単"]));
+  });
 });
