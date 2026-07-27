@@ -91,13 +91,16 @@ function dailyEntryCard(entry, helpers) {
   const childGrammar = helpers.linkedEntriesForSentence("grammar", entry.id);
   const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
   const children = [...childWords, ...childGrammar, ...childExpressions];
-  // The 등록 button only ever targets a sentence's word/grammar/expression
-  // children, so a sentence's own `registered` flag stays false in practice
-  // (both adapters CAN register a sentence as a 문장 item - D9 in
-  // tests/storage-conformance.test.js - but nothing in the UI asks them to) -
-  // so the "needs registration" mark on a sentence card is a rollup over its
-  // children, not entry.registered.
-  const needsRegistration = children.length ? children.some(child => helpers.core.entryNeedsRegistration(child)) : false;
+  // The 전체 등록 button targets the sentence itself as well as its
+  // word/grammar/expression children (registering a sentence creates a 문장
+  // item - D9 in tests/storage-conformance.test.js), so the "needs
+  // registration" mark is a rollup over the sentence AND its children. Both
+  // halves matter: a sentence whose children are all registered but which is
+  // itself unregistered is still a 전체 등록 target (and still flags its day in
+  // the calendar), so it must not claim 전체 등록됨. The rollup is exactly
+  // core.entryNeedsRegistration over the same set of entries the calendar's
+  // unregisteredStudyDates looks at, which keeps card and calendar in sync.
+  const needsRegistration = [entry, ...children].some(item => helpers.core.entryNeedsRegistration(item));
   const leftCandidates = childWords.length ? `
     <section class="candidate-section">
       <div class="candidate-title">새 단어</div>
@@ -133,7 +136,7 @@ function dailyEntryCard(entry, helpers) {
             ? `<span class="badge red">등록 필요</span>`
             : children.length
               ? `<span class="badge green">전체 등록됨</span>`
-              : `<span class="badge yellow">오늘 기록</span>`}
+              : `<span class="badge green">등록됨</span>`}
           <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
         </div>
       </div>

@@ -64,7 +64,6 @@ export function renderAppShell(byId) {
             <p class="sidebar-title">빠른 필터</p>
             <div class="toc-list">
               <button class="toc-item filter-btn" type="button" data-filter="review"><span>복습 필요</span><span class="count" id="reviewFilterCount">0</span></button>
-              <button class="toc-item filter-btn" type="button" data-filter="N3"><span>JLPT N3</span><span class="count" id="n3FilterCount">0</span></button>
               <button class="toc-item filter-btn" type="button" data-filter="source"><span>자료 연결됨</span><span class="count" id="sourceFilterCount">0</span></button>
               <button class="toc-item filter-btn" type="button" data-filter="pending"><span>미완료</span><span class="count" id="pendingFilterCount">0</span></button>
             </div>
@@ -372,6 +371,9 @@ export function reviewPageTemplate() {
         <div class="panel-header">
           <h2 class="panel-title">복습 큐</h2>
           <button class="primary-btn" id="completeReviewBtn" type="button">선택 복습 완료</button>
+        </div>
+        <div class="table-tools">
+          <select id="reviewKindFilter" aria-label="복습 종류 필터"><option value="">전체 종류</option></select>
         </div>
         <div class="cards" id="reviewCards"></div>
       </section>

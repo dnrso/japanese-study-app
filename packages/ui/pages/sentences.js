@@ -19,12 +19,11 @@ function sentenceCard(entry, helpers) {
   const childGrammar = helpers.linkedEntriesForSentence("grammar", entry.id);
   const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
   const children = [...childWords, ...childGrammar, ...childExpressions];
-  // Same rollup as today.js's dailyEntryCard: the 등록 button only ever targets
-  // a sentence's word/grammar/expression children, so a sentence's own
-  // `registered` flag stays false in practice (both adapters CAN register a
-  // sentence as a 문장 item - D9 - but nothing in the UI asks them to), and the
-  // "needs registration" mark here is a rollup over its children.
-  const needsRegistration = children.length ? children.some(child => helpers.core.entryNeedsRegistration(child)) : false;
+  // Same rollup as today.js's dailyEntryCard: 전체 등록 targets the sentence
+  // itself (which becomes a 문장 item - D9) as well as its
+  // word/grammar/expression children, so the "needs registration" mark covers
+  // the sentence AND its children.
+  const needsRegistration = [entry, ...children].some(item => helpers.core.entryNeedsRegistration(item));
 
   const leftCandidates = childWords.length ? `
     <section class="candidate-section">
@@ -63,7 +62,7 @@ function sentenceCard(entry, helpers) {
             ? `<span class="badge red">등록 필요</span>`
             : children.length
               ? `<span class="badge green">전체 등록됨</span>`
-              : ""}
+              : `<span class="badge green">등록됨</span>`}
         </div>
         <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
       </div>
