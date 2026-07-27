@@ -1,13 +1,10 @@
 {
-  "name": "@nihongo-study/storage-idb",
+  "name": "@nihongo-study/storage-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js"
-  },
-  "dependencies": {
-    "@nihongo-study/storage-core": "0.1.0"
   }
 }

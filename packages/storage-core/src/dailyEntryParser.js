@@ -1,4 +1,23 @@
-function itemToRawText(item) {
+// The single daily-entry text parser, shared by both storage adapters.
+//
+// It used to live in packages/storage-sqlite/src/dailyEntryParser.js while
+// storage-idb carried a second, inline reimplementation (parseSentenceBlock /
+// parseInlineEntry). The two agreed on the canonical AI output format but
+// diverged on every markdown-bulleted variant of it - notably the
+// `- \`天気\` (てんき): 날씨` shape that itemToRawText itself emits and that a
+// pasted LLM reply looks like - so web/Android users got corrupted cards where
+// desktop users did not. This is the sqlite (canonical) implementation moved
+// here verbatim; the only edits were dropping its private copies of `text` and
+// `normalizeDailyKind` in favour of this package's already-identical ones.
+//
+// It lives in storage-core because it is pure (no injected deps, no closure
+// state, no fs/crypto) and storage-core is the one place both a CommonJS
+// `require` from the sqlite adapter and an ESM `import` from the Vite-bundled
+// idb adapter can reach.
+import { normalizeDailyKind } from "./kinds.js";
+import { text } from "./values.js";
+
+export function itemToRawText(item) {
   const parts = [`### ${text(item.title)}`];
   if (item.reading) parts.push(`- **읽기**: ${item.reading}`);
   if (item.meaning) parts.push(`- **해석**: ${item.meaning}`);
@@ -10,7 +29,7 @@ function itemToRawText(item) {
 }
 
 
-function parseDailyEntry(kind, rawText) {
+export function parseDailyEntry(kind, rawText) {
   const normalizedKind = normalizeDailyKind(kind);
   const raw = text(rawText).trim();
   const title = firstMatch(raw, /^#{1,6}\s*(.+)$/m) || firstMatch(raw, /`([^`]+)`/) || raw.split(/\r?\n/)[0] || "";
@@ -98,7 +117,7 @@ function inlineDescription(line) {
   return firstMatch(text(line), /`[^`]+`\s*(?:\([^)]+\))?\s*:?\s*(.+)$/).trim();
 }
 
-function dailyEntryToItems(kind, parsed) {
+export function dailyEntryToItems(kind, parsed) {
   if (kind === "sentence") {
     return [
       {
@@ -139,7 +158,7 @@ function dailyEntryToItems(kind, parsed) {
   return [];
 }
 
-function withKanjiItems(items) {
+export function withKanjiItems(items) {
   return items.flatMap(item => [item, ...kanjiItemsFromWord(item)]);
 }
 
@@ -209,11 +228,6 @@ function parseKanjiToken(value) {
   return { title, meaning: token.replace(title, "").trim() };
 }
 
-
-function normalizeDailyKind(kind) {
-  return ["sentence", "word", "grammar", "expression"].includes(kind) ? kind : "sentence";
-}
-
 function firstMatch(value, pattern) {
   return value.match(pattern)?.[1] || "";
 }
@@ -221,14 +235,3 @@ function firstMatch(value, pattern) {
 function fieldValue(line, fieldName) {
   return firstMatch(line, new RegExp(`${fieldName}=([^|]+)`)).trim();
 }
-
-function text(value) {
-  return String(value ?? "");
-}
-
-module.exports = {
-  parseDailyEntry,
-  dailyEntryToItems,
-  withKanjiItems,
-  itemToRawText
-};

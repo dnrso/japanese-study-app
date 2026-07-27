@@ -1,14 +1,28 @@
+// Imported by relative path, not by package name: nothing in this repo
+// resolves bare @nihongo-study specifiers at runtime. The desktop renderer
+// loads shared packages as plain ES modules with no bundler, and the packaged
+// app.asar carries no @nihongo-study scope in node_modules, so the relative
+// form is the one that works everywhere. Vite handles it fine too.
+import {
+  addDays,
+  itemToRawText,
+  kindLabel,
+  normalizeDailyKind,
+  normalizeDate,
+  normalizeDeletedAt,
+  normalizeOptionalDate,
+  normalizeReview,
+  normalizeReviewCompletionTargets,
+  parseDailyEntry as parseCanonicalDailyEntry,
+  pruneStaleTombstones,
+  reviewIntervals,
+  text,
+  todayKey,
+  toNumber
+} from "../../storage-core/src/index.js";
+
 const databaseVersion = 2;
 
-const reviewIntervals = {
-  "내일": 1,
-  "3일 후": 3,
-  "일주일": 7,
-  "2주일": 14,
-  "한달": 30
-};
-
-const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
 const storeDefinitions = [
   { name: "meta", options: { keyPath: "key" }, indexes: [] },
   { name: "studyDays", options: { keyPath: "studyDate" }, indexes: [] },
@@ -701,7 +715,10 @@ function putDailyCandidate(transaction, sentence, kind, item) {
     title: item.title,
     reading: item.reading,
     meaning: item.meaning,
-    rawText: item.rawText,
+    // The shared parser returns structured items, not the source bullet line,
+    // so regenerate the candidate's raw text the way the sqlite adapter's
+    // dailyCandidatePayload does. Keeps both adapters' stored rawText equal.
+    rawText: itemToRawText(item),
     parsed: { ...item, kind },
     registered: false,
     sourceSentences: [{ id: sentence.id, title: sentence.title, studyDate: sentence.studyDate }]
@@ -816,68 +833,29 @@ function parseLegacyParsedJson(value) {
   }
 }
 
+// Thin adapter over the shared parser in @nihongo-study/storage-core. This
+// adapter used to carry its own reimplementation (parseSentenceBlock /
+// parseInlineEntry), which mangled every markdown-bulleted variant of the
+// format - see the parser's own header.
+//
+// The only adapter-specific bit left: for word/grammar/expression entries this
+// adapter persists 품사/문자/한자 as flat fields on the entry's `parsed` blob
+// and reads them back in itemFromDailyEntry when registering. The canonical
+// parser exposes them per-bullet in `parsed.words`, so lift the first inline
+// match up exactly the way the sqlite adapter's dailyEntryToItems does
+// (parsed.note is the trimmed raw text `parsed.words` was parsed from, so
+// parsed.words[0] and parseWordLines(parsed.note)[0] are the same object).
 function parseDailyEntry(kind, rawText) {
-  if (kind === "sentence") {
-    return parseSentenceBlock(rawText);
+  const parsed = parseCanonicalDailyEntry(kind, rawText);
+  if (parsed.kind === "sentence") {
+    return parsed;
   }
-  return parseInlineEntry(rawText, kind);
-}
-
-function parseSentenceBlock(rawText) {
-  const lines = text(rawText).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const title = cleanHeading(lines.find(line => !line.startsWith("읽기") && !line.startsWith("해석") && !["단어장", "문법", "표현"].includes(line)) || "새 문장");
+  const [inlineWord] = parsed.words;
   return {
-    title,
-    reading: cleanLabelLine(lines.find(line => line.startsWith("읽기")) || ""),
-    meaning: cleanLabelLine(lines.find(line => line.startsWith("해석")) || ""),
-    words: parseSectionEntries(lines, "단어장", "문법").map(line => parseInlineEntry(line, "word")),
-    grammar: parseSectionEntries(lines, "문법", "표현").map(line => parseInlineEntry(line, "grammar")),
-    expressions: parseSectionEntries(lines, "표현", "").map(line => parseInlineEntry(line, "expression"))
-  };
-}
-
-function parseSectionEntries(lines, sectionName, nextSectionName) {
-  const startIndex = lines.findIndex(line => line === sectionName);
-  if (startIndex < 0) {
-    return [];
-  }
-  const nextIndex = nextSectionName
-    ? lines.findIndex((line, index) => index > startIndex && line === nextSectionName)
-    : -1;
-  return lines
-    .slice(startIndex + 1, nextIndex > startIndex ? nextIndex : undefined)
-    .filter(line => line && !["단어장", "문법", "표현"].includes(line));
-}
-
-function parseInlineEntry(rawText, kind) {
-  const meta = {};
-  const [mainPart, ...metaParts] = text(rawText).split("|").map(part => part.trim());
-  metaParts.forEach(part => {
-    const [key, ...valueParts] = part.split("=");
-    if (key && valueParts.length) {
-      meta[key.trim()] = valueParts.join("=").trim();
-    }
-  });
-
-  const titleMatch = mainPart.match(/`([^`]+)`/) || mainPart.match(/^([^\s(]+)/);
-  const readingMatch = mainPart.match(/\(([^)]+)\)/);
-  const title = titleMatch?.[1] || "새 항목";
-  const reading = readingMatch?.[1] || "";
-  const meaning = mainPart
-    .replace(/`[^`]+`/, "")
-    .replace(/\([^)]+\)/, "")
-    .trim() || title;
-
-  return {
-    kind,
-    title,
-    reading,
-    meaning,
-    kanji: meta["한자"] || "",
-    part: meta["품사"] || "",
-    script: meta["문자"] || "",
-    note: meta["메모"] || "",
-    rawText
+    ...parsed,
+    kanji: inlineWord?.kanji || "",
+    part: inlineWord?.part || "",
+    script: inlineWord?.script || ""
   };
 }
 
@@ -923,116 +901,13 @@ function linkPayload(entryId, sentenceId) {
   };
 }
 
-function normalizeReviewCompletionTargets(targets) {
-  if (!Array.isArray(targets)) {
-    return [];
-  }
-  return targets
-    .map(target => {
-      if (target && typeof target === "object") {
-        return {
-          id: text(target.id),
-          review: normalizeCompletionReview(target.review)
-        };
-      }
-      return { id: text(target), review: "3일 후" };
-    })
-    .filter(target => target.id && target.review);
-}
-
-function normalizeCompletionReview(value) {
-  const review = normalizeReview(value);
-  if (review === "오늘") {
-    return "3일 후";
-  }
-  return reviewIntervals[review] ? review : "";
-}
-
-function normalizeDailyKind(kind) {
-  return ["sentence", "word", "grammar", "expression"].includes(kind) ? kind : "sentence";
-}
-
-function normalizeDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : todayKey();
-}
-
-function normalizeOptionalDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(text(value)) ? text(value) : "";
-}
-
-function normalizeDeletedAt(value) {
-  return value ? text(value) : null;
-}
-
-// An empty review is meaningful and must stay empty: source items carry
-// review "" by design, and the quiz's "변경 안 함" option sends "" to mean
-// "leave the review untouched" (see submitWordQuizAnswer's `&& nextReview`
-// guard). Only non-empty unknown values fall back to "대기".
-function normalizeReview(value) {
-  const review = text(value);
-  if (!review) {
-    return "";
-  }
-  return reviewStates.includes(review) ? review : "대기";
-}
-
 function reviewDueDateFor(review, baseDate = todayKey()) {
   const days = reviewIntervals[review];
   return days ? addDays(normalizeDate(baseDate), days) : "";
 }
 
-function addDays(dateValue, days) {
-  const [year, month, day] = normalizeDate(dateValue).split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + days);
-  return dateKey(date);
-}
-
-function todayKey() {
-  return dateKey(new Date());
-}
-
-function dateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function cleanHeading(value) {
-  return text(value).replace(/^#+\s*/, "").trim();
-}
-
-function cleanLabelLine(value) {
-  return text(value).replace(/^(읽기|해석)\s*/, "").trim();
-}
-
-function kindLabel(kind) {
-  return {
-    sentence: "문장",
-    word: "단어",
-    grammar: "문법",
-    expression: "표현",
-    kanji: "한자",
-    source: "자료"
-  }[kind] || kind;
-}
-
 function sortNewest(left, right) {
   return text(right.createdAt).localeCompare(text(left.createdAt));
-}
-
-const tombstoneTtlMs = 90 * 24 * 60 * 60 * 1000;
-
-function pruneStaleTombstones(records) {
-  const cutoff = Date.now() - tombstoneTtlMs;
-  return records.filter(record => {
-    if (!record.deletedAt) {
-      return true;
-    }
-    const deletedAtMs = Date.parse(record.deletedAt);
-    return !Number.isFinite(deletedAtMs) || deletedAtMs >= cutoff;
-  });
 }
 
 function now() {
@@ -1041,13 +916,4 @@ function now() {
 
 function createId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function text(value) {
-  return String(value ?? "");
-}
-
-function toNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
 }

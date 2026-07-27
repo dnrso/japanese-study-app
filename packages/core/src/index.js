@@ -1,3 +1,14 @@
+// Single definition of the SRS intervals lives in packages/storage-core, which
+// both storage adapters also read, so the review queue's due-date arithmetic
+// can never drift from the intervals the adapters actually persist.
+//
+// Imported by relative path, not by package name: the desktop renderer loads
+// this file as a plain ES module over file:// (apps/desktop/src/renderer/
+// state.js does `import("../../../../packages/core/src/index.js")`), and with
+// no bundler in that path a bare specifier fails with "Failed to resolve
+// module specifier". Vite resolves the relative form just as happily.
+import { reviewIntervals as REVIEW_QUEUE_INTERVALS } from "../../storage-core/src/index.js";
+
 export * from "./merge.js";
 
 // Display-only copy of the AI 문장 분석 usage limits, for the client to show
@@ -15,14 +26,6 @@ export const AI_ANALYSIS_LIMITS = {
   perMinute: 1,
   perDay: 100,
   maxChars: 300
-};
-
-const REVIEW_QUEUE_INTERVALS = {
-  "내일": 1,
-  "3일 후": 3,
-  "일주일": 7,
-  "2주일": 14,
-  "한달": 30
 };
 
 const SEARCH_FIELDS = [
