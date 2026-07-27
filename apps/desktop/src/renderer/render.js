@@ -13,6 +13,7 @@ function renderAll() {
   renderToday();
   renderLearnedSections();
   renderSources();
+  renderSentences();
   renderWordFilters();
   renderWords();
   renderCards("grammar", "grammarCards");
@@ -142,6 +143,37 @@ function renderSources() {
     sources: items("source"),
     helpers: renderHelpers()
   }));
+}
+
+function renderSentences() {
+  const sentenceEntries = core.rootSentenceEntries(allDailyEntriesForSentences());
+  applyPagePatch(uiPages.renderSentencesPage({
+    caption: searchTerm ? `검색 결과 ${sentenceEntries.length}개` : `오늘 공부에서 저장한 문장 ${sentenceEntries.length}개`,
+    sentences: sentenceEntries,
+    helpers: {
+      ...renderHelpers(),
+      entryToCandidate,
+      linkedEntriesForSentence: linkedEntriesForAnySentence
+    }
+  }));
+}
+
+function allDailyEntriesForSentences() {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
+  if (!searchTerm) {
+    return entries;
+  }
+  const normalizedSearch = searchTerm.toLowerCase();
+  return entries.filter(entry => [
+    entry.title,
+    entry.reading,
+    entry.meaning,
+    entry.studyDate
+  ].some(value => String(value || "").toLowerCase().includes(normalizedSearch)));
+}
+
+function linkedEntriesForAnySentence(kind, sentenceId) {
+  return core.linkedEntriesForSentence(state.allDailyEntries || state.dailyEntries || [], kind, sentenceId);
 }
 
 function renderWords() {
