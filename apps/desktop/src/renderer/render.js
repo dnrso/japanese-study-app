@@ -39,6 +39,10 @@ function renderHelpers() {
     escapeHtml,
     highlight,
     kindLabels,
+    // renderReviewPage calls reviewQueueReview to mark a card as having a
+    // pending draft; it was missing from this object, which made every
+    // 복습 큐 card render throw here.
+    reviewQueueReview,
     reviewQueueStatusText,
     reviewStatusText
   };
@@ -207,8 +211,11 @@ function renderKanji() {
 }
 
 function renderReview() {
+  const kindFilter = reviewKindFilterValue();
   applyPagePatch(uiPages.renderReviewPage({
     reviewItems: reviewItems(),
+    kindFilter,
+    kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
     helpers: renderHelpers()
   }));
 }

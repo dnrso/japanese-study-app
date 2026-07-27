@@ -372,6 +372,9 @@ export function reviewPageTemplate() {
           <h2 class="panel-title">복습 큐</h2>
           <button class="primary-btn" id="completeReviewBtn" type="button">선택 복습 완료</button>
         </div>
+        <div class="table-tools">
+          <select id="reviewKindFilter" aria-label="복습 종류 필터"><option value="">전체 종류</option></select>
+        </div>
         <div class="cards" id="reviewCards"></div>
       </section>
     </section>

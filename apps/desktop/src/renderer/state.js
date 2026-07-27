@@ -136,7 +136,8 @@ function reviewCompletionTargets() {
   return core.reviewCompletionTargets({
     items: state.items,
     drafts: reviewQueueDrafts,
-    searchTerm
+    searchTerm,
+    kindFilter: reviewKindFilterValue()
   });
 }
 
@@ -219,6 +220,14 @@ function buildQuizQuestion({ kind, mode, forwardMode, reverseMode }) {
   });
 }
 
+// The 복습 큐 종류 filter is a view filter, not a setting: its value lives in
+// the <select> just like the 단어 page's wordPartFilter/wordScriptFilter/
+// wordReviewFilter, and is deliberately NOT written to localStorage the way
+// the 퀴즈 표시 settings above are.
+function reviewKindFilterValue() {
+  return core.normalizeReviewKindFilter(byId("reviewKindFilter")?.value || "");
+}
+
 function reviewItems() {
-  return core.reviewItems(state.items, searchTerm);
+  return core.reviewItems(state.items, searchTerm, reviewKindFilterValue());
 }
