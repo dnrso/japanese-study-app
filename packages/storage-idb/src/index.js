@@ -256,7 +256,11 @@ export function createIdbStorage(options = {}) {
       await putValue("items", {
         ...item,
         review: nextReview,
-        reviewDueDate: reviewDueDateFor(nextReview, studyDate),
+        // Due dates are scheduled from today, not from the browsed studyDate
+        // (matches storage-sqlite; otherwise reviewing while viewing a past
+        // date yields an already-past due date that promoteDueReviews
+        // immediately flips back to "오늘").
+        reviewDueDate: reviewDueDateFor(nextReview),
         updatedAt: now()
       });
     }
@@ -278,7 +282,8 @@ export function createIdbStorage(options = {}) {
           store.put({
             ...item,
             review: target.review,
-            reviewDueDate: reviewDueDateFor(target.review, studyDate),
+            // Scheduled from today, not the browsed studyDate (see updateItemReview).
+            reviewDueDate: reviewDueDateFor(target.review),
             lastReviewedAt: reviewedAt,
             updatedAt: reviewedAt
           });
@@ -310,7 +315,8 @@ export function createIdbStorage(options = {}) {
     let reviewUpdated = false;
     if (correct && payload.updateReviewOnCorrect && nextReview) {
       nextItem.review = nextReview;
-      nextItem.reviewDueDate = reviewDueDateFor(nextReview, payload.studyDate);
+      // Scheduled from today, not the browsed payload.studyDate (see updateItemReview).
+      nextItem.reviewDueDate = reviewDueDateFor(nextReview);
       nextItem.lastReviewedAt = nextItem.updatedAt;
       reviewUpdated = true;
     }
@@ -958,8 +964,15 @@ function normalizeDeletedAt(value) {
   return value ? text(value) : null;
 }
 
+// An empty review is meaningful and must stay empty: source items carry
+// review "" by design, and the quiz's "변경 안 함" option sends "" to mean
+// "leave the review untouched" (see submitWordQuizAnswer's `&& nextReview`
+// guard). Only non-empty unknown values fall back to "대기".
 function normalizeReview(value) {
   const review = text(value);
+  if (!review) {
+    return "";
+  }
   return reviewStates.includes(review) ? review : "대기";
 }
 

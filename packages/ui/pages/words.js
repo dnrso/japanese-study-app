@@ -4,7 +4,7 @@ export function renderWordsPage({ rows, helpers }) {
   return {
     html: {
       wordRows: rows.length ? rows.map(item => `
-        <tr data-item-id="${item.id}">
+        <tr data-item-id="${helpers.escapeHtml(item.id)}">
           <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span>${helpers.highlight(item.title)}</span></div></td>
           <td>${helpers.highlight(item.reading || "-")}</td>
           <td>${helpers.highlight(item.meaning)}</td>
@@ -12,11 +12,11 @@ export function renderWordsPage({ rows, helpers }) {
           <td><span class="badge blue">${helpers.highlight(item.part || "-")}</span></td>
           <td><span class="badge green">${helpers.highlight(item.script || "-")}</span></td>
           <td>${sourceSentenceLinks(item.sourceSentences, helpers)}</td>
-          <td><button class="badge ${item.review === "오늘" ? "red" : "yellow"}" data-cycle-review="${item.id}">${helpers.highlight(helpers.reviewStatusText(item))}</button></td>
+          <td><button class="badge ${item.review === "오늘" ? "red" : "yellow"}" data-cycle-review="${helpers.escapeHtml(item.id)}">${helpers.highlight(helpers.reviewStatusText(item))}</button></td>
           <td>
             <div class="word-row-actions">
-              <button class="ghost-btn" data-edit-item="${item.id}">수정</button>
-              <button class="danger-btn" data-delete-item="${item.id}">삭제</button>
+              <button class="ghost-btn" data-edit-item="${helpers.escapeHtml(item.id)}">수정</button>
+              <button class="danger-btn" data-delete-item="${helpers.escapeHtml(item.id)}">삭제</button>
             </div>
           </td>
         </tr>

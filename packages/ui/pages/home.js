@@ -88,8 +88,8 @@ export function renderTasksPage({ tasks, helpers }) {
   return {
     html: {
       taskList: tasks.length ? tasks.map(task => `
-        <div class="task ${task.done ? "done" : ""}" data-task-id="${task.id}">
-          <button class="check" data-toggle-task="${task.id}" aria-label="완료 전환"></button>
+        <div class="task ${task.done ? "done" : ""}" data-task-id="${helpers.escapeHtml(task.id)}">
+          <button class="check" data-toggle-task="${helpers.escapeHtml(task.id)}" aria-label="완료 전환"></button>
           <div><strong>${helpers.highlight(task.title)}</strong><span>${helpers.highlight(task.note)}</span></div>
           <span class="badge ${task.done ? "green" : "red"}">${helpers.escapeHtml(task.tag)}</span>
         </div>
