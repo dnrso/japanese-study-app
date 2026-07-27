@@ -22,6 +22,8 @@ Electron 데스크톱 앱 실행:
 npm.cmd start
 ```
 
+실행 전 스크립트가 설치된 Electron 버전에 맞는 `better-sqlite3` 사전 빌드 바이너리를 확인합니다. 일반 Node용 바이너리가 설치됐거나 Electron 버전이 바뀐 경우에는 올바른 바이너리를 자동으로 내려받아 ABI 불일치를 복구합니다.
+
 Windows unpacked 데스크톱 빌드:
 
 ```powershell

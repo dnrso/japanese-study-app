@@ -452,8 +452,11 @@ export function settingsPageTemplate() {
         <div class="settings-actions">
           <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
           <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
+          <button class="ghost-btn" id="syncRetryBtn" type="button" disabled>동기화 재시도</button>
         </div>
         <p class="muted" id="accountStatus"></p>
+        <p class="muted" id="syncStatus" aria-live="polite">동기화 대기</p>
+        <p class="muted" id="syncLastSuccess">마지막 성공: 없음</p>
       </section>
 
       <section class="panel section" id="settings-list-page-size">

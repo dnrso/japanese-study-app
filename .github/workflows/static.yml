@@ -11,6 +11,19 @@ on:
       - "packages/ui/**"
       - "packages/ai/**"
       - "packages/storage-idb/**"
+      - "packages/storage-core/**"
+      - "packages/sync/**"
+      - ".github/workflows/static.yml"
+      - "package*.json"
+
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/core/**"
+      - "packages/ui/**"
+      - "packages/ai/**"
+      - "packages/storage-idb/**"
+      - "packages/storage-core/**"
       - "packages/sync/**"
       - ".github/workflows/static.yml"
       - "package*.json"
@@ -18,24 +31,11 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,18 +43,37 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Run tests
+        run: npm test
       - name: Build web app
         run: npm run web:build
       - name: Setup Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'apps/web/dist'
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

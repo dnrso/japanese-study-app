@@ -12,6 +12,7 @@ export { getSupabaseClient } from "./client.js";
 export { getSupabaseConfig, isConfigured } from "./config.js";
 export { getSession, onAuthChange, signInWithOAuth } from "./auth.js";
 export { pullSnapshot, pushSnapshot } from "./snapshot.js";
+export { createSyncCoordinator, createSyncingStorage, syncMutationMethods } from "./coordinator.js";
 
 async function readErrorResponseData(error) {
   const response = error?.context;
