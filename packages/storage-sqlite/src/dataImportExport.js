@@ -177,6 +177,40 @@ function importFullBackup() {
   return replaceBackup(backup);
 }
 
+// Merges "remote" into the CURRENT local rows and replaces the database inside
+// one transaction (replaceBackup's own transaction nests as a savepoint). Unlike
+// exportData() this never writes the CSV/YAML export files.
+function applyRemoteSnapshot(remote, merge) {
+  if (!remote || typeof remote !== "object") {
+    const data = currentData();
+    return { state: getState(data.selectedDate), data };
+  }
+
+  return getDb().transaction(() => {
+    const result = merge(currentData(), remote);
+    if (result && typeof result.then === "function") {
+      throw new TypeError("applyRemoteSnapshot merge must be synchronous.");
+    }
+    if (!result || !result.data || typeof result.data !== "object") {
+      throw new TypeError("applyRemoteSnapshot merge must return { data }.");
+    }
+    const data = result.data;
+    replaceBackup(data);
+    return { state: getState(normalizeDate(data.selectedDate)), data };
+  })();
+}
+
+function currentData() {
+  return {
+    selectedDate: normalizeDate(),
+    studyDays: pruneStaleTombstones(allStudyDaysRaw()),
+    dailyEntries: pruneStaleTombstones(allDailyEntriesRaw()),
+    dailyEntryLinks: pruneStaleTombstones(allDailyEntryLinksRaw()),
+    tasks: pruneStaleTombstones(allTasksRaw()),
+    items: pruneStaleTombstones(allItemsRaw())
+  };
+}
+
 function replaceBackup(backup) {
   const insertDay = getDb().prepare(`
     INSERT INTO study_days (study_date, minutes, summary, note, created_at, updated_at, deleted_at)
@@ -328,7 +362,8 @@ function writeUtf8(filePath, content) {
   return {
     exportData,
     importCsvExports,
-    importFullBackup
+    importFullBackup,
+    applyRemoteSnapshot
   };
 }
 

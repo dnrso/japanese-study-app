@@ -471,18 +471,75 @@ export function createIdbStorage(options = {}) {
     return getState(selectedDate);
   }
 
+  // Merges "remote" into the CURRENT local rows inside a single readwrite
+  // transaction, so a write that lands while the caller was pulling is part of
+  // "local" (or commits after us and triggers a follow-up sync). Nothing may be
+  // awaited between the reads and the writes or the transaction auto-commits.
+  async function applyRemoteSnapshot(remote, merge) {
+    if (!remote || typeof remote !== "object") {
+      return { state: await getState(), data: (await exportData()).data };
+    }
+
+    const db = await getDb();
+    const dataStores = ["studyDays", "dailyEntries", "dailyEntryLinks", "tasks", "items"];
+    const data = await new Promise((resolve, reject) => {
+      const transaction = db.transaction(stores, "readwrite");
+      const rows = {};
+      let merged = null;
+      let failure = null;
+      const fail = error => {
+        failure = error;
+        try {
+          transaction.abort();
+        } catch {
+          // Already finished or aborting.
+        }
+        reject(error);
+      };
+      transaction.oncomplete = () => resolve(merged);
+      transaction.onerror = () => reject(failure || transaction.error);
+      transaction.onabort = () => reject(failure || transaction.error);
+
+      let pending = dataStores.length;
+      dataStores.forEach(name => {
+        const request = transaction.objectStore(name).getAll();
+        request.onsuccess = () => {
+          rows[name] = request.result;
+          pending -= 1;
+          if (pending > 0) {
+            return;
+          }
+          try {
+            const local = {
+              selectedDate: todayKey(),
+              studyDays: pruneStaleTombstones(rows.studyDays),
+              dailyEntries: pruneStaleTombstones(rows.dailyEntries),
+              dailyEntryLinks: pruneStaleTombstones(rows.dailyEntryLinks),
+              tasks: pruneStaleTombstones(rows.tasks),
+              items: pruneStaleTombstones(rows.items)
+            };
+            const result = merge(local, remote);
+            if (result && typeof result.then === "function") {
+              throw new TypeError("applyRemoteSnapshot merge must be synchronous.");
+            }
+            if (!result || !result.data || typeof result.data !== "object") {
+              throw new TypeError("applyRemoteSnapshot merge must return { data }.");
+            }
+            merged = result.data;
+            writeNormalizedSeed(transaction, normalizeSeedState(merged));
+          } catch (error) {
+            fail(error);
+          }
+        };
+      });
+    });
+
+    return { state: await getState(normalizeDate(data.selectedDate)), data };
+  }
+
   async function seedDatabase(seed) {
     const normalized = normalizeSeedState(seed);
-    await runTransaction(stores, "readwrite", transaction => {
-      stores.forEach(name => transaction.objectStore(name).clear());
-      const metaStore = transaction.objectStore("meta");
-      metaStore.put({ key: "initialized", value: true });
-      normalized.studyDays.forEach(day => transaction.objectStore("studyDays").put(day));
-      normalized.dailyEntries.forEach(entry => transaction.objectStore("dailyEntries").put(entry));
-      normalized.dailyEntryLinks.forEach(link => transaction.objectStore("dailyEntryLinks").put(link));
-      normalized.tasks.forEach(task => transaction.objectStore("tasks").put(task));
-      normalized.items.forEach(item => transaction.objectStore("items").put(item));
-    });
+    await runTransaction(stores, "readwrite", transaction => writeNormalizedSeed(transaction, normalized));
   }
 
   function getDb() {
@@ -574,8 +631,20 @@ export function createIdbStorage(options = {}) {
     exportData,
     importCsvExports,
     importFullBackup,
+    applyRemoteSnapshot,
     paths
   };
+}
+
+function writeNormalizedSeed(transaction, normalized) {
+  stores.forEach(name => transaction.objectStore(name).clear());
+  const metaStore = transaction.objectStore("meta");
+  metaStore.put({ key: "initialized", value: true });
+  normalized.studyDays.forEach(day => transaction.objectStore("studyDays").put(day));
+  normalized.dailyEntries.forEach(entry => transaction.objectStore("dailyEntries").put(entry));
+  normalized.dailyEntryLinks.forEach(link => transaction.objectStore("dailyEntryLinks").put(link));
+  normalized.tasks.forEach(task => transaction.objectStore("tasks").put(task));
+  normalized.items.forEach(item => transaction.objectStore("items").put(item));
 }
 
 function openDatabase(dbName) {

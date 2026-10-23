@@ -1085,7 +1085,7 @@ const importExport = createDataImportExport({
   allDailyEntryLinksMap
 });
 
-const { exportData, importCsvExports, importFullBackup } = importExport;
+const { exportData, importCsvExports, importFullBackup, applyRemoteSnapshot } = importExport;
 
 return {
   initDatabase,
@@ -1106,6 +1106,7 @@ return {
   exportData,
   importCsvExports,
   importFullBackup,
+  applyRemoteSnapshot,
   paths: {
     appDataDir,
     exportsDir,

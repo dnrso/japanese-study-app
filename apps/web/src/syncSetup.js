@@ -167,6 +167,25 @@ export async function signOutOfAccount(ctx) {
 // Wires sync.onAuthChange to update accountSession and run the coordinator's
 // initial pull/merge when a new authenticated user appears. Successful state
 // refreshes are handled by the coordinator callback configured in main.js.
+// Applies a successful syncNow() result to the UI. Background syncs keep the
+// user's browsed date and transient UI (result.state is always for today, so it
+// is reloaded for the browsed date instead); a new account resets both.
+// `ctx` needs: setState, renderAll, plus resetTransientUiState (resetUi) or
+// getSelectedDate and loadState (background).
+export async function applySyncResult(ctx, result, { resetUi = false } = {}) {
+  if (!result || result.skipped || !result.state) {
+    return false;
+  }
+  if (resetUi) {
+    ctx.setState(result.state);
+    ctx.resetTransientUiState();
+  } else {
+    ctx.setState(await ctx.loadState(ctx.getSelectedDate()));
+  }
+  ctx.renderAll();
+  return true;
+}
+
 export function wireAuthChange(ctx) {
   const { sync } = ctx;
   sync.onAuthChange(async session => {
@@ -178,7 +197,8 @@ export function wireAuthChange(ctx) {
       return;
     }
     if (previousUserId !== session.user?.id) {
-      await ctx.syncCoordinator.syncNow();
+      const result = await ctx.syncCoordinator.syncNow();
+      await applySyncResult(ctx, result, { resetUi: true });
     }
   });
 }

@@ -16,6 +16,7 @@
 //   "state"       -> the getState() envelope
 //   "stateResult" -> { state, result }
 //   "export"      -> the exportData() envelope
+//   "applied"     -> { state, data }: the post-merge state plus the merged data
 //   "handle"      -> the underlying database handle
 const storageContract = [
   {
@@ -70,6 +71,12 @@ const storageContract = [
     // tests/storage-conformance.test.js (KNOWN DIVERGENCE D14).
     params: ["backup"],
     returns: "state"
+  },
+  {
+    name: "applyRemoteSnapshot",
+    params: ["remote", "merge"],
+    returns: "applied",
+    note: "merge(localData, remoteData) => { data } must be synchronous; it runs inside one write transaction against current local rows. Returns { state, data }."
   }
 ];
 

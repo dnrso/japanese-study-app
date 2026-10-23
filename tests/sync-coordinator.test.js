@@ -70,6 +70,28 @@ describe("createSyncCoordinator", () => {
     expect(sync.syncNow).toHaveBeenCalledTimes(2);
   });
 
+  it("reports a follow-up while a sync is in flight and re-runs once it finishes", async () => {
+    const first = deferred();
+    const sync = {
+      isEnabled: true,
+      syncNow: vi.fn()
+        .mockImplementationOnce(() => first.promise)
+        .mockResolvedValue(successfulResult())
+    };
+    const coordinator = createSyncCoordinator({ sync });
+    coordinator.setSession(session());
+
+    const running = coordinator.syncNow();
+    await vi.waitFor(() => expect(sync.syncNow).toHaveBeenCalledTimes(1));
+
+    expect(coordinator.schedule()).toEqual({ scheduled: true, followUp: true });
+    expect(sync.syncNow).toHaveBeenCalledTimes(1);
+
+    first.resolve(successfulResult());
+    await running;
+    expect(sync.syncNow).toHaveBeenCalledTimes(2);
+  });
+
   it("exposes a failed sync and recovers through manual retry", async () => {
     const error = new Error("offline");
     const onError = vi.fn();
@@ -203,20 +225,28 @@ describe("web auth and status wiring", () => {
       setAccountSession: next => {
         accountSession = next;
       },
-      renderAccountStatus: vi.fn()
+      renderAccountStatus: vi.fn(),
+      setState: vi.fn(),
+      resetTransientUiState: vi.fn(),
+      renderAll: vi.fn()
     };
 
     wireAuthChange(ctx);
     await authCallback(null);
     expect(syncCoordinator.syncNow).not.toHaveBeenCalled();
+    expect(ctx.resetTransientUiState).not.toHaveBeenCalled();
 
     const authenticated = session();
     await authCallback(authenticated);
     expect(syncCoordinator.setSession).toHaveBeenLastCalledWith(authenticated);
     expect(syncCoordinator.syncNow).toHaveBeenCalledTimes(1);
+    expect(ctx.setState).toHaveBeenCalledWith({ selectedDate: "2026-07-27" });
+    expect(ctx.resetTransientUiState).toHaveBeenCalledTimes(1);
+    expect(ctx.renderAll).toHaveBeenCalledTimes(1);
 
     await authCallback(authenticated);
     expect(syncCoordinator.syncNow).toHaveBeenCalledTimes(1);
+    expect(ctx.resetTransientUiState).toHaveBeenCalledTimes(1);
   });
 
   it("renders idle, syncing, success, error, last-success, and retry availability", () => {

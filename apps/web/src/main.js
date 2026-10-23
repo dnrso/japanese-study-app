@@ -138,13 +138,7 @@ let listPageSizeOverrides = loadListPageSizeOverrides();
 syncCoordinator = createSyncCoordinator({
   sync,
   onStateChange: () => renderAccountStatus(),
-  onSyncSuccess: result => {
-    if (result?.state) {
-      state = result.state;
-      resetTransientUiState();
-      renderAll();
-    }
-  },
+  onSyncSuccess: result => applySyncResult(syncCtx(), result),
   onError: error => {
     console.error("데이터 동기화 실패:", error);
   }
@@ -1634,6 +1628,8 @@ function syncCtx() {
     renderAccountStatus,
     getState: () => state,
     setState: nextState => { state = nextState; },
+    getSelectedDate: () => selectedDate,
+    loadState: date => baseStore.getState(date),
     resetTransientUiState,
     renderAll
   };
