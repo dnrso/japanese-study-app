@@ -103,7 +103,7 @@ export function renderAppShell(byId) {
   `;
 }
 
-export function homePageTemplate() {
+function homePageTemplate() {
   return `
     <section class="page" id="home">
       <div class="hero" id="home-overview">
@@ -157,7 +157,7 @@ export function homePageTemplate() {
   `;
 }
 
-export function todayPageTemplate() {
+function todayPageTemplate() {
   return `
     <section class="page hidden-page" id="today">
       <div class="today-top-grid">
@@ -213,7 +213,7 @@ export function todayPageTemplate() {
   `;
 }
 
-export function sourcesPageTemplate() {
+function sourcesPageTemplate() {
   return `
     <section class="page hidden-page" id="sources">
       <section class="panel section" id="sources-library">
@@ -227,7 +227,7 @@ export function sourcesPageTemplate() {
   `;
 }
 
-export function sentencesPageTemplate() {
+function sentencesPageTemplate() {
   return `
     <section class="page hidden-page" id="sentences">
       <section class="panel section" id="sentences-list">
@@ -245,7 +245,7 @@ export function sentencesPageTemplate() {
   `;
 }
 
-export function wordsPageTemplate() {
+function wordsPageTemplate() {
   return `
     <section class="page hidden-page" id="words">
       <section class="panel section" id="words-list">
@@ -290,7 +290,7 @@ export function wordsPageTemplate() {
   `;
 }
 
-export function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, pageId = kind) {
+function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, pageId = kind) {
   return `
     <section class="page hidden-page" id="${pageId}">
       <section class="panel section" id="${sectionId}">
@@ -305,7 +305,7 @@ export function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, 
   `;
 }
 
-export function kanjiPageTemplate() {
+function kanjiPageTemplate() {
   return `
     <section class="page hidden-page" id="kanji">
       <section class="panel section" id="kanji-grid">
@@ -320,7 +320,7 @@ export function kanjiPageTemplate() {
   `;
 }
 
-export function quizPageTemplate() {
+function quizPageTemplate() {
   return `
     <section class="page hidden-page" id="quiz">
       <section class="panel section" id="quiz-select">
@@ -364,7 +364,7 @@ export function quizPageTemplate() {
   `;
 }
 
-export function reviewPageTemplate() {
+function reviewPageTemplate() {
   return `
     <section class="page hidden-page" id="review">
       <section class="panel section" id="review-queue">
@@ -381,7 +381,7 @@ export function reviewPageTemplate() {
   `;
 }
 
-export function statsPageTemplate() {
+function statsPageTemplate() {
   return `
     <section class="page hidden-page" id="stats">
       <section class="panel section" id="stats-overview">
@@ -415,7 +415,7 @@ function listPageSizeSelect(view, label) {
   `;
 }
 
-export function settingsPageTemplate() {
+function settingsPageTemplate() {
   return `
     <section class="page hidden-page" id="settings">
       <section class="panel section" id="settings-general">

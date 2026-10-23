@@ -542,6 +542,20 @@ export function createIdbStorage(options = {}) {
     await runTransaction(stores, "readwrite", transaction => writeNormalizedSeed(transaction, normalized));
   }
 
+  // Closes the IDBDatabase (so deleteDatabase / tab teardown is not blocked) and
+  // forgets it; a later call lazily reopens. Idempotent.
+  async function close() {
+    const pending = dbPromise;
+    dbPromise = null;
+    if (pending) {
+      try {
+        (await pending).close();
+      } catch {
+        // The open itself failed; there is no handle to release.
+      }
+    }
+  }
+
   function getDb() {
     if (!dbPromise) {
       dbPromise = openDatabase(dbName);
@@ -566,12 +580,6 @@ export function createIdbStorage(options = {}) {
   async function putValue(storeName, value) {
     await runTransaction([storeName], "readwrite", transaction => {
       transaction.objectStore(storeName).put(value);
-    });
-  }
-
-  async function deleteValue(storeName, key) {
-    await runTransaction([storeName], "readwrite", transaction => {
-      transaction.objectStore(storeName).delete(key);
     });
   }
 
@@ -632,6 +640,7 @@ export function createIdbStorage(options = {}) {
     importCsvExports,
     importFullBackup,
     applyRemoteSnapshot,
+    close,
     paths
   };
 }

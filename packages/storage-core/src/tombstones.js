@@ -1,6 +1,6 @@
 import { text } from "./values.js";
 
-export const tombstoneTtlMs = 90 * 24 * 60 * 60 * 1000;
+const tombstoneTtlMs = 90 * 24 * 60 * 60 * 1000;
 
 export function normalizeDeletedAt(value) {
   return value ? text(value) : null;

@@ -31,6 +31,7 @@
 //   importFullBackup        () -> state  [reads full-backup.yaml]       (backup = null) -> state
 //   applyRemoteSnapshot     (remote, merge) -> { state, data }          (remote, merge) -> { state, data }
 //                           [one transaction, never writes CSV/YAML]    [one readwrite transaction]
+//   close                   () -> void  [closes the db handle]          () -> void  [closes the IDBDatabase]
 //
 // Divergences are NOT papered over: each is asserted per-adapter through the
 // `expected` table on the adapter descriptors below, tagged
@@ -251,7 +252,7 @@ const adapters = [
     name: "storage-sqlite",
     loadError: sqlite.loadError,
     async create(options = {}) {
-      const store = sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite"), ...options });
+      const store = tmpDirs.track(sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite"), ...options }));
       store.initDatabase();
       return store;
     },
@@ -276,7 +277,7 @@ const adapters = [
 describe("storage contract (adapter-independent)", () => {
   it("storageMethodNames stays derived from storageContract", () => {
     expect(storageMethodNames).toEqual(storageContract.map(entry => entry.name));
-    expect(storageMethodNames).toHaveLength(19);
+    expect(storageMethodNames).toHaveLength(20);
     expect(new Set(storageMethodNames).size).toBe(storageMethodNames.length);
   });
 
@@ -284,7 +285,7 @@ describe("storage contract (adapter-independent)", () => {
     storageContract.forEach(entry => {
       expect(typeof entry.name).toBe("string");
       expect(Array.isArray(entry.params)).toBe(true);
-      expect(["state", "stateResult", "export", "handle", "applied"]).toContain(entry.returns);
+      expect(["state", "stateResult", "export", "handle", "applied", "none"]).toContain(entry.returns);
     });
     expect(storageStateShape.required).toContain("items");
     expect(storageStateShape.required).toContain("allDailyEntries");

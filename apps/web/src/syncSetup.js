@@ -27,7 +27,7 @@ import { App } from "@capacitor/app";
 //  - an entry in the Supabase project's Auth > URL Configuration >
 //    "Redirect URLs" allowlist
 // scheme = appId (see apps/web/capacitor.config.json), host = "auth-callback".
-export const NATIVE_AUTH_CALLBACK_URL = "io.github.dnrso.nihongostudy://auth-callback";
+const NATIVE_AUTH_CALLBACK_URL = "io.github.dnrso.nihongostudy://auth-callback";
 
 function isNativePlatform() {
   return Boolean(Capacitor?.isNativePlatform?.());

@@ -45,7 +45,7 @@ const adapters = [
     name: "storage-sqlite",
     loadError: sqlite.loadError,
     async create() {
-      const store = sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite") });
+      const store = tmpDirs.track(sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite") }));
       store.initDatabase();
       return store;
     }

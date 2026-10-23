@@ -1,5 +1,4 @@
 export {
-  TTS_ENGINE_BROWSER,
   TTS_ENGINE_VOICEVOX,
   normalizeTtsEngine,
   normalizeTtsRate,
@@ -17,6 +16,5 @@ export {
 export {
   createVoicevoxClient,
   friendlyTtsErrorMessage,
-  VOICEVOX_BASE_URL,
   voicevoxSpeakerOptions
 } from "./voicevox.js";
