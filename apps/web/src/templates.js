@@ -483,7 +483,7 @@ function settingsPageTemplate() {
 
       <section class="panel section" id="settings-tts">
         <div class="panel-header"><h2 class="panel-title">음성 재생</h2></div>
-        <p class="muted">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
+        <p class="muted" id="ttsDescription">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
       </section>
 
       <section class="panel section" id="settings-voicevox" hidden>
