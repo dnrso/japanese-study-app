@@ -2,7 +2,7 @@
 //
 // Until this suite existed there were two parsers for the same text format:
 // the canonical markdown/regex one in packages/storage-sqlite (used by the
-// Electron desktop app) and an inline reimplementation inside
+// since-removed Electron desktop renderer) and an inline reimplementation inside
 // packages/storage-idb (used by web/Android). They agreed exactly on the
 // canonical AI output format (see packages/ai/src/index.js's [출력 형식]) and
 // diverged on every markdown-bulleted variant of it - including the shape

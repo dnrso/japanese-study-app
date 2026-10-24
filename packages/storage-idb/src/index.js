@@ -1,6 +1,6 @@
 // Imported by relative path, not by package name: nothing in this repo
-// resolves bare @nihongo-study specifiers at runtime. The desktop renderer
-// loads shared packages as plain ES modules with no bundler, and the packaged
+// resolves bare @nihongo-study specifiers at runtime. Shared packages load as
+// plain ES modules where no bundler is involved, and the packaged
 // app.asar carries no @nihongo-study scope in node_modules, so the relative
 // form is the one that works everywhere. Vite handles it fine too.
 import {
@@ -257,9 +257,8 @@ export function createIdbStorage(options = {}) {
   // to show. IndexedDB gives no way to continue past a failed request inside
   // the same transaction (an unhandled request error aborts it), so "report the
   // failure AND keep going" requires a transaction boundary per entry. That is
-  // also exactly storage-sqlite's granularity: it wraps each id in its own
-  // db.transaction and catches per id (packages/storage-sqlite/src/index.js:667),
-  // so on both adapters a mid-batch failure leaves the entries before it
+  // also the granularity the removed storage-sqlite adapter had (one
+  // transaction per id, caught per id), so a mid-batch failure leaves the entries before it
   // committed and the entries after it still processed - atomic per entry, not
   // per batch.
   async function registerDailyEntries(ids = [], studyDate = todayKey()) {
@@ -989,8 +988,8 @@ function mergeDailyCandidate(existing, candidate) {
 // 문장 item. The shape here is the one dailyEntryToItems' sentence branch in
 // @nihongo-study/storage-core builds for sqlite: fixed part 문장 / script 혼합,
 // note = the parsed raw text, no `source` (a sentence has no parent sentence to
-// name, so it keeps an empty one rather than gaining the "오늘 공부" fallback -
-// packages/storage-sqlite/src/index.js:619 does the same) and no 한자 items
+// name, so it keeps an empty one rather than gaining the "오늘 공부" fallback)
+// and no 한자 items
 // (withKanjiItems only derives them from a `word`).
 //
 // The 한자 derivation is withKanjiItems from @nihongo-study/storage-core - the
@@ -1145,9 +1144,8 @@ function parseDailyEntry(kind, rawText) {
 
 // The title of the sentence a word/grammar/expression entry came from - the
 // `source` every registered item gets (D8). Resolution order is the one
-// storage-sqlite uses (packages/storage-sqlite/src/index.js:264 and
-// dataImportExport.js:64), so both adapters produce the same string for the
-// same data: a stored parentTitle (only legacy desktop imports carry one), else
+// the removed storage-sqlite adapter used, so migrated data produces the
+// same string: a stored parentTitle (only legacy desktop imports carry one), else
 // the parent entry looked up by parentId, else the first linked sentence.
 //
 // Returns "" for a manually added standalone entry (the 단어/문법/표현 input has

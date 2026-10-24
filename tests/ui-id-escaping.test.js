@@ -26,8 +26,8 @@ import * as core from "@nihongo-study/core";
 
 const HOSTILE_ID = `x" autofocus onfocus="alert(1)`;
 
-// Byte-identical to the escapeHtml the real apps thread through `helpers`
-// (apps/web/src/templates.js, apps/desktop/src/renderer/domUtils.js).
+// Byte-identical to the escapeHtml the real app threads through `helpers`
+// (apps/web/src/templates.js).
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")

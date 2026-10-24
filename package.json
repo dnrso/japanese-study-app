@@ -9,13 +9,10 @@
     "packages/*"
   ],
   "scripts": {
-    "prestart": "node scripts/prepare-electron-native.mjs",
-    "start": "electron .",
+    "start": "npm run web:build && electron .",
     "build": "node apps/desktop/scripts/build-windows.js",
     "web:dev": "npm --workspace @nihongo-study/web run dev --",
     "web:build": "npm run build --workspace @nihongo-study/web",
-    "desktop:web": "npm run web:build && node scripts/desktop-web.mjs",
-    "desktop:legacy": "node scripts/desktop-web.mjs legacy",
     "web:preview": "npm --workspace @nihongo-study/web run preview --",
     "android:sync": "npm run web:build && npm --workspace @nihongo-study/web run cap:sync",
     "android:open": "npm --workspace @nihongo-study/web run cap:open",
@@ -36,22 +33,14 @@
       "packages/**/*",
       "package.json"
     ],
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
-    ],
     "win": {
       "target": "dir"
     }
   },
   "devDependencies": {
-    "@electron/asar": "^3.4.1",
     "electron": "^41.7.2",
     "electron-builder": "^26.15.2",
     "fake-indexeddb": "^6.2.5",
     "vitest": "^4.1.10"
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.10.0",
-    "yaml": "^2.9.0"
   }
 }

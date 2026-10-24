@@ -1,15 +1,18 @@
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadSqliteAdapter, describeStorageSuite } from "./helpers/storage-adapters.js";
 
 const require = createRequire(import.meta.url);
 const { readLegacySqlite, normalizeTimestamp, LegacyReadError } = require("../apps/desktop/src/legacySqliteReader.js");
 const { DatabaseSync } = require("node:sqlite");
 
+// tests/fixtures/legacy-desktop.sqlite and legacy-desktop.expected.json were generated
+// by the (since removed) packages/storage-sqlite code: the database was built through
+// its initDatabase + public API and the expected JSON is its exportData().data. They
+// are now frozen; the reader must keep producing exactly this JSON from this file.
 const fixturePath = path.resolve(__dirname, "fixtures/legacy-desktop.sqlite");
 const expected = JSON.parse(fs.readFileSync(path.resolve(__dirname, "fixtures/legacy-desktop.expected.json"), "utf8"));
 // Reference "now" for the 90-day tombstone pruning (the fixture's generation time).
@@ -147,34 +150,5 @@ describe("legacy sqlite reader", () => {
     expect(counts).toEqual({ studyDays: 1, dailyEntries: 0, dailyEntryLinks: 0, tasks: 0, items: 1 });
     expect(data.items[0]).toMatchObject({ id: "i1", quizCorrectCount: 0, reviewDueDate: "", lastReviewedAt: "", deletedAt: null });
     expect(data.studyDays[0].createdAt).toBe(data.studyDays[0].updatedAt);
-  });
-});
-
-const { createSqliteStorage, loadError } = loadSqliteAdapter();
-
-describeStorageSuite("legacy reader parity with storage-sqlite", loadError, () => {
-  it("returns the same data as storage-sqlite's export of the same database", () => {
-    const { dir } = fixtureCopy("parity");
-    const store = createSqliteStorage({ appDataDir: dir });
-    // Pin the clock to the fixture's generation time: initDatabase/export promote
-    // due reviews and prune 90-day tombstones relative to "now".
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(now);
-    try {
-      store.initDatabase();
-      const exported = store.exportData().data;
-      const readerData = readLegacySqlite(path.join(dir, "nihongo.sqlite"), { now }).data;
-      const normalized = Object.fromEntries(Object.keys(readerData).map(name => [
-        name,
-        exported[name].map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [
-          key,
-          ["createdAt", "updatedAt", "deletedAt"].includes(key) ? normalizeTimestamp(value) : value
-        ])))
-      ]));
-      expect(readerData).toEqual(normalized);
-    } finally {
-      vi.useRealTimers();
-      store.close();
-    }
   });
 });

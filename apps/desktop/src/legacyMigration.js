@@ -2,8 +2,8 @@
 //
 // State lives in <userData>/migration.json:
 //   { status: "pending" | "done" | "failed", completedAt?, counts?, error? }
-// The SQLite file itself is never renamed, moved or deleted here: leaving it in
-// place keeps the NIHONGO_DESKTOP_UI=legacy rollback working.
+// The SQLite file itself is never renamed, moved or deleted here, so a failed
+// migration can be retried and the old data stays available as a backup.
 const fs = require("fs");
 const path = require("path");
 const { migrationChannels } = require("./migrationChannels");

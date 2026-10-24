@@ -1,16 +1,16 @@
 // The canonical storage adapter contract.
 //
-// Both adapters (@nihongo-study/storage-sqlite for desktop, and
-// @nihongo-study/storage-idb for web/android) must satisfy this contract, and
-// `tests/storage-conformance.test.js` drives its behavioral assertions off the
-// table below so the contract and the parity suite cannot drift apart.
+// @nihongo-study/storage-idb (web, Android and the desktop web UI) is the only
+// adapter and must satisfy this contract; `tests/storage-conformance.test.js`
+// drives its behavioral assertions off the table below so the contract and the
+// suite cannot drift apart.
 //
 // `params` lists the declared parameter names of the canonical signature. It
 // is the *maximum* an implementation may declare: `assertStorageAdapter`
 // rejects a method whose `Function.length` exceeds it (that always means the
 // adapter demands more arguments than every call site passes). It cannot be an
 // equality check, because a defaulted parameter does not count toward
-// `Function.length`, and the two adapters default different parameters.
+// `Function.length`.
 //
 // `returns` is documentation only (nothing can assert it statically):
 //   "state"       -> the getState() envelope
@@ -24,13 +24,13 @@ const storageContract = [
     name: "initDatabase",
     params: [],
     returns: "handle",
-    note: "Creates/opens and migrates the store. sqlite is synchronous, idb returns a promise; callers must await either way."
+    note: "Creates/opens and migrates the store. Returns a promise; callers must await it."
   },
   {
     name: "getState",
     params: ["studyDate"],
     returns: "state",
-    note: "studyDate defaults to today on both adapters."
+    note: "studyDate defaults to today."
   },
   { name: "saveStudyLog", params: ["studyLog"], returns: "state" },
   { name: "addDailyEntry", params: ["entry"], returns: "state" },
@@ -58,18 +58,11 @@ const storageContract = [
   { name: "exportData", params: [], returns: "export" },
   {
     name: "importCsvExports",
-    // Canonical signature is the two-argument form; storage-sqlite still only
-    // implements importCsvExports(studyDate) and reads exports/*.csv off disk.
-    // See tests/storage-conformance.test.js (KNOWN DIVERGENCE D15).
     params: ["backup", "studyDate"],
     returns: "state"
   },
   {
     name: "importFullBackup",
-    // Canonical signature is the object form that packages/sync/src/index.js:73
-    // and apps/web/src/main.js:1315 already call; storage-sqlite ignores the
-    // argument and reads backups/full-backup.yaml off disk instead. See
-    // tests/storage-conformance.test.js (KNOWN DIVERGENCE D14).
     params: ["backup"],
     returns: "state"
   },
@@ -83,7 +76,7 @@ const storageContract = [
     name: "close",
     params: [],
     returns: "none",
-    note: "Releases the underlying database handle (sqlite closes the file, idb closes the IDBDatabase). Idempotent; safe to call before initDatabase()/twice. Only tests and shutdown paths need it."
+    note: "Releases the underlying database handle (closes the IDBDatabase). Idempotent; safe to call before initDatabase()/twice. Only tests and shutdown paths need it."
   }
 ];
 
@@ -102,9 +95,8 @@ const storageStateShape = {
 
 // `strict: true` additionally rejects function-valued properties that the
 // contract above does not declare, so an adapter cannot quietly grow a method
-// that only one platform implements. The desktop boot path
-// (apps/desktop/src/dataStore.js) deliberately calls the non-strict form so a
-// purely additive adapter change cannot brick the app; the conformance suite
+// that only one platform implements. Boot paths should use the non-strict form so
+// a purely additive adapter change cannot brick the app; the conformance suite
 // runs strict.
 function assertStorageAdapter(store, { strict = false } = {}) {
   if (!store || typeof store !== "object") {

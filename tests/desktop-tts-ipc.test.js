@@ -133,7 +133,7 @@ describe("tts config", () => {
 describe("tts:voicevox-synthesize", () => {
   it("returns legacy-shaped bytes and normalizes the payload", async () => {
     const { ipc, client } = setup();
-    const result = await ipc.invoke(ttsChannels.voicevoxSynthesize, { text: " 猫 ", speakerId: "3", rate: 5 });
+    const result = await ipc.invoke(ttsChannels.voicevoxSynthesize, { text: " 猫 ", speakerId: 3, rate: 5 });
     expect(result.mimeType).toBe("audio/wav");
     expect(Buffer.isBuffer(result.audioData)).toBe(true);
     expect([...result.audioData]).toEqual([1, 2, 3]);
