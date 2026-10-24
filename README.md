@@ -327,16 +327,25 @@ TTS 공통 패키지입니다.
 - TTS 설정 정규화
 
 
-데스크톱 웹 UI 모드 (실험적)
+데스크톱 웹 UI 모드 (기본)
 --------------------------
 
-기본 데스크톱 앱은 기존 `apps/desktop/src/renderer` UI를 그대로 사용합니다. 환경변수 `NIHONGO_DESKTOP_UI=web`을 지정하면 `apps/web` Vite 빌드를 `app://nihongo/` 프로토콜로 불러옵니다.
+데스크톱 앱은 기본적으로 `apps/web` Vite 빌드를 `app://nihongo/` 프로토콜로 불러옵니다. 이 모드에서는 SQLite(`better-sqlite3`)를 초기화하지 않습니다. `apps/web/dist`가 없으면 오류 대화상자가 표시되므로 먼저 `npm run web:build`가 필요합니다.
 
 ```
-npm run desktop:web
+npm run desktop:web      # 웹 앱을 빌드한 뒤 Electron 실행
 ```
 
-위 명령은 웹 앱을 빌드한 뒤 `NIHONGO_DESKTOP_UI=web`으로 Electron을 실행합니다. 직접 실행하려면 `npm run web:build` 후 `set NIHONGO_DESKTOP_UI=web`(PowerShell은 `$env:NIHONGO_DESKTOP_UI="web"`) 설정하고 `npm start`를 실행하세요. `apps/web/dist`가 없으면 오류 대화상자가 표시됩니다.
+롤백용으로 기존 `apps/desktop/src/renderer` UI(SQLite 기반)도 남아 있습니다. 환경변수 `NIHONGO_DESKTOP_UI=legacy`(PowerShell은 `$env:NIHONGO_DESKTOP_UI="legacy"`)를 지정하거나 `npm run desktop:legacy`로 실행하세요.
+
+### 기존 SQLite 데이터 자동 이전
+
+기존 버전에서 `app-data/nihongo.sqlite`에 저장된 데이터는 웹 UI로 처음 실행할 때 한 번 IndexedDB로 이전됩니다.
+
+- 메인 프로세스가 `node:sqlite`로 DB 복사본을 읽기 전용으로 읽고(WAL 포함, 원본은 수정하지 않음), 웹 UI가 가져옵니다. 상태는 `user-data/migration.json`(`pending`/`done`/`failed`)에 기록됩니다.
+- IndexedDB가 비어 있거나 첫 실행 샘플 데이터 그대로면 교체하고, 이미 사용자 데이터가 있으면 기존 백업 "추가" 기능과 같은 방식으로 병합합니다.
+- 실패하면 화면에 안내가 표시되고 다음 실행 때 다시 시도합니다. 성공 후에도 `nihongo.sqlite` 파일은 삭제하거나 이름을 바꾸지 않으므로 `NIHONGO_DESKTOP_UI=legacy`로 되돌려도 데이터가 보입니다.
+- 개발/테스트 옵션: `NIHONGO_PORTABLE_ROOT=<디렉터리>`를 지정하면 `user-data/`와 `app-data/`를 그 디렉터리 아래에 만들어 실제 데이터를 건드리지 않고 실행할 수 있습니다.
 
 - 이 모드에서는 계정/동기화와 AI 문장 분석 UI가 숨겨지고 Supabase는 초기화되지 않습니다.
 - 설정 페이지에 데스크톱 전용 "VOICEVOX 음성" 섹션이 표시됩니다. 엔진 URL(기본 `http://127.0.0.1:50021`, 로컬 주소만 허용, `user-data/tts.json`에 저장), 연결 상태 확인, speaker/재생 속도 선택, 테스트 재생을 지원합니다. 스피커 버튼은 VOICEVOX 엔진이 실행 중이면 VOICEVOX로, 연결할 수 없으면 브라우저 음성(SpeechSynthesis)으로 대체 재생됩니다.

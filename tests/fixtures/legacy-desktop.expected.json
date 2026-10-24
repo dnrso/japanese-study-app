@@ -1,0 +1,801 @@
+{
+  "generatedAt": "2026-10-24T02:37:02.803Z",
+  "counts": {
+    "studyDays": 3,
+    "dailyEntries": 11,
+    "dailyEntryLinks": 7,
+    "tasks": 3,
+    "items": 11
+  },
+  "data": {
+    "studyDays": [
+      {
+        "studyDate": "2026-07-03",
+        "minutes": 0,
+        "summary": "",
+        "note": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "studyDate": "2026-07-02",
+        "minutes": 45,
+        "summary": "문법 공부",
+        "note": "〜てもいい を練習した",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "studyDate": "2026-07-01",
+        "minutes": 30,
+        "summary": "N5 단어 복습",
+        "note": "ひらがなの復習",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      }
+    ],
+    "dailyEntries": [
+      {
+        "id": "d9894ca9-f655-44bf-993d-726265a9bd53",
+        "studyDate": "2026-07-03",
+        "parentId": "",
+        "parentTitle": "",
+        "kind": "word",
+        "title": "図書館",
+        "reading": "としょかん",
+        "meaning": "(としょかん)",
+        "rawText": "`図書館`(としょかん)|품사=명사|한자=図(map),書(write),館(hall)|메모=도서관",
+        "parsed": {
+          "kind": "word",
+          "title": "図書館",
+          "reading": "としょかん",
+          "meaning": "(としょかん)",
+          "words": [
+            {
+              "kind": "word",
+              "title": "図書館",
+              "reading": "としょかん",
+              "meaning": "(としょかん)",
+              "kanji": "図(map),書(write),館(hall)",
+              "part": "명사",
+              "script": ""
+            }
+          ],
+          "grammar": [],
+          "expressions": [],
+          "note": "`図書館`(としょかん)|품사=명사|한자=図(map),書(write),館(hall)|메모=도서관"
+        },
+        "registered": false,
+        "sourceSentences": [],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "91999827-3c57-46d7-9fe4-1db46ad93597",
+        "studyDate": "2026-07-03",
+        "parentId": "",
+        "parentTitle": "",
+        "kind": "sentence",
+        "title": "消えた文章",
+        "reading": "きえたぶんしょう",
+        "meaning": "삭제될 문장",
+        "rawText": "# 消えた文章\n읽기 きえたぶんしょう\n해석 삭제될 문장",
+        "parsed": {
+          "kind": "sentence",
+          "title": "消えた文章",
+          "reading": "きえたぶんしょう",
+          "meaning": "삭제될 문장",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "# 消えた文章\n읽기 きえたぶんしょう\n해석 삭제될 문장"
+        },
+        "registered": false,
+        "sourceSentences": [],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.778Z",
+        "deletedAt": "2026-10-24T02:37:02.778Z"
+      },
+      {
+        "id": "75aac390-6f12-41fc-8024-4c8d18d6c0cb",
+        "studyDate": "2026-07-02",
+        "parentId": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "parentTitle": "単語を覚えてもいいですか",
+        "kind": "grammar",
+        "title": "〜てもいい",
+        "reading": "",
+        "meaning": "|메모=허가 표현",
+        "rawText": "### 〜てもいい\n- **해석**: |메모=허가 표현",
+        "parsed": {
+          "kind": "grammar",
+          "title": "〜てもいい",
+          "reading": "",
+          "meaning": "|메모=허가 표현",
+          "kanji": "",
+          "part": "",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "|메모=허가 표현"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+            "studyDate": "2026-07-02",
+            "title": "単語を覚えてもいいですか"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "5360b239-7f30-49fa-8a4b-58315666af26",
+        "studyDate": "2026-07-02",
+        "parentId": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "parentTitle": "単語を覚えてもいいですか",
+        "kind": "word",
+        "title": "覚える",
+        "reading": "おぼえる",
+        "meaning": "(おぼえる)",
+        "rawText": "### 覚える\n- **읽기**: おぼえる\n- **해석**: (おぼえる)\n- **품사**: 동사",
+        "parsed": {
+          "kind": "word",
+          "title": "覚える",
+          "reading": "おぼえる",
+          "meaning": "(おぼえる)",
+          "kanji": "",
+          "part": "동사",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "(おぼえる)"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+            "studyDate": "2026-07-02",
+            "title": "単語を覚えてもいいですか"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "963eabea-1833-4aad-9eb2-5b1b7cae8c02",
+        "studyDate": "2026-07-02",
+        "parentId": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "parentTitle": "単語を覚えてもいいですか",
+        "kind": "word",
+        "title": "単語",
+        "reading": "たんご",
+        "meaning": "(たんご)",
+        "rawText": "### 単語\n- **읽기**: たんご\n- **해석**: (たんご)\n- **한자**: 単(single),語(word)\n- **품사**: 명사",
+        "parsed": {
+          "kind": "word",
+          "title": "単語",
+          "reading": "たんご",
+          "meaning": "(たんご)",
+          "kanji": "単(single),語(word)",
+          "part": "명사",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "(たんご)"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+            "studyDate": "2026-07-02",
+            "title": "単語を覚えてもいいですか"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "studyDate": "2026-07-02",
+        "parentId": "",
+        "parentTitle": "",
+        "kind": "sentence",
+        "title": "単語を覚えてもいいですか",
+        "reading": "たんごをおぼえてもいいですか",
+        "meaning": "단어를 외워도 될까요?",
+        "rawText": "# 単語を覚えてもいいですか\n읽기 たんごをおぼえてもいいですか\n해석 단어를 외워도 될까요?\n단어장\n`単語`(たんご)|품사=명사|한자=単(single),語(word)|메모=단어\n`覚える`(おぼえる)|품사=동사|메모=외우다\n문법\n`〜てもいい`|메모=허가 표현",
+        "parsed": {
+          "kind": "sentence",
+          "title": "単語を覚えてもいいですか",
+          "reading": "たんごをおぼえてもいいですか",
+          "meaning": "단어를 외워도 될까요?",
+          "words": [
+            {
+              "kind": "word",
+              "title": "単語",
+              "reading": "たんご",
+              "meaning": "(たんご)",
+              "kanji": "単(single),語(word)",
+              "part": "명사",
+              "script": ""
+            },
+            {
+              "kind": "word",
+              "title": "覚える",
+              "reading": "おぼえる",
+              "meaning": "(おぼえる)",
+              "kanji": "",
+              "part": "동사",
+              "script": ""
+            }
+          ],
+          "grammar": [
+            {
+              "kind": "grammar",
+              "title": "〜てもいい",
+              "reading": "",
+              "meaning": "|메모=허가 표현",
+              "note": "|메모=허가 표현"
+            }
+          ],
+          "expressions": [],
+          "note": "# 単語を覚えてもいいですか\n읽기 たんごをおぼえてもいいですか\n해석 단어를 외워도 될까요?\n단어장\n`単語`(たんご)|품사=명사|한자=単(single),語(word)|메모=단어\n`覚える`(おぼえる)|품사=동사|메모=외우다\n문법\n`〜てもいい`|메모=허가 표현"
+        },
+        "registered": true,
+        "sourceSentences": [],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "f5b67fc9-c601-4966-a450-44c82d81ab13",
+        "studyDate": "2026-07-01",
+        "parentId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "parentTitle": "今日は天気がいいです",
+        "kind": "expression",
+        "title": "よろしくお願いします",
+        "reading": "",
+        "meaning": "",
+        "rawText": "### よろしくお願いします\n- **메모**: |메모=인사",
+        "parsed": {
+          "kind": "expression",
+          "title": "よろしくお願いします",
+          "reading": "",
+          "meaning": "",
+          "kanji": "",
+          "part": "",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "|메모=인사"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "3898f610-64bb-4506-a696-9bfeb458e24c",
+            "studyDate": "2026-07-01",
+            "title": "今日は天気がいいです"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "45914887-15fd-4d9f-ac03-d95540c8111d",
+        "studyDate": "2026-07-01",
+        "parentId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "parentTitle": "今日は天気がいいです",
+        "kind": "grammar",
+        "title": "〜てもいい",
+        "reading": "",
+        "meaning": "|메모=허가 표현",
+        "rawText": "### 〜てもいい\n- **해석**: |메모=허가 표현",
+        "parsed": {
+          "kind": "grammar",
+          "title": "〜てもいい",
+          "reading": "",
+          "meaning": "|메모=허가 표현",
+          "kanji": "",
+          "part": "",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "|메모=허가 표현"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "3898f610-64bb-4506-a696-9bfeb458e24c",
+            "studyDate": "2026-07-01",
+            "title": "今日は天気がいいです"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "e6569fea-783d-4522-bd30-a9a765effa75",
+        "studyDate": "2026-07-01",
+        "parentId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "parentTitle": "今日は天気がいいです",
+        "kind": "word",
+        "title": "単語",
+        "reading": "たんご",
+        "meaning": "(たんご)",
+        "rawText": "### 単語\n- **읽기**: たんご\n- **해석**: (たんご)\n- **한자**: 単(single),語(word)\n- **품사**: 명사",
+        "parsed": {
+          "kind": "word",
+          "title": "単語",
+          "reading": "たんご",
+          "meaning": "(たんご)",
+          "kanji": "単(single),語(word)",
+          "part": "명사",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "(たんご)"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "3898f610-64bb-4506-a696-9bfeb458e24c",
+            "studyDate": "2026-07-01",
+            "title": "今日は天気がいいです"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "bc14bb3c-c82b-45c4-866a-40ff87500d91",
+        "studyDate": "2026-07-01",
+        "parentId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "parentTitle": "今日は天気がいいです",
+        "kind": "word",
+        "title": "天気",
+        "reading": "てんき",
+        "meaning": "(てんき)",
+        "rawText": "### 天気\n- **읽기**: てんき\n- **해석**: (てんき)\n- **한자**: 天(heaven),気(spirit)\n- **품사**: 명사",
+        "parsed": {
+          "kind": "word",
+          "title": "天気",
+          "reading": "てんき",
+          "meaning": "(てんき)",
+          "kanji": "天(heaven),気(spirit)",
+          "part": "명사",
+          "script": "",
+          "words": [],
+          "grammar": [],
+          "expressions": [],
+          "note": "(てんき)"
+        },
+        "registered": false,
+        "sourceSentences": [
+          {
+            "id": "3898f610-64bb-4506-a696-9bfeb458e24c",
+            "studyDate": "2026-07-01",
+            "title": "今日は天気がいいです"
+          }
+        ],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "studyDate": "2026-07-01",
+        "parentId": "",
+        "parentTitle": "",
+        "kind": "sentence",
+        "title": "今日は天気がいいです",
+        "reading": "きょうはてんきがいいです",
+        "meaning": "오늘은 날씨가 좋습니다",
+        "rawText": "# 今日は天気がいいです\n읽기 きょうはてんきがいいです\n해석 오늘은 날씨가 좋습니다\n단어장\n`天気`(てんき)|품사=명사|한자=天(heaven),気(spirit)|메모=날씨\n`単語`(たんご)|품사=명사|한자=単(single),語(word)|메모=단어\n문법\n`〜てもいい`|메모=허가 표현\n표현\n`よろしくお願いします`|메모=인사",
+        "parsed": {
+          "kind": "sentence",
+          "title": "今日は天気がいいです",
+          "reading": "きょうはてんきがいいです",
+          "meaning": "오늘은 날씨가 좋습니다",
+          "words": [
+            {
+              "kind": "word",
+              "title": "天気",
+              "reading": "てんき",
+              "meaning": "(てんき)",
+              "kanji": "天(heaven),気(spirit)",
+              "part": "명사",
+              "script": ""
+            },
+            {
+              "kind": "word",
+              "title": "単語",
+              "reading": "たんご",
+              "meaning": "(たんご)",
+              "kanji": "単(single),語(word)",
+              "part": "명사",
+              "script": ""
+            }
+          ],
+          "grammar": [
+            {
+              "kind": "grammar",
+              "title": "〜てもいい",
+              "reading": "",
+              "meaning": "|메모=허가 표현",
+              "note": "|메모=허가 표현"
+            }
+          ],
+          "expressions": [
+            {
+              "kind": "expression",
+              "title": "よろしくお願いします",
+              "reading": "",
+              "meaning": "",
+              "note": "|메모=인사"
+            }
+          ],
+          "note": "# 今日は天気がいいです\n읽기 きょうはてんきがいいです\n해석 오늘은 날씨가 좋습니다\n단어장\n`天気`(てんき)|품사=명사|한자=天(heaven),気(spirit)|메모=날씨\n`単語`(たんご)|품사=명사|한자=単(single),語(word)|메모=단어\n문법\n`〜てもいい`|메모=허가 표현\n표현\n`よろしくお願いします`|메모=인사"
+        },
+        "registered": true,
+        "sourceSentences": [],
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      }
+    ],
+    "dailyEntryLinks": [
+      {
+        "id": "bc14bb3c-c82b-45c4-866a-40ff87500d91::3898f610-64bb-4506-a696-9bfeb458e24c",
+        "entryId": "bc14bb3c-c82b-45c4-866a-40ff87500d91",
+        "sentenceId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "e6569fea-783d-4522-bd30-a9a765effa75::3898f610-64bb-4506-a696-9bfeb458e24c",
+        "entryId": "e6569fea-783d-4522-bd30-a9a765effa75",
+        "sentenceId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "45914887-15fd-4d9f-ac03-d95540c8111d::3898f610-64bb-4506-a696-9bfeb458e24c",
+        "entryId": "45914887-15fd-4d9f-ac03-d95540c8111d",
+        "sentenceId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "f5b67fc9-c601-4966-a450-44c82d81ab13::3898f610-64bb-4506-a696-9bfeb458e24c",
+        "entryId": "f5b67fc9-c601-4966-a450-44c82d81ab13",
+        "sentenceId": "3898f610-64bb-4506-a696-9bfeb458e24c",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "963eabea-1833-4aad-9eb2-5b1b7cae8c02::8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "entryId": "963eabea-1833-4aad-9eb2-5b1b7cae8c02",
+        "sentenceId": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "5360b239-7f30-49fa-8a4b-58315666af26::8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "entryId": "5360b239-7f30-49fa-8a4b-58315666af26",
+        "sentenceId": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "75aac390-6f12-41fc-8024-4c8d18d6c0cb::8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "entryId": "75aac390-6f12-41fc-8024-4c8d18d6c0cb",
+        "sentenceId": "8e41fddd-2dbc-4b7f-9015-cdfd4a9bc4b0",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      }
+    ],
+    "tasks": [
+      {
+        "id": "task-3",
+        "title": "削除済みタスク",
+        "note": "",
+        "tag": "",
+        "done": false,
+        "studyDate": "2026-07-02",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": "2026-10-24T02:37:02.782Z"
+      },
+      {
+        "id": "task-2",
+        "title": "宿題を出す",
+        "note": "",
+        "tag": "",
+        "done": true,
+        "studyDate": "2026-07-02",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "task-1",
+        "title": "漢字を10個覚える",
+        "note": "N5 한자",
+        "tag": "한자",
+        "done": false,
+        "studyDate": "2026-07-01",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      }
+    ],
+    "items": [
+      {
+        "id": "item-deleted",
+        "kind": "word",
+        "title": "古い単語",
+        "reading": "",
+        "meaning": "지워질 단어",
+        "level": "",
+        "part": "",
+        "script": "",
+        "review": "대기",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "",
+        "note": "",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.797Z",
+        "deletedAt": "2026-10-24T02:37:02.797Z"
+      },
+      {
+        "id": "item-source-1",
+        "kind": "source",
+        "title": "NHK Easy",
+        "reading": "",
+        "meaning": "",
+        "level": "",
+        "part": "",
+        "script": "",
+        "review": "",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "",
+        "note": "https://www3.nhk.or.jp/news/easy/",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "item-sentence-1",
+        "kind": "sentence",
+        "title": "猫が好きです。",
+        "reading": "ねこがすきです",
+        "meaning": "고양이를 좋아합니다",
+        "level": "",
+        "part": "",
+        "script": "",
+        "review": "내일",
+        "reviewDueDate": "2026-10-25",
+        "kanji": "",
+        "source": "",
+        "note": "",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "item-kanji-1",
+        "kind": "kanji",
+        "title": "水",
+        "reading": "すい・みず",
+        "meaning": "물",
+        "level": "N5",
+        "part": "",
+        "script": "",
+        "review": "대기",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "",
+        "note": "水曜日",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "item-expression-1",
+        "kind": "expression",
+        "title": "お疲れ様です",
+        "reading": "おつかれさまです",
+        "meaning": "수고하셨습니다",
+        "level": "N4",
+        "part": "",
+        "script": "",
+        "review": "대기",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "",
+        "note": "",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "item-grammar-1",
+        "kind": "grammar",
+        "title": "〜ながら",
+        "reading": "",
+        "meaning": "~하면서",
+        "level": "N4",
+        "part": "",
+        "script": "",
+        "review": "3일 후",
+        "reviewDueDate": "2026-10-27",
+        "kanji": "",
+        "source": "",
+        "note": "同時進行",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "2026-10-24T02:37:02.796Z",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.796Z",
+        "deletedAt": null
+      },
+      {
+        "id": "08f1e04a-e69a-4533-99c1-09379cdf781e",
+        "kind": "kanji",
+        "title": "強",
+        "reading": "",
+        "meaning": "strong",
+        "level": "N5",
+        "part": "한자",
+        "script": "한자",
+        "review": "오늘",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "勉強",
+        "note": "勉強 (べんきょう)",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "aa61313e-bf08-443f-810c-d7cef8bf98f9",
+        "kind": "kanji",
+        "title": "勉",
+        "reading": "",
+        "meaning": "endeavor",
+        "level": "N5",
+        "part": "한자",
+        "script": "한자",
+        "review": "오늘",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "勉強",
+        "note": "勉強 (べんきょう)",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "item-word-1",
+        "kind": "word",
+        "title": "勉強",
+        "reading": "べんきょう",
+        "meaning": "공부",
+        "level": "N5",
+        "part": "명사",
+        "script": "한자",
+        "review": "오늘",
+        "reviewDueDate": "",
+        "kanji": "勉(endeavor),強(strong)",
+        "source": "教科書",
+        "note": "毎日勉強する",
+        "quizCorrectCount": 1,
+        "quizWrongCount": 1,
+        "lastQuizzedAt": "2026-10-24T02:37:02.794Z",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.794Z",
+        "deletedAt": null
+      },
+      {
+        "id": "200dd3d7-ca38-4a0d-bef8-63d73c0da3f5",
+        "kind": "sentence",
+        "title": "単語を覚えてもいいですか",
+        "reading": "たんごをおぼえてもいいですか",
+        "meaning": "단어를 외워도 될까요?",
+        "level": "",
+        "part": "문장",
+        "script": "혼합",
+        "review": "대기",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "",
+        "note": "# 単語を覚えてもいいですか\n읽기 たんごをおぼえてもいいですか\n해석 단어를 외워도 될까요?\n단어장\n`単語`(たんご)|품사=명사|한자=単(single),語(word)|메모=단어\n`覚える`(おぼえる)|품사=동사|메모=외우다\n문법\n`〜てもいい`|메모=허가 표현",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      },
+      {
+        "id": "89593fa0-a028-41a3-80c6-d2b88eb326d6",
+        "kind": "sentence",
+        "title": "今日は天気がいいです",
+        "reading": "きょうはてんきがいいです",
+        "meaning": "오늘은 날씨가 좋습니다",
+        "level": "",
+        "part": "문장",
+        "script": "혼합",
+        "review": "대기",
+        "reviewDueDate": "",
+        "kanji": "",
+        "source": "",
+        "note": "# 今日は天気がいいです\n읽기 きょうはてんきがいいです\n해석 오늘은 날씨가 좋습니다\n단어장\n`天気`(てんき)|품사=명사|한자=天(heaven),気(spirit)|메모=날씨\n`単語`(たんご)|품사=명사|한자=単(single),語(word)|메모=단어\n문법\n`〜てもいい`|메모=허가 표현\n표현\n`よろしくお願いします`|메모=인사",
+        "quizCorrectCount": 0,
+        "quizWrongCount": 0,
+        "lastQuizzedAt": "",
+        "lastReviewedAt": "",
+        "createdAt": "2026-10-24T02:37:02.000Z",
+        "updatedAt": "2026-10-24T02:37:02.000Z",
+        "deletedAt": null
+      }
+    ]
+  }
+}

@@ -30,6 +30,14 @@ const ttsChannels = {
   setConfig: "tts:set-config"
 };
 
+// Duplicated from migrationChannels.js (same reason). tests/desktop-migration-preload.test.js
+// guards against drift.
+const migrationChannels = {
+  getPending: "migration:get-pending",
+  complete: "migration:complete",
+  fail: "migration:fail"
+};
+
 contextBridge.exposeInMainWorld("appInfo", {
   name: "NihonGo Study"
 });
@@ -42,6 +50,11 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     health: () => ipcRenderer.invoke(ttsChannels.voicevoxHealth),
     getConfig: () => ipcRenderer.invoke(ttsChannels.getConfig),
     setConfig: config => ipcRenderer.invoke(ttsChannels.setConfig, config)
+  },
+  migration: {
+    getPending: () => ipcRenderer.invoke(migrationChannels.getPending),
+    complete: counts => ipcRenderer.invoke(migrationChannels.complete, { counts }),
+    fail: message => ipcRenderer.invoke(migrationChannels.fail, { message })
   }
 });
 

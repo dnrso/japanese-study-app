@@ -5,7 +5,14 @@
 const DESKTOP_HIDDEN_SELECTORS = ["#settings-account", ".ai-sentence-analysis-toggle"];
 const DESKTOP_HIDDEN_TOC_IDS = new Set(["settings-account"]);
 
+export const DESKTOP_TTS_DESCRIPTION =
+  "스피커 버튼은 로컬 VOICEVOX 엔진이 실행 중이면 VOICEVOX로, 연결할 수 없으면 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.";
+
 export function applyDesktopGating(root = document) {
+  const ttsDescription = root.querySelector?.("#ttsDescription");
+  if (ttsDescription) {
+    ttsDescription.textContent = DESKTOP_TTS_DESCRIPTION;
+  }
   DESKTOP_HIDDEN_SELECTORS.forEach(selector => {
     root.querySelectorAll(selector).forEach(element => {
       element.hidden = true;

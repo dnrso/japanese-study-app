@@ -60,3 +60,16 @@ describe("createDisabledSync", () => {
     expect(seen).toEqual([null]);
   });
 });
+
+describe("desktop TTS wording", () => {
+  it("rewrites the 음성 재생 description on desktop to mention VOICEVOX with a fallback", () => {
+    const description = { textContent: "browser only" };
+    const root = {
+      querySelectorAll: () => [],
+      querySelector: selector => (selector === "#ttsDescription" ? description : null)
+    };
+    applyDesktopGating(root);
+    expect(description.textContent).toContain("VOICEVOX");
+    expect(description.textContent).toContain("SpeechSynthesis");
+  });
+});

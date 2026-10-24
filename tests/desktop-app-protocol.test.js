@@ -128,15 +128,19 @@ describe("contentTypeFor", () => {
 });
 
 describe("selectDesktopUi", () => {
-  it("selects the web UI only for NIHONGO_DESKTOP_UI=web", () => {
+  it("selects the web UI by default", () => {
+    expect(selectDesktopUi({})).toBe("web");
+    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "" })).toBe("web");
+    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "1" })).toBe("web");
+  });
+
+  it("still accepts NIHONGO_DESKTOP_UI=web explicitly", () => {
     expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "web" })).toBe("web");
     expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: " WEB " })).toBe("web");
   });
 
-  it("keeps the existing renderer by default", () => {
-    expect(selectDesktopUi({})).toBe("renderer");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "" })).toBe("renderer");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "renderer" })).toBe("renderer");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "1" })).toBe("renderer");
+  it("selects the legacy renderer only for NIHONGO_DESKTOP_UI=legacy", () => {
+    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "legacy" })).toBe("renderer");
+    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: " Legacy " })).toBe("renderer");
   });
 });
