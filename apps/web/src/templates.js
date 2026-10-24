@@ -486,6 +486,28 @@ function settingsPageTemplate() {
         <p class="muted">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
       </section>
 
+      <section class="panel section" id="settings-voicevox" hidden>
+        <div class="panel-header"><h2 class="panel-title">VOICEVOX 음성 (데스크톱)</h2></div>
+        <p class="muted">로컬 VOICEVOX 엔진이 실행 중이면 스피커 버튼이 VOICEVOX로 재생됩니다. 연결할 수 없으면 브라우저 음성으로 대체됩니다.</p>
+        <div class="settings-grid">
+          <label>엔진 URL<input id="voicevoxBaseUrlInput" type="text" spellcheck="false" placeholder="http://127.0.0.1:50021" /></label>
+        </div>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="voicevoxSaveUrlBtn" type="button">URL 저장</button>
+          <button class="ghost-btn" id="voicevoxRecheckBtn" type="button">연결 다시 확인</button>
+        </div>
+        <p class="muted tts-status" id="voicevoxUrlStatus" aria-live="polite"></p>
+        <p class="muted tts-status" id="voicevoxHealthStatus" aria-live="polite"></p>
+        <div class="settings-grid">
+          <label>Speaker<select id="voicevoxSpeakerSelect"></select></label>
+          <label>재생 속도 <span id="voicevoxRateValue">1.0</span><input id="voicevoxRateRange" type="range" min="0.5" max="2" step="0.1" value="1" /></label>
+        </div>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="voicevoxTestBtn" type="button">테스트 재생</button>
+        </div>
+        <p class="muted tts-status" id="voicevoxTestStatus" aria-live="polite"></p>
+      </section>
+
     </section>
   `;
 }

@@ -50,6 +50,14 @@ import {
 import { isDesktopApp } from "./platform.js";
 import { applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
 import {
+  createBrowserProvider,
+  createCapacitorProvider,
+  createDesktopVoicevoxProvider,
+  createSpeechChain,
+  selectSpeechProviders
+} from "./ttsProviders.js";
+import { initVoicevoxSettings, loadVoicevoxPrefs } from "./voicevoxSettings.js";
+import {
   createDisabledSync,
   createSync,
   createSyncCoordinator,
@@ -1470,28 +1478,37 @@ function isNativePlatform() {
 // data model (only reading/meaning fields ever hold hiragana/Korean text,
 // and neither is ever spoken). So a single hardcoded "ja-JP" is correct for
 // every call site; there is no Korean text path through speak().
+function showSpeechNotice(message) {
+  let notice = document.getElementById("speechNotice");
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "speechNotice";
+    notice.setAttribute("role", "status");
+    notice.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:1000;padding:10px 16px;border-radius:8px;background:#2b2b2b;color:#fff;font-size:14px;pointer-events:none;";
+    document.body.appendChild(notice);
+  }
+  notice.textContent = message;
+  notice.hidden = false;
+  window.clearTimeout(showSpeechNotice.timer);
+  showSpeechNotice.timer = window.setTimeout(() => { notice.hidden = true; }, 4200);
+}
+
+// Provider order: desktop VOICEVOX (falls back to the browser voice when the
+// engine is down) -> Capacitor native -> browser speechSynthesis. See
+// ttsProviders.js.
+const voicevoxProvider = createDesktopVoicevoxProvider(window.desktopBridge?.tts, {
+  getSettings: () => loadVoicevoxPrefs()
+});
+const speechChain = createSpeechChain(selectSpeechProviders({
+  desktopTts: desktopApp && Boolean(window.desktopBridge?.tts),
+  isNative: isNativePlatform(),
+  voicevox: voicevoxProvider,
+  capacitor: createCapacitorProvider(TextToSpeech, { isNative: isNativePlatform }),
+  browser: createBrowserProvider()
+}), { onNotice: showSpeechNotice });
+
 function speak(text) {
-  const targetText = String(text || "").trim();
-  if (!targetText) {
-    return;
-  }
-
-  if (isNativePlatform()) {
-    TextToSpeech.speak({ text: targetText, lang: "ja-JP", rate: 0.95 }).catch(error => {
-      // e.g. no TTS engine or no Japanese voice installed on the device -
-      // degrade to silence instead of crashing the UI.
-      console.warn("네이티브 TTS 재생에 실패했습니다:", error);
-    });
-    return;
-  }
-
-  if (!window.speechSynthesis) {
-    return;
-  }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(targetText);
-  utterance.lang = "ja-JP";
-  window.speechSynthesis.speak(utterance);
+  return speechChain.speak(text);
 }
 
 function applyQuizQuestionFontSize() {
@@ -1674,6 +1691,10 @@ async function start() {
   renderAppShell(byId);
   if (desktopApp) {
     applyDesktopGating();
+    initVoicevoxSettings({
+      bridgeTts: window.desktopBridge?.tts,
+      testSpeak: text => voicevoxProvider.speak(text)
+    });
   }
   applyMobileAdSlotVisibility();
   bindEvents();
