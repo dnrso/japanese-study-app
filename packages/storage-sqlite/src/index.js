@@ -63,6 +63,16 @@ function createId() {
   return crypto.randomUUID();
 }
 
+// Releases the better-sqlite3 handle (and with it the WAL/shm files, which on
+// Windows otherwise keep the app-data directory locked). Idempotent.
+function close() {
+  if (db) {
+    const handle = db;
+    db = undefined;
+    handle.close();
+  }
+}
+
 function ensureDirectories() {
   fs.mkdirSync(exportsDir, { recursive: true });
   fs.mkdirSync(backupsDir, { recursive: true });
@@ -1085,7 +1095,7 @@ const importExport = createDataImportExport({
   allDailyEntryLinksMap
 });
 
-const { exportData, importCsvExports, importFullBackup } = importExport;
+const { exportData, importCsvExports, importFullBackup, applyRemoteSnapshot } = importExport;
 
 return {
   initDatabase,
@@ -1106,6 +1116,8 @@ return {
   exportData,
   importCsvExports,
   importFullBackup,
+  applyRemoteSnapshot,
+  close,
   paths: {
     appDataDir,
     exportsDir,

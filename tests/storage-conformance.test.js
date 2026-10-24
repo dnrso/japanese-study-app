@@ -29,6 +29,9 @@
 //   exportData              () -> envelope + writes CSV/YAML to disk    () -> envelope, nothing written to disk
 //   importCsvExports        (studyDate) -> state  [reads exports/*.csv] (backup = null, studyDate = today) -> state
 //   importFullBackup        () -> state  [reads full-backup.yaml]       (backup = null) -> state
+//   applyRemoteSnapshot     (remote, merge) -> { state, data }          (remote, merge) -> { state, data }
+//                           [one transaction, never writes CSV/YAML]    [one readwrite transaction]
+//   close                   () -> void  [closes the db handle]          () -> void  [closes the IDBDatabase]
 //
 // Divergences are NOT papered over: each is asserted per-adapter through the
 // `expected` table on the adapter descriptors below, tagged
@@ -63,10 +66,11 @@
 // unified into @nihongo-study/storage-core while this suite was being written,
 // so the shared `sharedChildRecords` assertion below guards that instead.
 import "fake-indexeddb/auto";
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { createRequire } from "node:module";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import { createSampleState, missingDailyEntryMessage } from "@nihongo-study/storage-core";
+import { mergeBackupData } from "../packages/core/src/index.js";
 import { loadSqliteAdapter, describeStorageSuite, createTmpDirs } from "./helpers/storage-adapters.js";
 
 const require = createRequire(import.meta.url);
@@ -167,6 +171,7 @@ const adapters = [
       // (packages/storage-sqlite/src/dataImportExport.js:147-158).
       // UNIFY: one envelope - paths + data - with `files` desktop-only.
       exportEnvelopeExtraKeys: ["dbPath"],
+      replacePreservesTimestamps: true,
       // KNOWN DIVERGENCE D4: idb returns whole records from getState, so
       // items/tasks/dailyEntries carry createdAt/updatedAt/deletedAt; sqlite
       // hand-picks columns (packages/storage-sqlite/src/index.js:199-249) and
@@ -247,7 +252,7 @@ const adapters = [
     name: "storage-sqlite",
     loadError: sqlite.loadError,
     async create(options = {}) {
-      const store = sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite"), ...options });
+      const store = tmpDirs.track(sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite"), ...options }));
       store.initDatabase();
       return store;
     },
@@ -259,7 +264,12 @@ const adapters = [
       upsertDerivesKanjiItems: true, // D7
       reportsLinkedOnRelink: true, // D12
       importFullBackupAcceptsObject: false, // D14
-      importCsvExportsAcceptsObject: false // D15
+      importCsvExportsAcceptsObject: false, // D15
+      // sqlite replaceBackup() inserts items and tasks without created_at /
+      // updated_at, so the columns fall back to CURRENT_TIMESTAMP and merged
+      // rows come back with fresh timestamps (idb preserves them). Assertions
+      // on applied data therefore compare ids and content, not stamps.
+      replacePreservesTimestamps: false
     }
   }
 ];
@@ -267,7 +277,7 @@ const adapters = [
 describe("storage contract (adapter-independent)", () => {
   it("storageMethodNames stays derived from storageContract", () => {
     expect(storageMethodNames).toEqual(storageContract.map(entry => entry.name));
-    expect(storageMethodNames).toHaveLength(18);
+    expect(storageMethodNames).toHaveLength(20);
     expect(new Set(storageMethodNames).size).toBe(storageMethodNames.length);
   });
 
@@ -275,7 +285,7 @@ describe("storage contract (adapter-independent)", () => {
     storageContract.forEach(entry => {
       expect(typeof entry.name).toBe("string");
       expect(Array.isArray(entry.params)).toBe(true);
-      expect(["state", "stateResult", "export", "handle"]).toContain(entry.returns);
+      expect(["state", "stateResult", "export", "handle", "applied", "none"]).toContain(entry.returns);
     });
     expect(storageStateShape.required).toContain("items");
     expect(storageStateShape.required).toContain("allDailyEntries");
@@ -1254,6 +1264,166 @@ function defineConformanceTests(adapter) {
     expect(state.dailyEntries).toHaveLength(5);
     expect(wordEntries[0].sourceSentences).toHaveLength(2);
   });
+
+  // --------------------------------------------------- applyRemoteSnapshot
+
+  const mergeRemote = (local, remote) => mergeBackupData(local, remote);
+  const futureStamp = "2999-01-01T00:00:00.000Z";
+  const pastStamp = "2000-01-01T00:00:00.000Z";
+  const idsOf = rows => rows.map(row => row.id ?? row.studyDate).sort();
+
+  function remoteItem(fields) {
+    return { kind: "word", reading: "", level: "", part: "", script: "", source: "", note: "", ...fields };
+  }
+
+  it("applyRemoteSnapshot() lets the newer updatedAt win and keeps local when the remote is older", async () => {
+    const store = await freshStore();
+    await store.upsertItem({ id: "lww-newer", kind: "word", title: "あたらしい", meaning: "local-a" });
+    await store.upsertItem({ id: "lww-older", kind: "word", title: "ふるい", meaning: "local-b" });
+
+    const { state } = await store.applyRemoteSnapshot({
+      items: [
+        remoteItem({ id: "lww-newer", title: "あたらしい", meaning: "remote-a", updatedAt: futureStamp }),
+        remoteItem({ id: "lww-older", title: "ふるい", meaning: "remote-b", updatedAt: pastStamp })
+      ]
+    }, mergeRemote);
+
+    expect(state.items.find(item => item.id === "lww-newer").meaning).toBe("remote-a");
+    expect(state.items.find(item => item.id === "lww-older").meaning).toBe("local-b");
+    const persisted = await store.getState();
+    expect(persisted.items.find(item => item.id === "lww-newer").meaning).toBe("remote-a");
+  });
+
+  it("applyRemoteSnapshot() applies a newer remote tombstone and keeps it in exportData()", async () => {
+    const store = await freshStore();
+    await store.upsertItem({ id: "tomb-1", kind: "word", title: "きえる", meaning: "local" });
+
+    const { state } = await store.applyRemoteSnapshot({
+      items: [remoteItem({ id: "tomb-1", title: "きえる", meaning: "local", updatedAt: futureStamp, deletedAt: futureStamp })]
+    }, mergeRemote);
+
+    expect(state.items.find(item => item.id === "tomb-1")).toBeUndefined();
+    const exported = (await store.exportData()).data;
+    expect(exported.items.find(item => item.id === "tomb-1").deletedAt).toBeTruthy();
+  });
+
+  it("applyRemoteSnapshot() remaps remote daily entries and links onto local ids by content key", async () => {
+    const { store } = await storeWithSentence();
+    const local = (await store.exportData()).data;
+    expect(local.dailyEntries.length).toBeGreaterThan(1);
+    expect(local.dailyEntryLinks.length).toBeGreaterThan(0);
+
+    const prefix = id => (id ? `remote-${id}` : id);
+    const remote = {
+      dailyEntries: local.dailyEntries.map(entry => ({
+        ...entry,
+        id: prefix(entry.id),
+        parentId: prefix(entry.parentId),
+        sourceSentences: (entry.sourceSentences || []).map(sentence => ({ ...sentence, id: prefix(sentence.id) }))
+      })),
+      dailyEntryLinks: local.dailyEntryLinks.map(link => ({
+        ...link,
+        id: prefix(link.id),
+        entryId: prefix(link.entryId),
+        sentenceId: prefix(link.sentenceId)
+      }))
+    };
+
+    const { data } = await store.applyRemoteSnapshot(remote, mergeRemote);
+
+    expect(idsOf(data.dailyEntries)).toEqual(idsOf(local.dailyEntries));
+    expect(data.dailyEntries.some(entry => String(entry.id).startsWith("remote-"))).toBe(false);
+    const after = (await store.exportData()).data;
+    expect(idsOf(after.dailyEntries)).toEqual(idsOf(local.dailyEntries));
+    expect(after.dailyEntryLinks).toHaveLength(local.dailyEntryLinks.length);
+    const entryIds = new Set(after.dailyEntries.map(entry => entry.id));
+    after.dailyEntryLinks.forEach(link => {
+      expect(entryIds.has(link.entryId)).toBe(true);
+      expect(entryIds.has(link.sentenceId)).toBe(true);
+    });
+  });
+
+  it("applyRemoteSnapshot() returns { state, data } and data matches the subsequent exportData()", async () => {
+    const store = await freshStore();
+    await store.upsertItem({ id: "apply-local", kind: "word", title: "ろーかる", meaning: "local" });
+    await store.addTask({ title: "할 일" });
+
+    const result = await store.applyRemoteSnapshot({
+      items: [remoteItem({ id: "apply-remote", title: "りもーと", meaning: "remote", updatedAt: futureStamp })]
+    }, mergeRemote);
+
+    expect(Object.keys(result).sort()).toEqual(["data", "state"]);
+    expect(result.state.selectedDate).toBe(todayKey());
+    expect(result.state.items.map(item => item.id)).toEqual(expect.arrayContaining(["apply-local", "apply-remote"]));
+
+    const exported = (await store.exportData()).data;
+    // studyDays is excluded: the adapters' normalizeStudyDays() adds a row for the
+    // selected date while persisting, which the pre-write merge result lacks.
+    for (const name of ["dailyEntries", "dailyEntryLinks", "tasks", "items"]) {
+      expect(idsOf(result.data[name] || [])).toEqual(idsOf(exported[name]));
+    }
+    expect(result.data.selectedDate).toBe(todayKey());
+    if (expected.replacePreservesTimestamps) {
+      // Persisting normalizes defaults (review, counters), so compare the identifying fields.
+      const byId = rows => Object.fromEntries(rows.map(row => [row.id, [row.title, row.meaning, row.updatedAt]]));
+      expect(byId(result.data.items)).toEqual(byId(exported.items));
+      expect(byId(result.data.tasks)).toEqual(byId(exported.tasks));
+    }
+  });
+
+  it("applyRemoteSnapshot() with a null remote returns the current data unchanged and never calls merge", async () => {
+    const store = await freshStore();
+    await store.upsertItem({ id: "keep-1", kind: "word", title: "のこる", meaning: "stay" });
+    const merge = vi.fn();
+
+    const result = await store.applyRemoteSnapshot(null, merge);
+
+    expect(merge).not.toHaveBeenCalled();
+    expect(result.state.items.map(item => item.id)).toEqual(["keep-1"]);
+    expect(idsOf(result.data.items)).toEqual(["keep-1"]);
+    expect(idsOf((await store.exportData()).data.items)).toEqual(["keep-1"]);
+  });
+
+  it("applyRemoteSnapshot() rejects a merge that returns a Promise and writes nothing", async () => {
+    const store = await freshStore();
+    await store.upsertItem({ id: "safe-1", kind: "word", title: "あんぜん", meaning: "safe" });
+
+    const error = await caught(() => store.applyRemoteSnapshot(
+      { items: [remoteItem({ id: "never-1", title: "こない", meaning: "x", updatedAt: futureStamp })] },
+      async (local, remote) => mergeBackupData(local, remote)
+    ));
+
+    expect(error).toBeInstanceOf(TypeError);
+    const state = await store.getState();
+    expect(state.items.map(item => item.id)).toEqual(["safe-1"]);
+  });
+
+  it("applyRemoteSnapshot() rejects a merge that throws or returns no data, leaving local rows untouched", async () => {
+    const store = await freshStore();
+    await store.upsertItem({ id: "safe-2", kind: "word", title: "あんぜん", meaning: "safe" });
+    const boom = new Error("merge exploded");
+
+    expect(await caught(() => store.applyRemoteSnapshot({ items: [] }, () => { throw boom; }))).toBe(boom);
+    expect(await caught(() => store.applyRemoteSnapshot({ items: [] }, () => ({})))).toBeInstanceOf(TypeError);
+    expect((await store.getState()).items.map(item => item.id)).toEqual(["safe-2"]);
+  });
+
+  if (adapter.name === "storage-idb") {
+    it("applyRemoteSnapshot() keeps a write that races it (idb serializes the readwrite transactions)", async () => {
+      const store = await freshStore();
+      await store.upsertItem({ id: "race-base", kind: "word", title: "もと", meaning: "base" });
+
+      await Promise.all([
+        store.applyRemoteSnapshot({
+          items: [remoteItem({ id: "race-remote", title: "りもーと", meaning: "remote", updatedAt: futureStamp })]
+        }, mergeRemote),
+        store.upsertItem({ id: "race-new", kind: "word", title: "あたらしい", meaning: "new" })
+      ]);
+
+      const ids = (await store.getState()).items.map(item => item.id);
+      expect(ids).toEqual(expect.arrayContaining(["race-base", "race-remote", "race-new"]));
+    });
+  }
 
   it("record- and array-taking methods tolerate omitted arguments", async () => {
     const store = await freshStore();

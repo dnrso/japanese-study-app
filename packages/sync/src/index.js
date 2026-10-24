@@ -7,11 +7,9 @@ import {
   setSessionFromTokens as setSupabaseSessionFromTokens
 } from "./auth.js";
 import { pullSnapshot, pushSnapshot } from "./snapshot.js";
+import { runSnapshotSync } from "./syncRun.js";
 
-export { getSupabaseClient } from "./client.js";
-export { getSupabaseConfig, isConfigured } from "./config.js";
-export { getSession, onAuthChange, signInWithOAuth } from "./auth.js";
-export { pullSnapshot, pushSnapshot } from "./snapshot.js";
+export { createSyncCoordinator, createSyncingStorage } from "./coordinator.js";
 
 async function readErrorResponseData(error) {
   const response = error?.context;
@@ -63,22 +61,12 @@ export function createSupabaseSync({ storage, mergeSnapshots }) {
       }
 
       const userId = session.user.id;
-      const local = await storage.exportData();
-      const remote = await pullSnapshot(supabase, userId);
-
-      let merged;
-      if (remote && remote.snapshot) {
-        const result = mergeSnapshots(local.data, remote.snapshot);
-        merged = result.data;
-        await storage.importFullBackup({ data: merged });
-      } else {
-        merged = local.data;
-      }
-
-      await pushSnapshot(supabase, userId, merged);
-
-      const state = await storage.getState(merged.selectedDate);
-      return { skipped: false, state };
+      return await runSnapshotSync({
+        storage,
+        mergeSnapshots,
+        pull: () => pullSnapshot(supabase, userId),
+        push: data => pushSnapshot(supabase, userId, data)
+      });
     } catch (error) {
       return { skipped: true, reason: "error", error };
     }

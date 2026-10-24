@@ -49,17 +49,24 @@ import {
 } from "./quiz.js";
 import {
   createSync,
+  createSyncCoordinator,
+  createSyncingStorage,
   renderAccountStatus as renderAccountStatusImpl,
+  retrySync as retrySyncImpl,
   signInWithGoogle as signInWithGoogleImpl,
   signOutOfAccount as signOutOfAccountImpl,
   wireAuthChange,
   wireAuthCallback
 } from "./syncSetup.js";
 
-const store = createIdbStorage({
+const baseStore = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
-const sync = createSync({ storage: store, mergeSnapshots: (current, imported) => core.mergeBackupData(current, imported, selectedDate || todayKey()) });
+const sync = createSync({ storage: baseStore, mergeSnapshots: (current, imported) => core.mergeBackupData(current, imported, selectedDate || todayKey()) });
+let syncCoordinator;
+const store = createSyncingStorage(baseStore, {
+  scheduleSync: () => syncCoordinator?.schedule()
+});
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
@@ -127,6 +134,15 @@ let pageIndex = {
 // entry in core.DEFAULT_LIST_PAGE_SIZES). Loaded once at startup from
 // localStorage; see LIST_PAGE_SIZE_STORAGE_KEY above.
 let listPageSizeOverrides = loadListPageSizeOverrides();
+
+syncCoordinator = createSyncCoordinator({
+  sync,
+  onStateChange: () => renderAccountStatus(),
+  onSyncSuccess: result => applySyncResult(syncCtx(), result),
+  onError: error => {
+    console.error("데이터 동기화 실패:", error);
+  }
+});
 
 function byId(id) {
   return document.getElementById(id);
@@ -422,6 +438,7 @@ function bindEvents() {
   byId("mergeBackupBtn").addEventListener("click", () => byId("mergeBackupFileInput").click());
   byId("googleSignInBtn").addEventListener("click", signInWithGoogle);
   byId("googleSignOutBtn").addEventListener("click", signOutOfAccount);
+  byId("syncRetryBtn").addEventListener("click", retrySync);
   byId("backupFileInput").addEventListener("change", loadBackupFromFile);
   byId("mergeBackupFileInput").addEventListener("change", mergeBackupFromFile);
 
@@ -827,6 +844,10 @@ async function signInWithGoogle() {
 
 async function signOutOfAccount() {
   await signOutOfAccountImpl(syncCtx());
+}
+
+async function retrySync() {
+  await retrySyncImpl(syncCtx());
 }
 
 function renderDate() {
@@ -1598,6 +1619,7 @@ function syncCtx() {
   return {
     byId,
     sync,
+    syncCoordinator,
     getAccountSession: () => accountSession,
     setAccountSession: nextSession => { accountSession = nextSession; },
     getAiSentenceAnalysisEnabled: () => aiSentenceAnalysisEnabled,
@@ -1606,6 +1628,8 @@ function syncCtx() {
     renderAccountStatus,
     getState: () => state,
     setState: nextState => { state = nextState; },
+    getSelectedDate: () => selectedDate,
+    loadState: date => baseStore.getState(date),
     resetTransientUiState,
     renderAll
   };

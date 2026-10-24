@@ -23,6 +23,7 @@
         <button class="tab active" data-page="home">홈</button>
         <button class="tab" data-page="today">오늘 공부</button>
         <button class="tab" data-page="sources">자료</button>
+        <button class="tab" data-page="sentences">문장</button>
         <button class="tab" data-page="words">단어</button>
         <button class="tab" data-page="grammar">문법</button>
         <button class="tab" data-page="expressions">표현</button>
@@ -35,7 +36,7 @@
 
       <label class="search" aria-label="전체 검색">
         <span>⌕</span>
-        <input id="globalSearch" placeholder="단어, 문법, 표현, 자료 검색" />
+        <input id="globalSearch" placeholder="문장, 단어, 문법, 표현, 자료 검색" />
         <span class="shortcut">Ctrl K</span>
       </label>
 
@@ -247,6 +248,19 @@
               <button class="primary-btn" data-kind="source" data-add-item>+ 자료 추가</button>
             </div>
             <div class="cards" id="sourceCards"></div>
+          </section>
+        </section>
+
+        <section class="page hidden-page" id="sentences">
+          <section class="panel section" id="sentences-list">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">문장 노트</h2>
+                <p class="muted" id="sentencePageDate"></p>
+              </div>
+              <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
+            </div>
+            <div class="cards daily-entry-list" id="sentenceCards"></div>
           </section>
         </section>
 

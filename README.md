@@ -22,6 +22,8 @@ Electron 데스크톱 앱 실행:
 npm.cmd start
 ```
 
+실행 전 스크립트가 설치된 Electron 버전에 맞는 `better-sqlite3` 사전 빌드 바이너리를 확인합니다. 일반 Node용 바이너리가 설치됐거나 Electron 버전이 바뀐 경우에는 올바른 바이너리를 자동으로 내려받아 ABI 불일치를 복구합니다.
+
 Windows unpacked 데스크톱 빌드:
 
 ```powershell
@@ -170,6 +172,7 @@ japanese-study-app/
 │  ├─ core/                # 검색, 필터링, 복습, 퀴즈, 통계 등 공통 계산
 │  ├─ ui/                  # 공통 UI 렌더러, 컴포넌트, 스타일, 설정
 │  ├─ storage/             # 저장소 adapter 런타임 계약
+│  ├─ storage-core/        # SQLite/IndexedDB 저장소가 공유하는 순수 helper (복습 간격, 날짜, 일일 항목 파서, 샘플 데이터)
 │  ├─ storage-sqlite/      # 데스크톱 SQLite 저장소 구현
 │  ├─ storage-idb/         # 웹 IndexedDB 저장소 구현
 │  ├─ sync/                # Supabase 로그인/동기화/Edge Function 호출 공통 로직
@@ -179,8 +182,13 @@ japanese-study-app/
 │  ├─ functions/           # Supabase Edge Functions (analyze-sentence 등)
 │  └─ migrations/          # Supabase Postgres 마이그레이션 (study_snapshots, ai_usage)
 │
+├─ tests/                  # Vitest 테스트 (core, storage conformance, sync, UI)
+│
+├─ scripts/                # Electron native 모듈 준비, AI 코드 동기화 스크립트
+│
 ├─ .github/workflows/
-│  └─ static.yml           # GitHub Pages 웹 앱 배포 workflow
+│  ├─ static.yml           # GitHub Pages 웹 앱 배포 workflow
+│  └─ test.yml             # Vitest 테스트 workflow (push/PR)
 │
 ├─ package.json            # npm workspaces, 공통 scripts, Electron Builder 설정
 ├─ package-lock.json       # npm lockfile
@@ -201,7 +209,7 @@ Electron 데스크톱 앱입니다.
 - `src/dataHandlers.js`: 데이터 IPC 요청을 storage adapter로 연결
 - `src/ttsHandlers.js`: VOICEVOX IPC handler
 - `src/renderer/`: 데스크톱 renderer shell, 이벤트, 상태, DOM adapter
-- `scripts/build-windows.js`: Windows unpacked 빌드 및 schema 변경 시 app-data 백업
+- `apps/desktop/scripts/build-windows.js`: Windows unpacked 빌드 및 schema 변경 시 app-data 백업
 
 데스크톱 renderer는 아직 Electron 전용 shell을 가지고 있습니다. 다만 페이지별 동적 렌더링, 공통 스타일, config, DOM patch 적용은 `packages/ui`를 사용합니다.
 
@@ -408,10 +416,12 @@ GitHub Pages 배포
 - `packages/ui/**`
 - `packages/ai/**`
 - `packages/storage-idb/**`
+- `packages/storage-core/**`
+- `packages/sync/**`
 - `.github/workflows/static.yml`
 - `package*.json`
 
-웹 배포에 영향을 주는 패키지를 더 분리할 경우(예: `packages/sync`도 현재 이 목록에는 없습니다) workflow path도 함께 갱신해야 합니다.
+`pull_request`에도 같은 path 목록이 적용됩니다. 웹 배포에 영향을 주는 패키지를 새로 의존하게 될 경우 workflow path도 함께 갱신해야 합니다.
 
 
 주요 의존성

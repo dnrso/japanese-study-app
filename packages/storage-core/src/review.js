@@ -8,7 +8,7 @@ export const reviewIntervals = {
   "한달": 30
 };
 
-export const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
+const reviewStates = ["오늘", ...Object.keys(reviewIntervals), "대기"];
 
 // An empty review is meaningful and must stay empty: source items carry
 // review "" by design, and the quiz's "변경 안 함" option sends "" to mean
@@ -22,7 +22,7 @@ export function normalizeReview(value) {
   return reviewStates.includes(review) ? review : "대기";
 }
 
-export function normalizeCompletionReview(value) {
+function normalizeCompletionReview(value) {
   const review = normalizeReview(value);
   if (review === "오늘") {
     return "3일 후";

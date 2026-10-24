@@ -16,7 +16,9 @@
 //   "state"       -> the getState() envelope
 //   "stateResult" -> { state, result }
 //   "export"      -> the exportData() envelope
+//   "applied"     -> { state, data }: the post-merge state plus the merged data
 //   "handle"      -> the underlying database handle
+//   "none"        -> nothing meaningful (callers must not rely on the value)
 const storageContract = [
   {
     name: "initDatabase",
@@ -70,6 +72,18 @@ const storageContract = [
     // tests/storage-conformance.test.js (KNOWN DIVERGENCE D14).
     params: ["backup"],
     returns: "state"
+  },
+  {
+    name: "applyRemoteSnapshot",
+    params: ["remote", "merge"],
+    returns: "applied",
+    note: "merge(localData, remoteData) => { data } must be synchronous; it runs inside one write transaction against current local rows. Returns { state, data }."
+  },
+  {
+    name: "close",
+    params: [],
+    returns: "none",
+    note: "Releases the underlying database handle (sqlite closes the file, idb closes the IDBDatabase). Idempotent; safe to call before initDatabase()/twice. Only tests and shutdown paths need it."
   }
 ];
 

@@ -72,7 +72,7 @@ export function unsafeRecordIds(data) {
   return [...found];
 }
 
-export function assertSafeRecordIds(data) {
+function assertSafeRecordIds(data) {
   const unsafe = unsafeRecordIds(data);
   if (unsafe.length) {
     // The offending ids are deliberately kept out of the message: it is
@@ -88,7 +88,7 @@ export function backupData(backup) {
   return backup?.data && typeof backup.data === "object" ? backup.data : backup;
 }
 
-export function isBackupData(data) {
+function isBackupData(data) {
   return Boolean(data && typeof data === "object" && [
     "studyDays",
     "dailyEntries",
@@ -146,7 +146,7 @@ export function mergeBackupData(currentData, importedData, fallbackDate) {
   };
 }
 
-export function mergeDailyEntries(currentRows, importedRows, idMap) {
+function mergeDailyEntries(currentRows, importedRows, idMap) {
   const existing = new Map();
   currentRows.forEach(row => {
     dailyEntryKeys(row).forEach(key => existing.set(key, row.id));
@@ -201,7 +201,7 @@ export function mergeDailyEntries(currentRows, importedRows, idMap) {
   return { rows: mergedRows, added, skipped, updated };
 }
 
-export function mergeUniqueRows(currentRows, importedRows, keyFactory) {
+function mergeUniqueRows(currentRows, importedRows, keyFactory) {
   const existing = new Map();
   currentRows.forEach((row, index) => {
     keyFactory(row).forEach(key => existing.set(key, index));
@@ -237,18 +237,18 @@ export function mergeUniqueRows(currentRows, importedRows, keyFactory) {
 // legacy records missing `updatedAt` on both sides) keep the current/local row.
 // Records without `updatedAt` are treated as epoch 0 so they lose to any
 // timestamped record on the other side.
-export function pickNewer(currentRow, importedRow) {
+function pickNewer(currentRow, importedRow) {
   const currentMs = updatedAtMs(currentRow);
   const importedMs = updatedAtMs(importedRow);
   return importedMs > currentMs ? importedRow : currentRow;
 }
 
-export function updatedAtMs(row) {
+function updatedAtMs(row) {
   const parsed = Date.parse(row?.updatedAt || "");
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function remapDailyEntry(entry, idMap) {
+function remapDailyEntry(entry, idMap) {
   const parentId = remappedId(entry.parentId, idMap);
   return {
     ...entry,
@@ -260,7 +260,7 @@ export function remapDailyEntry(entry, idMap) {
   };
 }
 
-export function remapDailyEntryLink(link, idMap) {
+function remapDailyEntryLink(link, idMap) {
   const entryId = remappedId(link.entryId || link.entry_id, idMap);
   const sentenceId = remappedId(link.sentenceId || link.sentence_id, idMap);
   return {
@@ -271,7 +271,7 @@ export function remapDailyEntryLink(link, idMap) {
   };
 }
 
-export function remappedId(id, idMap) {
+function remappedId(id, idMap) {
   const key = String(id || "");
   return key ? idMap.get(key) || key : "";
 }
@@ -280,35 +280,35 @@ export function studyDayKeys(row) {
   return compactKeys([key("studyDay", row.studyDate)]);
 }
 
-export function dailyEntryKeys(row) {
+function dailyEntryKeys(row) {
   return compactKeys([
     key("dailyEntryId", row.id),
     key("dailyEntry", row.studyDate, row.kind, row.title, row.reading, row.meaning, row.parentTitle || row.parentId)
   ]);
 }
 
-export function dailyEntryLinkKeys(row) {
+function dailyEntryLinkKeys(row) {
   return compactKeys([
     key("dailyEntryLinkId", row.id),
     key("dailyEntryLink", row.entryId || row.entry_id, row.sentenceId || row.sentence_id)
   ]);
 }
 
-export function taskKeys(row) {
+function taskKeys(row) {
   return compactKeys([
     key("taskId", row.id),
     key("task", row.studyDate, row.title, row.note, row.tag)
   ]);
 }
 
-export function itemKeys(row) {
+function itemKeys(row) {
   return compactKeys([
     key("itemId", row.id),
     key("item", row.kind, row.title, row.reading, row.meaning)
   ]);
 }
 
-export function compactKeys(keys) {
+function compactKeys(keys) {
   return keys.filter(Boolean);
 }
 
@@ -320,7 +320,7 @@ export function key(scope, ...parts) {
   return `${scope}:${normalized.join("|")}`;
 }
 
-export function keyPart(value) {
+function keyPart(value) {
   return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
@@ -328,7 +328,7 @@ export function rows(value) {
   return Array.isArray(value) ? value : [];
 }
 
-export function sumMergeSummaries(results) {
+function sumMergeSummaries(results) {
   return results.reduce((summary, result) => ({
     added: summary.added + result.added,
     skipped: summary.skipped + result.skipped,

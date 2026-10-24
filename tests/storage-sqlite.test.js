@@ -16,9 +16,18 @@ import "fake-indexeddb/auto";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import { loadSqliteAdapter, describeStorageSuite } from "./helpers/storage-adapters.js";
 
-const { Database, createSqliteStorage, loadError: abiError } = loadSqliteAdapter();
+const { Database, createSqliteStorage: createUntrackedSqliteStorage, loadError: abiError } = loadSqliteAdapter();
 
 const tmpDirs = [];
+const openStores = [];
+
+// Every store is remembered so afterAll can close its db handle before the temp
+// dir is removed; an open handle makes rmSync fail with EPERM on Windows.
+function createSqliteStorage(options) {
+  const store = createUntrackedSqliteStorage(options);
+  openStores.push(store);
+  return store;
+}
 function tmpDataDir(suffix) {
   const dir = path.join(os.tmpdir(), `nihongo-sqlite-parity-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -27,10 +36,13 @@ function tmpDataDir(suffix) {
 }
 
 afterAll(() => {
-  // Best-effort cleanup: better-sqlite3 doesn't expose a close() from
-  // createSqliteStorage, so on Windows the WAL/db file handle may still be
-  // held open here, making rmSync fail with EPERM. That's a harmless
-  // OS-temp-dir leak (the OS reclaims it eventually), not a test failure.
+  for (const store of openStores.splice(0)) {
+    try {
+      store.close();
+    } catch (error) {
+      console.warn(`[storage-sqlite.test.js] Could not close store: ${error.message}`);
+    }
+  }
   for (const dir of tmpDirs) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });

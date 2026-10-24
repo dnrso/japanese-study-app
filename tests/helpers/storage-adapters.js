@@ -63,6 +63,7 @@ export function describeStorageSuite(suiteName, loadError, defineTests) {
 // Temp app-data directories for the sqlite adapter.
 export function createTmpDirs(label) {
   const dirs = [];
+  const stores = [];
   return {
     make(suffix) {
       const dir = path.join(os.tmpdir(), `nihongo-${label}-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -70,10 +71,20 @@ export function createTmpDirs(label) {
       dirs.push(dir);
       return dir;
     },
-    // Best-effort cleanup: createSqliteStorage exposes no close(), so on
-    // Windows the WAL/db handle may still be open and rmSync fails with
-    // EPERM. That is a harmless OS-temp-dir leak, not a test failure.
+    // Remember a store so cleanup() can close its db handle first; an open
+    // sqlite handle makes rmSync fail with EPERM on Windows.
+    track(store) {
+      stores.push(store);
+      return store;
+    },
     cleanup() {
+      for (const store of stores.splice(0)) {
+        try {
+          store.close();
+        } catch (error) {
+          console.warn(`[${label}] Could not close store: ${error.message}`);
+        }
+      }
       for (const dir of dirs) {
         try {
           fs.rmSync(dir, { recursive: true, force: true });

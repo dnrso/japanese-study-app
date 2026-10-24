@@ -9,6 +9,7 @@
     "packages/*"
   ],
   "scripts": {
+    "prestart": "node scripts/prepare-electron-native.mjs",
     "start": "electron .",
     "build": "node apps/desktop/scripts/build-windows.js",
     "web:dev": "npm --workspace @nihongo-study/web run dev --",
