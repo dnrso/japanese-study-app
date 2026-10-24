@@ -327,6 +327,22 @@ TTS 공통 패키지입니다.
 - TTS 설정 정규화
 
 
+데스크톱 웹 UI 모드 (실험적)
+--------------------------
+
+기본 데스크톱 앱은 기존 `apps/desktop/src/renderer` UI를 그대로 사용합니다. 환경변수 `NIHONGO_DESKTOP_UI=web`을 지정하면 `apps/web` Vite 빌드를 `app://nihongo/` 프로토콜로 불러옵니다.
+
+```
+npm run desktop:web
+```
+
+위 명령은 웹 앱을 빌드한 뒤 `NIHONGO_DESKTOP_UI=web`으로 Electron을 실행합니다. 직접 실행하려면 `npm run web:build` 후 `set NIHONGO_DESKTOP_UI=web`(PowerShell은 `$env:NIHONGO_DESKTOP_UI="web"`) 설정하고 `npm start`를 실행하세요. `apps/web/dist`가 없으면 오류 대화상자가 표시됩니다.
+
+- 이 모드에서는 계정/동기화와 AI 문장 분석 UI가 숨겨지고 Supabase는 초기화되지 않습니다.
+- 데이터는 Chromium 프로필(`user-data/`)의 IndexedDB에 저장되며 origin `app://nihongo`에 묶입니다. 이 origin은 바꾸면 안 됩니다.
+- `npm run build`(Windows 빌드)는 웹 앱을 먼저 빌드하여 `apps/web/dist`를 패키지에 포함합니다.
+
+
 데이터 저장 위치
 ----------------
 

@@ -170,7 +170,16 @@ function restorePortableData() {
   fs.rmSync(preserveDir, { recursive: true, force: true });
 }
 
+function buildWebUi() {
+  // The packaged app can load the web UI (NIHONGO_DESKTOP_UI=web), so apps/web/dist must exist.
+  const result = spawnSync("npm", ["run", "web:build"], { cwd: rootDir, env: process.env, stdio: "inherit", shell: true });
+  if (result.status !== 0) {
+    process.exit(result.status || 1);
+  }
+}
+
 function run() {
+  buildWebUi();
   const currentSchemaHash = hash(fs.readFileSync(schemaPath));
   removeRootBuildArtifacts();
   preservePortableData();

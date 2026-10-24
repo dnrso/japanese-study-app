@@ -47,7 +47,10 @@ import {
   submitQuizChoice as submitQuizChoiceImpl,
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
 } from "./quiz.js";
+import { isDesktopApp } from "./platform.js";
+import { applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
 import {
+  createDisabledSync,
   createSync,
   createSyncCoordinator,
   createSyncingStorage,
@@ -62,11 +65,18 @@ import {
 const baseStore = createIdbStorage({
   seedState: () => createSampleState(todayKey)
 });
-const sync = createSync({ storage: baseStore, mergeSnapshots: (current, imported) => core.mergeBackupData(current, imported, selectedDate || todayKey()) });
+const desktopApp = isDesktopApp();
+// Desktop has no account/sync: use a permanently disabled sync and the plain
+// idb storage (no syncing wrapper), so nothing ever reaches Supabase.
+const sync = desktopApp
+  ? createDisabledSync()
+  : createSync({ storage: baseStore, mergeSnapshots: (current, imported) => core.mergeBackupData(current, imported, selectedDate || todayKey()) });
 let syncCoordinator;
-const store = createSyncingStorage(baseStore, {
-  scheduleSync: () => syncCoordinator?.schedule()
-});
+const store = desktopApp
+  ? baseStore
+  : createSyncingStorage(baseStore, {
+    scheduleSync: () => syncCoordinator?.schedule()
+  });
 const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
@@ -860,7 +870,7 @@ function renderDate() {
 }
 
 function renderToc(pageId) {
-  const tocItems = tocByPage[pageId] || [];
+  const tocItems = filterTocForPlatform(tocByPage[pageId] || [], desktopApp);
   byId("tocList").innerHTML = tocItems.map((item, index) => `
     <a class="toc-item ${index === 0 ? "active" : ""}" href="#${item[0]}">
       <span>${item[1]}</span>
@@ -1662,6 +1672,9 @@ function applyMobileAdSlotVisibility() {
 
 async function start() {
   renderAppShell(byId);
+  if (desktopApp) {
+    applyDesktopGating();
+  }
   applyMobileAdSlotVisibility();
   bindEvents();
   try {
@@ -1682,6 +1695,9 @@ async function start() {
     return;
   }
 
+  if (desktopApp) {
+    return;
+  }
   wireAuthChange(syncCtx());
   wireAuthCallback(syncCtx());
 }

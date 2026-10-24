@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld("appInfo", {
   name: "NihonGo Study"
 });
 
+contextBridge.exposeInMainWorld("desktopBridge", {
+  platform: "electron"
+});
+
 contextBridge.exposeInMainWorld("studyData", {
   getState: studyDate => ipcRenderer.invoke(dataChannels.getState, studyDate),
   saveStudyLog: studyLog => ipcRenderer.invoke(dataChannels.saveStudyLog, studyLog),
