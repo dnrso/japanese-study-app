@@ -37,6 +37,24 @@ export function createSync({ storage, mergeSnapshots }) {
   return createSupabaseSync({ storage, mergeSnapshots });
 }
 
+// Sync stand-in for the desktop app: same surface as createSupabaseSync() but
+// permanently disabled, so no Supabase client is ever created.
+export function createDisabledSync() {
+  return {
+    isEnabled: false,
+    getSession: async () => null,
+    onAuthChange: callback => {
+      Promise.resolve().then(() => callback(null));
+      return () => {};
+    },
+    syncNow: async () => ({ skipped: true, reason: "disabled" }),
+    signInWithGoogle: async () => ({ skipped: true, reason: "disabled" }),
+    handleAuthCallback: async () => ({ skipped: true, reason: "disabled" }),
+    signOut: async () => ({ skipped: true, reason: "disabled" }),
+    invokeFunction: async () => ({ skipped: true, reason: "disabled" })
+  };
+}
+
 export function createSyncCoordinator(options) {
   return createSyncCoordinatorImpl(options);
 }

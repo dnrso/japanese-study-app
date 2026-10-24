@@ -14,6 +14,7 @@
     "build": "node apps/desktop/scripts/build-windows.js",
     "web:dev": "npm --workspace @nihongo-study/web run dev --",
     "web:build": "npm run build --workspace @nihongo-study/web",
+    "desktop:web": "npm run web:build && node scripts/desktop-web.mjs",
     "web:preview": "npm --workspace @nihongo-study/web run preview --",
     "android:sync": "npm run web:build && npm --workspace @nihongo-study/web run cap:sync",
     "android:open": "npm --workspace @nihongo-study/web run cap:open",
@@ -30,6 +31,7 @@
     "files": [
       "apps/desktop/src/**/*",
       "apps/desktop/package.json",
+      "apps/web/dist/**/*",
       "packages/**/*",
       "package.json"
     ],
