@@ -339,6 +339,7 @@ npm run desktop:web
 위 명령은 웹 앱을 빌드한 뒤 `NIHONGO_DESKTOP_UI=web`으로 Electron을 실행합니다. 직접 실행하려면 `npm run web:build` 후 `set NIHONGO_DESKTOP_UI=web`(PowerShell은 `$env:NIHONGO_DESKTOP_UI="web"`) 설정하고 `npm start`를 실행하세요. `apps/web/dist`가 없으면 오류 대화상자가 표시됩니다.
 
 - 이 모드에서는 계정/동기화와 AI 문장 분석 UI가 숨겨지고 Supabase는 초기화되지 않습니다.
+- 설정 페이지에 데스크톱 전용 "VOICEVOX 음성" 섹션이 표시됩니다. 엔진 URL(기본 `http://127.0.0.1:50021`, 로컬 주소만 허용, `user-data/tts.json`에 저장), 연결 상태 확인, speaker/재생 속도 선택, 테스트 재생을 지원합니다. 스피커 버튼은 VOICEVOX 엔진이 실행 중이면 VOICEVOX로, 연결할 수 없으면 브라우저 음성(SpeechSynthesis)으로 대체 재생됩니다.
 - 데이터는 Chromium 프로필(`user-data/`)의 IndexedDB에 저장되며 origin `app://nihongo`에 묶입니다. 이 origin은 바꾸면 안 됩니다.
 - `npm run build`(Windows 빌드)는 웹 앱을 먼저 빌드하여 `apps/web/dist`를 패키지에 포함합니다.
 

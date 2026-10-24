@@ -20,12 +20,29 @@ const dataChannels = {
   getPaths: "data:get-paths"
 };
 
+// Duplicated from ttsChannels.js: a sandboxed preload cannot require local
+// files. tests/desktop-tts-preload.test.js guards against drift.
+const ttsChannels = {
+  voicevoxSpeakers: "tts:voicevox-speakers",
+  voicevoxSynthesize: "tts:voicevox-synthesize",
+  voicevoxHealth: "tts:voicevox-health",
+  getConfig: "tts:get-config",
+  setConfig: "tts:set-config"
+};
+
 contextBridge.exposeInMainWorld("appInfo", {
   name: "NihonGo Study"
 });
 
 contextBridge.exposeInMainWorld("desktopBridge", {
-  platform: "electron"
+  platform: "electron",
+  tts: {
+    speakers: () => ipcRenderer.invoke(ttsChannels.voicevoxSpeakers),
+    synthesize: payload => ipcRenderer.invoke(ttsChannels.voicevoxSynthesize, payload),
+    health: () => ipcRenderer.invoke(ttsChannels.voicevoxHealth),
+    getConfig: () => ipcRenderer.invoke(ttsChannels.getConfig),
+    setConfig: config => ipcRenderer.invoke(ttsChannels.setConfig, config)
+  }
 });
 
 contextBridge.exposeInMainWorld("studyData", {
@@ -49,6 +66,6 @@ contextBridge.exposeInMainWorld("studyData", {
 });
 
 contextBridge.exposeInMainWorld("ttsApi", {
-  getVoicevoxSpeakers: () => ipcRenderer.invoke("tts:voicevox-speakers"),
-  synthesizeVoicevox: payload => ipcRenderer.invoke("tts:voicevox-synthesize", payload)
+  getVoicevoxSpeakers: () => ipcRenderer.invoke(ttsChannels.voicevoxSpeakers),
+  synthesizeVoicevox: payload => ipcRenderer.invoke(ttsChannels.voicevoxSynthesize, payload)
 });

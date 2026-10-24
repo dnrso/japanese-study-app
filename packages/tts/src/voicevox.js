@@ -50,8 +50,8 @@ export function createVoicevoxClient(options = {}) {
 }
 
 export function voicevoxSpeakerOptions(speakers = []) {
-  return speakers.flatMap(speaker =>
-    (speaker.styles || [])
+  return (Array.isArray(speakers) ? speakers : []).flatMap(speaker =>
+    (speaker?.styles || [])
       .filter(style => !style.type || style.type === "talk")
       .map(style => ({
         id: String(style.id),

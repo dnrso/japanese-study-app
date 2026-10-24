@@ -19,6 +19,14 @@ export function applyDesktopGating(root = document) {
   }
 }
 
+// Entries that exist only on desktop, inserted after the given toc id.
+const DESKTOP_ONLY_TOC = [{ after: "settings-tts", item: ["settings-voicevox", "VOICEVOX 음성", ""] }];
+
 export function filterTocForPlatform(tocItems, desktop) {
-  return desktop ? tocItems.filter(item => !DESKTOP_HIDDEN_TOC_IDS.has(item[0])) : tocItems;
+  if (!desktop) return tocItems;
+  const visible = tocItems.filter(item => !DESKTOP_HIDDEN_TOC_IDS.has(item[0]));
+  return DESKTOP_ONLY_TOC.reduce((items, extra) => {
+    const index = items.findIndex(item => item[0] === extra.after);
+    return index < 0 ? items : [...items.slice(0, index + 1), extra.item, ...items.slice(index + 1)];
+  }, visible);
 }
