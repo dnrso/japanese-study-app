@@ -16,6 +16,7 @@ Thumbs.db
 /appicon.png
 
 # Claude Code local project config (not synced to GitHub)
+CLAUDE.md
 .claude/
 
 # Android (Capacitor)
