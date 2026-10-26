@@ -1,4 +1,4 @@
-// The canonical storage adapter contract.
+// The storage adapter contract, used only by the tests.
 //
 // @nihongo-study/storage-idb (web, Android and the desktop web UI) is the only
 // adapter and must satisfy this contract; `tests/storage-conformance.test.js`
@@ -84,8 +84,6 @@ const storageContract = [
 // contract so a new method can only be declared in one place.
 const storageMethodNames = storageContract.map(entry => entry.name);
 
-const storagePathKeys = ["appDataDir", "exportsDir", "backupsDir", "dbPath"];
-
 const storageStateShape = {
   required: ["selectedDate", "studyLog", "studyDays", "dailyEntries", "allDailyEntries", "tasks", "items"],
   optional: [],
@@ -121,31 +119,17 @@ function assertStorageAdapter(store, { strict = false } = {}) {
     if (undeclared.length > 0) {
       throw new TypeError(
         `Storage adapter exposes methods that the contract does not declare: ${undeclared.join(", ")}. ` +
-        "Add them to storageContract in packages/storage/src/index.js (and to the conformance suite) or keep them private."
+        "Add them to storageContract in tests/helpers/storageContract.js (and to the conformance suite) or keep them private."
       );
     }
   }
 
-  if (!store.paths || typeof store.paths !== "object") {
-    throw new TypeError("Storage adapter must expose a paths object.");
-  }
-
-  storagePathKeys.forEach(name => {
-    if (typeof store.paths[name] !== "string") {
-      throw new TypeError(`Storage adapter paths.${name} must be a string.`);
-    }
-    if (!store.paths[name]) {
-      throw new TypeError(`Storage adapter paths.${name} must be a non-empty string.`);
-    }
-  });
-
   return store;
 }
 
-module.exports = {
+export {
   storageContract,
   storageMethodNames,
-  storagePathKeys,
   storageStateShape,
   assertStorageAdapter
 };

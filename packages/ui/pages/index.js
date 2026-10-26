@@ -8,4 +8,4 @@ export { renderKanjiPage } from "./kanji.js";
 export { renderKanjiQuizPage, renderSentenceQuizPage, renderWordQuizPage } from "./quiz.js";
 export { renderReviewPage } from "./review.js";
 export { renderStatsPage } from "./stats.js";
-export { renderQuizSettingsPage, renderStoragePathsPage } from "./settings.js";
+export { renderQuizSettingsPage } from "./settings.js";

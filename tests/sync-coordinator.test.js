@@ -184,7 +184,6 @@ describe("createSyncingStorage", () => {
     const scheduleSync = vi.fn();
     const error = new Error("write failed");
     const storage = {
-      paths: { appDataDir: "idb", exportsDir: "downloads", backupsDir: "downloads", dbPath: "idb" },
       getState: vi.fn().mockResolvedValue({}),
       addTask: vi.fn().mockResolvedValue({ tasks: [] }),
       upsertItem: vi.fn().mockRejectedValue(error)

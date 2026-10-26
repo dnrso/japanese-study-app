@@ -70,13 +70,6 @@ export function createIdbStorage(options = {}) {
   const sampleState = seedState || createSampleState;
   let dbPromise = null;
 
-  const paths = {
-    appDataDir: "IndexedDB",
-    exportsDir: "Browser download",
-    backupsDir: "Browser download",
-    dbPath: dbName
-  };
-
   async function initDatabase() {
     const db = await getDb();
     const meta = await getValue("meta", "initialized");
@@ -439,7 +432,7 @@ export function createIdbStorage(options = {}) {
       tasks: pruneStaleTombstones(await getAll("tasks")),
       items: pruneStaleTombstones(await getAll("items"))
     };
-    return { ...paths, data };
+    return { data };
   }
 
   async function importCsvExports(importData = null, studyDate = todayKey()) {
@@ -639,8 +632,7 @@ export function createIdbStorage(options = {}) {
     importCsvExports,
     importFullBackup,
     applyRemoteSnapshot,
-    close,
-    paths
+    close
   };
   return storage;
 }

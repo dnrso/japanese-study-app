@@ -1,11 +1,11 @@
 // Behavioral conformance suite for the storage adapter contract.
 //
 // Runs against storage-idb (the only adapter) on fake-indexeddb, driven off
-// `storageContract` in packages/storage. `assertStorageAdapter`'s typeof-only
+// `storageContract` in tests/helpers/storageContract.js. `assertStorageAdapter`'s typeof-only
 // check cannot see any of this.
 //
 // Observed behavior worth knowing (each is asserted below):
-//   - exportData() returns { appDataDir, exportsDir, backupsDir, dbPath, data };
+//   - exportData() returns { data };
 //     nothing is written to disk (the browser download is the host's job).
 //   - getState() returns whole records (createdAt/updatedAt/deletedAt present,
 //     no parsedJson) and full study-day records including `note`.
@@ -23,19 +23,16 @@
 // `sharedChildRecords` assertion below guards the parsed output.
 import "fake-indexeddb/auto";
 import { describe, it, expect, vi } from "vitest";
-import { createRequire } from "node:module";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import { createSampleState, missingDailyEntryMessage } from "@nihongo-study/storage-core";
 import { mergeBackupData } from "../packages/core/src/index.js";
 
-const require = createRequire(import.meta.url);
-const {
+import {
   storageContract,
   storageMethodNames,
-  storagePathKeys,
   storageStateShape,
   assertStorageAdapter
-} = require("../packages/storage/src/index.js");
+} from "./helpers/storageContract.js";
 
 const studyDate = "2026-07-06";
 const pastDate = "2020-01-05";
@@ -126,21 +123,17 @@ describe("storage contract", () => {
     expect(storageStateShape.required).toContain("allDailyEntries");
     expect(storageStateShape.arrays).toContain("allDailyEntries");
     expect(storageStateShape.optional).not.toContain("allDailyEntries");
-    expect(storagePathKeys).toEqual(["appDataDir", "exportsDir", "backupsDir", "dbPath"]);
   });
 
-  it("assertStorageAdapter rejects missing methods, bad arity, bad paths and undeclared methods", () => {
+  it("assertStorageAdapter rejects missing methods, bad arity and undeclared methods", () => {
     const stub = {};
     storageMethodNames.forEach(name => {
       stub[name] = () => ({});
     });
-    stub.paths = { appDataDir: "a", exportsDir: "b", backupsDir: "c", dbPath: "d" };
 
     expect(() => assertStorageAdapter(stub)).not.toThrow();
     expect(() => assertStorageAdapter(null)).toThrow(/must be an object/);
     expect(() => assertStorageAdapter({ ...stub, getState: undefined })).toThrow(/missing methods: getState/);
-    expect(() => assertStorageAdapter({ ...stub, paths: { ...stub.paths, dbPath: 1 } })).toThrow(/paths\.dbPath must be a string/);
-    expect(() => assertStorageAdapter({ ...stub, paths: { ...stub.paths, dbPath: "" } })).toThrow(/non-empty/);
     // The check the old typeof-only version could not make: a method that
     // demands more arguments than the contract's canonical signature.
     expect(() => assertStorageAdapter({ ...stub, deleteItem: (a, b, c) => ({ a, b, c }) }))
@@ -188,7 +181,6 @@ describe("storage conformance: storage-idb", () => {
       expect(typeof store[entry.name]).toBe("function");
       expect(store[entry.name].length).toBeLessThanOrEqual(entry.params.length);
     });
-    storagePathKeys.forEach(key => expect(store.paths[key]).toBeTruthy());
   });
 
   it("getState() returns the canonical state envelope", async () => {
@@ -815,9 +807,6 @@ describe("storage conformance: storage-idb", () => {
     await store.deleteDailyEntry(sentence.id, studyDate);
 
     const exported = await store.exportData();
-    expect(exported.appDataDir).toBeTruthy();
-    expect(exported.exportsDir).toBeTruthy();
-    expect(exported.backupsDir).toBeTruthy();
     ["selectedDate", "studyDays", "dailyEntries", "dailyEntryLinks", "tasks", "items"].forEach(key => {
       expect(exported.data).toHaveProperty(key);
     });
@@ -945,11 +934,11 @@ describe("storage conformance: storage-idb", () => {
     expect(exported.data).not.toHaveProperty("allDailyEntries");
   });
 
-  it("exportData() envelope carries the storage paths and the data", async () => {
+  it("exportData() envelope carries only the data", async () => {
     const { store } = await storeWithSentence();
     const exported = await store.exportData();
 
-    expect(exported).toHaveProperty("dbPath");
+    expect(Object.keys(exported)).toEqual(["data"]);
     expect(exported).toHaveProperty("data");
     expect(exported).not.toHaveProperty("sqlite");
     expect(exported).not.toHaveProperty("files");

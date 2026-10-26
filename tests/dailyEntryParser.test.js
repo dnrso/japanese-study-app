@@ -4,7 +4,7 @@
 // the canonical markdown/regex one in packages/storage-sqlite (used by the
 // since-removed Electron desktop renderer) and an inline reimplementation inside
 // packages/storage-idb (used by web/Android). They agreed exactly on the
-// canonical AI output format (see packages/ai/src/index.js's [출력 형식]) and
+// canonical AI output format (see supabase/functions/_shared/ai.js's [출력 형식]) and
 // diverged on every markdown-bulleted variant of it - including the shape
 // itemToRawText itself emits - so web users got corrupted cards where desktop
 // users did not. The parser now lives in packages/storage-core and both
@@ -20,7 +20,7 @@ import { createIdbStorage } from "@nihongo-study/storage-idb";
 
 // (a) The canonical AI output format: no bullets, meaning space-separated
 // after the reading, pipe-delimited 한자/품사/문자 metadata. Trimmed down
-// from the worked example in packages/ai/src/index.js.
+// from the worked example in supabase/functions/_shared/ai.js.
 const canonicalAiBlock = [
   "# 私なんか気に障ることしたかな…",
   "읽기 わたし なんか きに さわる こと したかな…",

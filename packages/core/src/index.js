@@ -15,7 +15,7 @@ export * from "./merge.js";
 // keep these three numbers in sync by hand with:
 //   - supabase/functions/analyze-sentence/index.ts's RATE_LIMIT_PER_MINUTE_MS
 //     (60_000ms = 1/min) and DAILY_LIMIT (100)
-//   - supabase/functions/_shared/ai.js / packages/ai/src/index.js's
+//   - supabase/functions/_shared/ai.js's
 //     maxSentenceLength (300)
 // The edge function can't import from this workspace package at runtime
 // (it's a separately-deployed Deno function), so a cross-reference comment
@@ -98,10 +98,6 @@ export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
     return "";
   }
   return scheduledReviewOptions.includes(value) ? value : "내일";
-}
-
-export function normalizeQuizCorrectReview(value, scheduledReviewOptions) {
-  return scheduledReviewOptions.includes(value) ? value : "";
 }
 
 export function reviewStatusText(item) {

@@ -1,6 +1,4 @@
-import { normalizeTtsRate } from "./settings.js";
-
-export const VOICEVOX_BASE_URL = "http://localhost:50021";
+const VOICEVOX_BASE_URL = "http://localhost:50021";
 
 export function createVoicevoxClient(options = {}) {
   const baseUrl = options.baseUrl || VOICEVOX_BASE_URL;
@@ -34,7 +32,7 @@ export function createVoicevoxClient(options = {}) {
 
       const queryResponse = await fetchVoicevox("/audio_query", { text, speaker }, { method: "POST" });
       const audioQuery = await queryResponse.json();
-      audioQuery.speedScale = normalizeTtsRate(payload.rate);
+      audioQuery.speedScale = normalizeRate(payload.rate);
 
       const synthesisResponse = await fetchVoicevox("/synthesis", { speaker }, {
         method: "POST",
@@ -49,6 +47,11 @@ export function createVoicevoxClient(options = {}) {
   };
 }
 
+function normalizeRate(rate) {
+  const value = Number(rate || 1);
+  return Number.isFinite(value) ? Math.min(2, Math.max(0.5, value)) : 1;
+}
+
 export function voicevoxSpeakerOptions(speakers = []) {
   return (Array.isArray(speakers) ? speakers : []).flatMap(speaker =>
     (speaker?.styles || [])
@@ -58,11 +61,4 @@ export function voicevoxSpeakerOptions(speakers = []) {
         label: `${speaker.name} / ${style.name} (#${style.id})`
       }))
   );
-}
-
-export function friendlyTtsErrorMessage(error) {
-  const message = error?.message || String(error);
-  return message.includes("Failed to fetch") || message.includes("fetch failed") || message.includes("ECONNREFUSED")
-    ? "VOICEVOX 엔진 연결에 실패했습니다. http://localhost:50021 실행 상태를 확인하세요."
-    : message;
 }

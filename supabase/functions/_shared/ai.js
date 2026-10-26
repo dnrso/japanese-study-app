@@ -1,12 +1,12 @@
-// Copied verbatim from packages/ai/src/index.js — keep in sync.
+// Source of truth for the Gemini sentence-analysis logic (this file is the
+// edge function's runtime; there is no other copy).
 // Deno-compatible ESM (uses only globalThis.fetch, no Node APIs).
 export const defaultGeminiModel = "gemini-3.5-flash-lite";
 export const geminiInteractionsEndpoint = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
-// Enforced input length cap (source of truth, copied verbatim into
-// supabase/functions/_shared/ai.js for the edge function). packages/core's
-// AI_ANALYSIS_LIMITS.maxChars is a display-only copy shown next to the
-// client's AI 문장 분석 checkbox - keep all three in sync by hand.
+// Enforced input length cap. packages/core's AI_ANALYSIS_LIMITS.maxChars is a
+// display-only copy shown next to the client's AI 문장 분석 checkbox - keep the
+// two in sync by hand.
 export const maxSentenceLength = 300;
 
 export const aiSentenceAnalysisMessages = Object.freeze({

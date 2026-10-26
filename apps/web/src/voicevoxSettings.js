@@ -18,7 +18,7 @@ export function loadVoicevoxPrefs(storage = globalThis.localStorage) {
   }
 }
 
-export function saveVoicevoxPrefs(prefs, storage = globalThis.localStorage) {
+function saveVoicevoxPrefs(prefs, storage = globalThis.localStorage) {
   try {
     storage.setItem(VOICEVOX_PREFS_KEY, JSON.stringify({
       speakerId: String(prefs.speakerId || ""),

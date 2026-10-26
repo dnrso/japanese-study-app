@@ -4,7 +4,7 @@
 // lives dependency-free in packages/core, so we import the real module
 // directly instead of re-implementing it.
 import { describe, it, expect } from "vitest";
-import { isSafeRecordId, mergeBackupData, parseBackupFile, unsafeRecordIds } from "../packages/core/src/index.js";
+import { backupData, isSafeRecordId, mergeBackupData, parseBackupFile, unsafeRecordIds } from "../packages/core/src/index.js";
 
 describe("mergeBackupData (LWW merge)", () => {
   it("(a) newer local tombstone survives over older remote live copy", () => {
@@ -148,6 +148,20 @@ describe("record id validation on import", () => {
   it("parseBackupFile still accepts a well-formed backup", () => {
     const text = JSON.stringify({ data: { items: [{ id: "word-1", kind: "word", title: "水" }] } });
     expect(() => parseBackupFile(text)).not.toThrow();
+  });
+
+  it("parseBackupFile accepts an old-style envelope that still carries the storage path keys", () => {
+    const text = JSON.stringify({
+      format: "nihongo-study-backup",
+      version: 1,
+      appDataDir: "IndexedDB",
+      exportsDir: "Browser download",
+      backupsDir: "Browser download",
+      dbPath: "nihongo-study",
+      data: { items: [{ id: "word-1", kind: "word", title: "水" }] }
+    });
+    const backup = parseBackupFile(text);
+    expect(backupData(backup).items).toHaveLength(1);
   });
 
   it("mergeBackupData rejects the imported side (this is the Supabase sync path)", () => {

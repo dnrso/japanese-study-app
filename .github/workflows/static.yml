@@ -9,10 +9,10 @@ on:
       - "apps/web/**"
       - "packages/core/**"
       - "packages/ui/**"
-      - "packages/ai/**"
       - "packages/storage-idb/**"
       - "packages/storage-core/**"
       - "packages/sync/**"
+      - "packages/tts/**"
       - ".github/workflows/static.yml"
       - "package*.json"
 
@@ -21,10 +21,10 @@ on:
       - "apps/web/**"
       - "packages/core/**"
       - "packages/ui/**"
-      - "packages/ai/**"
       - "packages/storage-idb/**"
       - "packages/storage-core/**"
       - "packages/sync/**"
+      - "packages/tts/**"
       - ".github/workflows/static.yml"
       - "package*.json"
 

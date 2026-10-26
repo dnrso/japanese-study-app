@@ -41,14 +41,3 @@ export const manualEntryPlaceholders = {
   grammar: "`したかな` 동사 'する'의 과거형 'した'에 의문을 나타내는 종조사 'かな'가 붙어, 자신의 행동을 되돌아보며 자문하는 뉘앙스를 나타냅니다.",
   expression: "`お疲れさまです` (おつかれさまです) 수고하셨습니다. 직장이나 모임에서 인사, 감사, 마무리 인사로 넓게 쓰는 표현입니다."
 };
-
-export const uiConfig = {
-  tocByPage,
-  kindLabels,
-  badgeClassByKind,
-  reviewOptions,
-  scheduledReviewOptions,
-  partOptions,
-  scriptOptions,
-  manualEntryPlaceholders
-};

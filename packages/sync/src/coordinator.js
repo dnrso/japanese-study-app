@@ -1,4 +1,4 @@
-export const syncMutationMethods = Object.freeze([
+const syncMutationMethods = Object.freeze([
   "saveStudyLog",
   "addDailyEntry",
   "deleteDailyEntry",
