@@ -48,7 +48,6 @@ import {
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
 } from "./quiz.js";
 import { isDesktopApp } from "./platform.js";
-import { runDesktopMigration } from "./desktopMigration.js";
 import { applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
 import {
   createBrowserProvider,
@@ -1701,11 +1700,6 @@ async function start() {
   bindEvents();
   try {
     await store.initDatabase();
-    if (desktopApp) {
-      // Before the first getState()/render, so the UI never shows (or edits)
-      // data that the legacy import is about to replace.
-      await runDesktopMigration({ bridge: window.desktopBridge, store, today: todayKey() });
-    }
     state = await store.getState(selectedDate);
     selectedDate = state.selectedDate;
     calendarMonth = selectedDate.slice(0, 7);

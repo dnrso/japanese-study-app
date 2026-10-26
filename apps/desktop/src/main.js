@@ -1,7 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain, protocol } = require("electron");
 const path = require("path");
 const { registerTtsHandlers } = require("./ttsHandlers");
-const { createLegacyMigration, registerMigrationHandlers } = require("./legacyMigration");
 const {
   APP_SCHEME,
   APP_ENTRY_URL,
@@ -39,26 +38,22 @@ function appBaseDir() {
     : path.resolve(__dirname, "..", "..", "..");
 }
 
-// NIHONGO_PORTABLE_ROOT (developer/testing option) relocates user-data and
-// app-data under the given directory instead of next to the executable / repo
-// root, so a test run never touches real study data.
+// NIHONGO_PORTABLE_ROOT (developer/testing option) relocates user-data under
+// the given directory instead of next to the executable / repo root, so a test
+// run never touches real study data.
 function configurePortablePaths(env = process.env) {
   const override = String(env.NIHONGO_PORTABLE_ROOT || "").trim();
   const baseDir = override ? path.resolve(override) : appBaseDir();
   const userDataDir = path.join(baseDir, "user-data");
   app.setPath("userData", userDataDir);
   app.setPath("sessionData", userDataDir);
-  process.env.NIHONGO_APP_DATA_DIR = path.join(baseDir, "app-data");
-  return { userDataDir, appDataDir: process.env.NIHONGO_APP_DATA_DIR };
+  return { userDataDir };
 }
 
-const portablePaths = configurePortablePaths();
+configurePortablePaths();
 
 app.whenReady().then(() => {
   registerTtsHandlers(ipcMain);
-  // The web UI keeps its data in IndexedDB; the old SQLite file is only read
-  // (never written) by the one-time migration.
-  registerMigrationHandlers(ipcMain, createLegacyMigration(portablePaths));
   const distRoot = webDistRoot();
   if (!webDistExists(distRoot)) {
     dialog.showErrorBox(

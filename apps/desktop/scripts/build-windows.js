@@ -6,11 +6,8 @@ const desktopDir = path.resolve(__dirname, "..");
 const rootDir = path.resolve(desktopDir, "..", "..");
 const distDir = path.join(rootDir, "dist");
 const unpackedDir = path.join(distDir, "win-unpacked");
-const appDataDir = path.join(unpackedDir, "app-data");
 const userDataDir = path.join(unpackedDir, "user-data");
-const legacyAppDataDir = path.join(distDir, "app-data");
 const preserveDir = path.join(rootDir, ".portable-data-preserve");
-const preservedAppDataDir = path.join(preserveDir, "app-data");
 const preservedUserDataDir = path.join(preserveDir, "user-data");
 const builderCliPath = path.join(rootDir, "node_modules", "electron-builder", "cli.js");
 
@@ -22,37 +19,6 @@ function removeRootBuildArtifacts() {
   fs.readdirSync(distDir, { withFileTypes: true })
     .filter(entry => entry.isFile())
     .forEach(entry => fs.rmSync(path.join(distDir, entry.name), { force: true }));
-}
-
-function assertDataFilesReadable(dataDir) {
-  if (!fs.existsSync(dataDir)) {
-    return;
-  }
-
-  const lockedFiles = fs.readdirSync(dataDir)
-    .filter(name => name.startsWith("nihongo.sqlite"))
-    .filter(name => {
-      const filePath = path.join(dataDir, name);
-      let handle;
-      try {
-        handle = fs.openSync(filePath, "r");
-        const buffer = Buffer.alloc(1);
-        fs.readSync(handle, buffer, 0, 1, 0);
-        return false;
-      } catch {
-        return true;
-      } finally {
-        if (handle !== undefined) {
-          fs.closeSync(handle);
-        }
-      }
-    });
-
-  if (lockedFiles.length > 0) {
-    throw new Error(
-      `Close NihonGo Study before building. Locked data files: ${lockedFiles.join(", ")}`
-    );
-  }
 }
 
 function copyDirectory(sourceDir, targetDir) {
@@ -80,17 +46,6 @@ function copyDirectory(sourceDir, targetDir) {
 function preservePortableData() {
   fs.rmSync(preserveDir, { recursive: true, force: true });
 
-  const sourceAppDataDir = fs.existsSync(appDataDir)
-    ? appDataDir
-    : fs.existsSync(legacyAppDataDir)
-      ? legacyAppDataDir
-      : "";
-  if (sourceAppDataDir) {
-    assertDataFilesReadable(sourceAppDataDir);
-    fs.mkdirSync(preserveDir, { recursive: true });
-    copyDirectory(sourceAppDataDir, preservedAppDataDir);
-  }
-
   if (fs.existsSync(userDataDir)) {
     fs.mkdirSync(preserveDir, { recursive: true });
     copyDirectory(userDataDir, preservedUserDataDir);
@@ -98,10 +53,6 @@ function preservePortableData() {
 }
 
 function restorePortableData() {
-  if (fs.existsSync(preservedAppDataDir)) {
-    fs.rmSync(appDataDir, { recursive: true, force: true });
-    copyDirectory(preservedAppDataDir, appDataDir);
-  }
   if (fs.existsSync(preservedUserDataDir)) {
     fs.rmSync(userDataDir, { recursive: true, force: true });
     copyDirectory(preservedUserDataDir, userDataDir);
@@ -136,10 +87,9 @@ function run() {
   }
 
   restorePortableData();
-  fs.mkdirSync(appDataDir, { recursive: true });
   removeRootBuildArtifacts();
   console.log(`Windows unpacked build created at ${unpackedDir}`);
-  console.log(`Portable app data is stored inside the app folder at ${appDataDir}`);
+  console.log(`Portable user data is stored inside the app folder at ${userDataDir}`);
 }
 
 run();

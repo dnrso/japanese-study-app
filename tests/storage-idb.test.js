@@ -6,7 +6,7 @@
 // store, and deleteItem soft-delete parity.
 import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach } from "vitest";
-import { createIdbStorage, isPristine } from "@nihongo-study/storage-idb";
+import { createIdbStorage } from "@nihongo-study/storage-idb";
 
 const studyDate = "2026-07-06";
 
@@ -257,43 +257,5 @@ describe("storage-idb (fake-indexeddb)", () => {
     const retry = await storage.registerDailyEntries([word.id], studyDate);
     expect(retry.result.errors).toEqual([]);
     expect(retry.result.registered).toEqual(expect.arrayContaining(["단어: 単語", "한자: 単"]));
-  });
-});
-
-describe("storage-idb isPristine()", () => {
-  const seed = () => ({
-    selectedDate: "2026-07-06",
-    items: [{ id: "seed-item", kind: "word", title: "種", meaning: "씨앗" }]
-  });
-
-  it("is true for an empty database and for the untouched first-run seed, false after any change", async () => {
-    const name = `pristine-${Math.random().toString(16).slice(2)}`;
-    const empty = createIdbStorage({ dbName: `${name}-empty` });
-    await empty.initDatabase();
-    expect(await isPristine(empty)).toBe(true);
-
-    const first = createIdbStorage({ dbName: name, seedState: seed });
-    await first.initDatabase();
-    expect(await isPristine(first)).toBe(true);
-    await first.close();
-
-    // A later session on the same database: still the untouched sample.
-    const second = createIdbStorage({ dbName: name, seedState: seed });
-    await second.initDatabase();
-    expect(await isPristine(second)).toBe(true);
-
-    await second.addTask({ id: "t1", title: "할 일", studyDate: "2026-07-06" });
-    expect(await isPristine(second)).toBe(false);
-  });
-
-  it("reports edits and re-seeds as not pristine", async () => {
-    const store = createIdbStorage({ dbName: `pristine-edit-${Math.random().toString(16).slice(2)}`, seedState: seed });
-    await store.initDatabase();
-    await store.upsertItem({ id: "seed-item", kind: "word", title: "種", meaning: "변경됨" });
-    expect(await isPristine(store)).toBe(false);
-
-    // resetSampleData() re-seeds without a snapshot: conservatively not pristine.
-    await store.resetSampleData();
-    expect(await isPristine(store)).toBe(false);
   });
 });
