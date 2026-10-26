@@ -20,8 +20,12 @@
     font-size: 18px;
   }
 
-  .panel.welcome h1 {
-    font-size: 26px;
+  .home-summary h1 {
+    font-size: 22px;
+  }
+
+  .home-sentence-title {
+    font-size: 22px;
   }
 
   .search {

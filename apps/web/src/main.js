@@ -574,12 +574,6 @@ function renderHome() {
     overview: core.homeOverview(state, searchTerm),
     helpers: renderHelpers()
   }));
-  applyPagePatch({
-    text: {
-      reviewedWordCount: `${core.reviewedTodayCount(state.items, "word", selectedDate)}개`,
-      reviewedKanjiCount: `${core.reviewedTodayCount(state.items, "kanji", selectedDate)}개`
-    }
-  });
   renderHomeSentence();
 }
 

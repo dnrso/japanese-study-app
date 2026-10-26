@@ -1,4 +1,4 @@
-export { homeSentencePanel, homeWelcomePanel, renderHomePage, renderHomeSentencePanel, renderQuickFiltersPage, renderTasksPage } from "./home.js";
+export { homeProgressPanel, homeSentencePanel, homeSummaryPanel, renderHomePage, renderHomeSentencePanel, renderQuickFiltersPage, renderTasksPage } from "./home.js";
 export { renderCalendarPage, renderLearnedSectionsPage, renderTodayPage, sentenceEntryPanel } from "./today.js";
 export { renderSourcesPage, safeSourceUrl } from "./sources.js";
 export { renderSentencesPage } from "./sentences.js";

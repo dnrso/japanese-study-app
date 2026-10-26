@@ -53,8 +53,67 @@
   height: 24px;
   min-height: 24px;
   padding: 0;
-  font-size: 13px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
   line-height: 1;
+}
+
+.home-sentence-title {
+  margin: 0;
+  padding: 6px 0 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.home-sentence-title .speaker-btn {
+  width: 32px;
+  height: 32px;
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+.home-sentence-details {
+  border-top: 1px solid var(--line);
+}
+
+.home-sentence-details summary {
+  width: fit-content;
+  margin-top: 10px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.home-sentence-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.home-sentence-details summary:hover,
+.home-sentence-details[open] summary {
+  border-color: rgba(63, 129, 98, 0.38);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.home-sentence-details .daily-reading-meaning {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.home-sentence-details .daily-reading-meaning p {
+  margin-bottom: 0;
+  font-size: 14px;
 }
 
 .today-top-grid {
@@ -400,7 +459,7 @@
   width: 20px;
   height: 20px;
   min-height: 20px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .grammar-candidate-list {

@@ -1,6 +1,8 @@
 import {
+  homeProgressPanel,
   homeSentencePanel,
-  homeWelcomePanel,
+  homeSummaryPanel,
+  icon,
   manualEntryPlaceholders,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
@@ -43,7 +45,7 @@ export function renderAppShell(byId) {
         </nav>
 
         <label class="search" aria-label="전체 검색">
-          <span>⌕</span>
+          <span class="search-icon">${icon("search")}</span>
           <input id="globalSearch" placeholder="단어, 문법, 표현, 자료 검색" />
           <span class="shortcut">Ctrl K</span>
         </label>
@@ -107,17 +109,13 @@ function homePageTemplate() {
   return `
     <section class="page" id="home">
       <div class="hero" id="home-overview">
-        ${homeWelcomePanel()}
-        ${homeSentencePanel()}
+        ${homeSummaryPanel()}
+        ${homeProgressPanel()}
       </div>
 
-      <div class="stat-grid" id="home-stats">
-        <div class="stat-card"><div class="stat-label">오늘 공부 항목</div><div class="stat-value" id="todayDoneCount">0개</div><div class="stat-note">완료한 할 일 기준</div></div>
-        <div class="stat-card"><div class="stat-label">새 항목</div><div class="stat-value" id="newItemCount">0개</div><div class="stat-note">단어 · 문법 · 표현 · 한자</div></div>
-        <div class="stat-card"><div class="stat-label">복습 항목</div><div class="stat-value" id="reviewItemCount">0개</div><div class="stat-note">오늘/대기 복습 대상</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 복습한 단어</div><div class="stat-value" id="reviewedWordCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 복습한 한자</div><div class="stat-value" id="reviewedKanjiCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
-      </div>
+      ${homeSentencePanel()}
+
+      <div class="stat-grid" id="home-stats"></div>
 
       <div class="content-grid">
         <div>
@@ -142,7 +140,7 @@ function homePageTemplate() {
           <section class="panel section" id="home-queue">
             <div class="panel-header">
               <h2 class="panel-title">복습 큐</h2>
-              <button class="primary-btn" type="button" data-open-page="review">복습 보기</button>
+              <button class="ghost-btn" type="button" data-open-page="review">복습 보기</button>
             </div>
             <div class="table-scroll">
               <table class="table">
