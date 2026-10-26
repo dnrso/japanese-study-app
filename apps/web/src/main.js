@@ -36,7 +36,7 @@ import {
   scriptOptions,
   tocByPage
 } from "@nihongo-study/ui";
-import { createSampleState } from "../../../packages/storage-core/src/index.js";
+import { createSampleState, dateKey as toDateKey, todayKey } from "@nihongo-study/storage-core";
 import { escapeHtml, renderAppShell } from "./templates.js";
 import {
   emptyQuiz,
@@ -1022,7 +1022,7 @@ async function addDailyEntryFromInput() {
     // Only gate text that actually looks like an attempted structured
     // block (a "#" line, or a 읽기/해석 line) - plain single-line free text
     // is a legitimate existing quick-entry style handled fine by
-    // parseSentenceBlock (see core.looksLikeSentenceBlockAttempt) and must
+    // parseDailyEntry (see core.looksLikeSentenceBlockAttempt) and must
     // keep saving as before. The AI path is validated separately below
     // (server + core.hasValidSentenceBlockStructure on the AI's own
     // output), so this only runs for the manual/non-AI path.
@@ -1141,7 +1141,7 @@ async function addManualEntryFromInput() {
 }
 
 async function registerLearnedEntries() {
-  // Sentences are registerable too (they become 문장 items - D9), so the
+  // Sentences are registerable too (they become 문장 items), so the
   // button collects unregistered entries of every kind, not just the
   // word/grammar/expression children.
   const targets = dailyEntriesForSelectedDate().filter(entry => core.entryNeedsRegistration(entry));
@@ -1156,7 +1156,7 @@ async function registerLearnedEntries() {
   const linked = response.result.linked || [];
   const duplicates = response.result.duplicates || [];
   // errors was silently dropped here: the adapter reports per-entry failures
-  // (D13) and a missing entry id (D11), and this alert used to show only the
+  // (a failed write) and a missing entry id, and this alert used to show only the
   // registered/duplicate counts - so a partial failure looked like a success.
   // Desktop already listed all four; the shape now matches.
   const errors = response.result.errors || [];
@@ -1189,7 +1189,7 @@ async function promptAddItem(kind) {
     meaning,
     // No `level`: this used to stamp "N3" on every new item and "웹" on every
     // 자료, neither of which the user asked for. 레벨/난이도 is free text the user
-    // fills in from the edit dialog, so it starts empty (D8).
+    // fills in from the edit dialog, so it starts empty.
     part: kind === "word" ? "명사" : "",
     script: kind === "word" ? "한자+히라가나" : "",
     review: kind === "source" ? "" : "대기",
@@ -1595,17 +1595,6 @@ function nextId(prefix) {
     return `${prefix}-${globalThis.crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function toDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function todayKey() {
-  return toDateKey(new Date());
 }
 
 function highlight(value) {

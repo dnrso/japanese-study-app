@@ -1,7 +1,7 @@
 import { escapeHtml } from "./templates.js";
 import { voicevoxSpeakerOptions } from "@nihongo-study/tts";
 
-export const VOICEVOX_PREFS_KEY = "nihongo-web-voicevox-prefs";
+const VOICEVOX_PREFS_KEY = "nihongo-web-voicevox-prefs";
 const TEST_PHRASE = "こんにちは。VOICEVOXのテストです。";
 
 function clampRate(value) {

@@ -705,8 +705,7 @@ describe("storage conformance: storage-idb", () => {
     expect(registered.result.duplicates).toContain("한자: 単");
   });
 
-  // A sentence id registers a 문장 item, the one dailyEntryToItems' sentence
-  // branch in @nihongo-study/storage-core defines.
+  // A sentence id registers a 문장 item (part 문장, script 혼합).
   it("registerDailyEntries() registers a sentence entry as a 문장 item", async () => {
     const { store, sentence } = await storeWithSentence();
 

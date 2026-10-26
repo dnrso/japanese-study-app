@@ -10,7 +10,7 @@
 // worth pinning down is what that function actually returns.
 import "fake-indexeddb/auto";
 import { describe, it, expect } from "vitest";
-import { dailyEntryToItems, itemToRawText, parseDailyEntry, withKanjiItems } from "@nihongo-study/storage-core";
+import { itemToRawText, parseDailyEntry, withKanjiItems } from "@nihongo-study/storage-core";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 
 // (a) The canonical AI output format: no bullets, meaning space-separated
@@ -272,19 +272,6 @@ describe("note field", () => {
     // Word candidates carry no note of their own; storage-idb falls back to "".
     expect(parsed.words[0].note).toBeUndefined();
   });
-
-  it("dailyEntryToItems puts the raw text in the item note for a directly added entry", () => {
-    const parsed = parseDailyEntry("grammar", "`がいい` ~이 좋다");
-    const [item] = dailyEntryToItems("grammar", parsed);
-    expect(item).toMatchObject({
-      kind: "grammar",
-      title: "がいい",
-      meaning: "~이 좋다",
-      part: "문법",
-      script: "혼합",
-      note: "`がいい` ~이 좋다"
-    });
-  });
 });
 
 describe("itemToRawText round-trip", () => {
@@ -294,17 +281,6 @@ describe("itemToRawText round-trip", () => {
     expect(parsed.title).toBe("天気");
     expect(parsed.reading).toBe("てんき");
     expect(parsed.meaning).toBe("날씨");
-  });
-
-  it("does NOT recover 한자/품사/문자 from '- **한자**:' lines (known shared limitation)", () => {
-    // A bulleted re-parse loses these - the metadata is only
-    // read from the pipe form (`한자=...`). Pinned so that fixing it is a
-    // deliberate change rather than a silent drift.
-    const item = { title: "天気", reading: "てんき", meaning: "날씨", kanji: "天 (하늘 천)", part: "명사", script: "한자" };
-    const [reparsed] = dailyEntryToItems("word", parseDailyEntry("word", itemToRawText(item)));
-    expect(reparsed.kanji).toBe("");
-    expect(reparsed.part).toBe("");
-    expect(reparsed.script).toBe("");
   });
 });
 

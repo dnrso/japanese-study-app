@@ -13,12 +13,12 @@ function sentenceRawText(title, sections) {
   ].join("\n");
 }
 
-describe("storage-idb D17 daily-candidate deduplication", () => {
+describe("storage-idb daily-candidate deduplication", () => {
   let storage;
 
   beforeEach(async () => {
     storage = createIdbStorage({
-      dbName: `storage-idb-d17-${Math.random().toString(16).slice(2)}`
+      dbName: `storage-idb-dedup-${Math.random().toString(16).slice(2)}`
     });
     await storage.initDatabase();
   });

@@ -109,47 +109,6 @@ function inlineDescription(line) {
   return firstMatch(text(line), /`[^`]+`\s*(?:\([^)]+\))?\s*:?\s*(.+)$/).trim();
 }
 
-export function dailyEntryToItems(kind, parsed) {
-  if (kind === "sentence") {
-    return [
-      {
-        kind: "sentence",
-        title: parsed.title,
-        reading: parsed.reading,
-        meaning: parsed.meaning,
-        part: "문장",
-        script: "혼합",
-        note: parsed.note
-      }
-    ];
-  }
-
-  if (kind === "word") {
-    const inlineWord = parseWordLines(parsed.note || "")[0];
-    return [{
-      kind: "word",
-      title: parsed.title,
-      reading: parsed.reading,
-      meaning: parsed.meaning,
-      kanji: parsed.kanji || "",
-      part: parsed.part || "",
-      script: parsed.script || "",
-      note: parsed.note,
-      ...inlineWord
-    }];
-  }
-
-  if (kind === "grammar") {
-    return [{ kind: "grammar", title: parsed.title, reading: parsed.reading, meaning: parsed.meaning, part: "문법", script: "혼합", note: parsed.note }];
-  }
-
-  if (kind === "expression") {
-    return [{ kind: "expression", title: parsed.title, reading: parsed.reading, meaning: parsed.meaning, part: "표현", script: "혼합", note: parsed.note }];
-  }
-
-  return [];
-}
-
 export function withKanjiItems(items) {
   return items.flatMap(item => [item, ...kanjiItemsFromWord(item)]);
 }

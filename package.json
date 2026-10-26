@@ -2,7 +2,7 @@
   "name": "japanese-study-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron Japanese study app",
+  "description": "Japanese study app (web, Android, Windows desktop)",
   "main": "apps/desktop/src/main.js",
   "workspaces": [
     "apps/*",

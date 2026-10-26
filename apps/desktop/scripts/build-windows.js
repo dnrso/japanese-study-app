@@ -6,9 +6,9 @@ const desktopDir = path.resolve(__dirname, "..");
 const rootDir = path.resolve(desktopDir, "..", "..");
 const distDir = path.join(rootDir, "dist");
 const unpackedDir = path.join(distDir, "win-unpacked");
+const portableDataDirNames = ["user-data", "app-data"];
 const userDataDir = path.join(unpackedDir, "user-data");
 const preserveDir = path.join(rootDir, ".portable-data-preserve");
-const preservedUserDataDir = path.join(preserveDir, "user-data");
 const builderCliPath = path.join(rootDir, "node_modules", "electron-builder", "cli.js");
 
 function removeRootBuildArtifacts() {
@@ -43,35 +43,59 @@ function copyDirectory(sourceDir, targetDir) {
   });
 }
 
-function preservePortableData() {
-  fs.rmSync(preserveDir, { recursive: true, force: true });
-
-  if (fs.existsSync(userDataDir)) {
-    fs.mkdirSync(preserveDir, { recursive: true });
-    copyDirectory(userDataDir, preservedUserDataDir);
-  }
+function preservePortableData(sourceRoot = unpackedDir, targetRoot = preserveDir, dirNames = portableDataDirNames) {
+  // A leftover preserve dir from a failed run is only replaced per directory, and only
+  // when the live copy exists. Otherwise it is kept so restorePortableData can bring it back.
+  dirNames.forEach(name => {
+    const sourcePath = path.join(sourceRoot, name);
+    if (!fs.existsSync(sourcePath)) {
+      return;
+    }
+    const targetPath = path.join(targetRoot, name);
+    fs.rmSync(targetPath, { recursive: true, force: true });
+    copyDirectory(sourcePath, targetPath);
+  });
 }
 
-function restorePortableData() {
-  if (fs.existsSync(preservedUserDataDir)) {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
-    copyDirectory(preservedUserDataDir, userDataDir);
+function restorePortableData(sourceRoot = preserveDir, targetRoot = unpackedDir, dirNames = portableDataDirNames) {
+  dirNames.forEach(name => {
+    const preservedPath = path.join(sourceRoot, name);
+    if (!fs.existsSync(preservedPath)) {
+      return;
+    }
+    const targetPath = path.join(targetRoot, name);
+    fs.rmSync(targetPath, { recursive: true, force: true });
+    copyDirectory(preservedPath, targetPath);
+  });
+  // Only reached once every preserved directory has been copied back.
+  fs.rmSync(sourceRoot, { recursive: true, force: true });
+}
+
+function failBuild(status, message) {
+  if (message) {
+    console.error(message);
   }
-  fs.rmSync(preserveDir, { recursive: true, force: true });
+  try {
+    restorePortableData();
+  } catch (error) {
+    console.error(`Failed to restore portable data; it is kept in ${preserveDir}: ${error.message}`);
+  }
+  process.exit(status || 1);
 }
 
 function buildWebUi() {
   // The packaged app loads the web UI, so apps/web/dist must exist.
-  const result = spawnSync("npm", ["run", "web:build"], { cwd: rootDir, env: process.env, stdio: "inherit", shell: true });
+  // A single command string avoids Node DEP0190 (args array combined with shell: true).
+  const result = spawnSync("npm run web:build", { cwd: rootDir, env: process.env, stdio: "inherit", shell: true });
   if (result.status !== 0) {
-    process.exit(result.status || 1);
+    failBuild(result.status, result.error && result.error.message);
   }
 }
 
 function run() {
-  buildWebUi();
   removeRootBuildArtifacts();
   preservePortableData();
+  buildWebUi();
 
   const result = spawnSync(process.execPath, [builderCliPath, "--win", "--x64", "--dir"], {
     cwd: rootDir,
@@ -80,10 +104,7 @@ function run() {
   });
 
   if (result.status !== 0) {
-    if (result.error) {
-      console.error(result.error.message);
-    }
-    process.exit(result.status || 1);
+    failBuild(result.status, result.error && result.error.message);
   }
 
   restorePortableData();
@@ -92,4 +113,8 @@ function run() {
   console.log(`Portable user data is stored inside the app folder at ${userDataDir}`);
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = { portableDataDirNames, preservePortableData, restorePortableData };

@@ -20,7 +20,7 @@ function sentenceCard(entry, helpers) {
   const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
   const children = [...childWords, ...childGrammar, ...childExpressions];
   // Same rollup as today.js's dailyEntryCard: 전체 등록 targets the sentence
-  // itself (which becomes a 문장 item - D9) as well as its
+  // itself (which becomes a 문장 item) as well as its
   // word/grammar/expression children, so the "needs registration" mark covers
   // the sentence AND its children.
   const needsRegistration = [entry, ...children].some(item => helpers.core.entryNeedsRegistration(item));

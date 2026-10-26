@@ -17,6 +17,7 @@
     "@capacitor/browser": "^8.0.3",
     "@capacitor/core": "^8.4.1",
     "@nihongo-study/core": "0.1.0",
+    "@nihongo-study/storage-core": "0.1.0",
     "@nihongo-study/storage-idb": "0.1.0",
     "@nihongo-study/sync": "0.1.0",
     "@nihongo-study/tts": "0.1.0",
