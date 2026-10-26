@@ -64,8 +64,7 @@ export function createIdbStorage(options = {}) {
   // First-run seeding stays opt-in (the host has to ask for it), but
   // resetSampleData() - the "샘플 데이터" button - always restores sample data,
   // falling back to the shared seed in @nihongo-study/storage-core when the
-  // host injected none. storage-sqlite does exactly the same, so the button
-  // behaves identically on desktop and web.
+  // host injected none.
   const seedState = typeof options.seedState === "function" ? options.seedState : null;
   const sampleState = seedState || createSampleState;
   let dbPromise = null;
@@ -208,10 +207,8 @@ export function createIdbStorage(options = {}) {
   // to show. IndexedDB gives no way to continue past a failed request inside
   // the same transaction (an unhandled request error aborts it), so "report the
   // failure AND keep going" requires a transaction boundary per entry. That is
-  // also the granularity the removed storage-sqlite adapter had (one
-  // transaction per id, caught per id), so a mid-batch failure leaves the entries before it
-  // committed and the entries after it still processed - atomic per entry, not
-  // per batch.
+  // so a mid-batch failure leaves the entries before it committed and the
+  // entries after it still processed - atomic per entry, not per batch.
   async function registerDailyEntries(ids = [], studyDate = todayKey()) {
     const entries = await getAllActive("dailyEntries");
     const links = await getAllActive("dailyEntryLinks");
@@ -233,8 +230,7 @@ export function createIdbStorage(options = {}) {
       // key and would throw DataError instead of reporting anything.
       const entry = entries.find(candidate => candidate.id === id);
       if (!entry) {
-        // D11: an unknown id is an error, not a duplicate. storage-sqlite
-        // reports the same string.
+        // D11: an unknown id is an error, not a duplicate.
         errors.push(missingDailyEntryMessage);
         continue;
       }
@@ -257,8 +253,8 @@ export function createIdbStorage(options = {}) {
         pending.push(candidate);
       });
 
-      // Nothing to write and nothing to report: leave `registered` alone, the
-      // way sqlite does (it only stamps the flag when something happened).
+      // Nothing to write and nothing to report: leave `registered` alone
+      // (the flag is only stamped when something happened).
       if (!pending.length && !duplicateCount) {
         continue;
       }
@@ -327,7 +323,7 @@ export function createIdbStorage(options = {}) {
         ...item,
         review: nextReview,
         // Due dates are scheduled from today, not from the browsed studyDate
-        // (matches storage-sqlite; otherwise reviewing while viewing a past
+        // (otherwise reviewing while viewing a past
         // date yields an already-past due date that promoteDueReviews
         // immediately flips back to "오늘").
         reviewDueDate: reviewDueDateFor(nextReview),
@@ -881,8 +877,7 @@ function dailyCandidatePayload(sentence, kind, item) {
     reading: item.reading,
     meaning: item.meaning,
     // The shared parser returns structured items, not the source bullet line,
-    // so regenerate the candidate's raw text the way the sqlite adapter's
-    // dailyCandidatePayload does. Keeps both adapters' stored rawText equal.
+    // so regenerate the candidate's raw text from the item.
     rawText: itemToRawText(item),
     parsed: { ...item, kind },
     registered: false,
@@ -931,25 +926,18 @@ function mergeDailyCandidate(existing, candidate) {
 // Every collection item a single daily entry registers into: the entry itself
 // plus, for a word carrying 한자=..., one 한자 item per character.
 //
-// A sentence entry registers as a `sentence` item (D9). It used to be filtered
-// out of registerDailyEntries entirely, so on web the 등록 call was a silent
-// no-op - no item, no duplicate, no error, no message - while desktop created a
-// 문장 item. The shape here is the one dailyEntryToItems' sentence branch in
-// @nihongo-study/storage-core builds for sqlite: fixed part 문장 / script 혼합,
+// A sentence entry registers as a `sentence` item (D9): fixed part 문장 / script 혼합,
 // note = the parsed raw text, no `source` (a sentence has no parent sentence to
 // name, so it keeps an empty one rather than gaining the "오늘 공부" fallback)
 // and no 한자 items
 // (withKanjiItems only derives them from a `word`).
 //
 // The 한자 derivation is withKanjiItems from @nihongo-study/storage-core - the
-// same shared helper storage-sqlite has always run here (and in upsertItem).
-// It used to be desktop-only, so the web/Android 한자 collection could never
-// fill from daily entries at all (D10 in tests/storage-conformance.test.js).
-// It is forward-only: entries registered before this change are untouched, and
-// re-registering one is a no-op because the duplicate check below already
+// same shared helper upsertItem runs (D10 in tests/storage-conformance.test.js).
+// Re-registering an entry is a no-op because the duplicate check below already
 // covers the derived items.
 //
-// `source` is the provenance both adapters now agree on (D8): the title of the
+// `source` is the provenance (D8): the title of the
 // sentence this entry came from, resolved by parentSentenceTitle below and
 // passed in. `level` is deliberately NOT set - this adapter used to stamp "웹"
 // on every registered item, encoding the platform in a field the UI presents as
@@ -977,8 +965,8 @@ function itemsFromDailyEntry(entry, parentTitle) {
 }
 
 // Accepts either the canonical exchange shape (structured `parsed` object)
-// or a legacy sqlite-shaped entry that only carries a `parsedJson`/
-// `parsed_json` string, so pre-parity desktop backup files still import
+// or a legacy desktop-backup entry that only carries a `parsedJson`/
+// `parsed_json` string, so older desktop backup files still import
 // without losing the parsed word/grammar/expression breakdown.
 function normalizeDailyEntry(entry = {}) {
   const parsed = entry.parsed && typeof entry.parsed === "object"
@@ -1065,17 +1053,13 @@ function parseLegacyParsedJson(value) {
   }
 }
 
-// Thin adapter over the shared parser in @nihongo-study/storage-core. This
-// adapter used to carry its own reimplementation (parseSentenceBlock /
-// parseInlineEntry), which mangled every markdown-bulleted variant of the
-// format - see the parser's own header.
+// Thin wrapper over the shared parser in @nihongo-study/storage-core.
 //
-// The only adapter-specific bit left: for word/grammar/expression entries this
+// The one extra bit: for word/grammar/expression entries this
 // adapter persists 품사/문자/한자 as flat fields on the entry's `parsed` blob
 // and reads them back in itemsFromDailyEntry when registering. The canonical
 // parser exposes them per-bullet in `parsed.words`, so lift the first inline
-// match up exactly the way the sqlite adapter's dailyEntryToItems does
-// (parsed.note is the trimmed raw text `parsed.words` was parsed from, so
+// match up (parsed.note is the trimmed raw text `parsed.words` was parsed from, so
 // parsed.words[0] and parseWordLines(parsed.note)[0] are the same object).
 function parseDailyEntry(kind, rawText) {
   const parsed = parseCanonicalDailyEntry(kind, rawText);
@@ -1093,7 +1077,7 @@ function parseDailyEntry(kind, rawText) {
 
 // The title of the sentence a word/grammar/expression entry came from - the
 // `source` every registered item gets (D8). Resolution order is the one
-// the removed storage-sqlite adapter used, so migrated data produces the
+// the legacy desktop backups used, so imported data produces the
 // same string: a stored parentTitle (only legacy desktop imports carry one), else
 // the parent entry looked up by parentId, else the first linked sentence.
 //

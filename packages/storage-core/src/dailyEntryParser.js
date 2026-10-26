@@ -1,19 +1,11 @@
-// The single daily-entry text parser, shared by both storage adapters.
+// The single daily-entry text parser used by storage-idb.
 //
-// It used to live in packages/storage-sqlite/src/dailyEntryParser.js while
-// storage-idb carried a second, inline reimplementation (parseSentenceBlock /
-// parseInlineEntry). The two agreed on the canonical AI output format but
-// diverged on every markdown-bulleted variant of it - notably the
-// `- \`天気\` (てんき): 날씨` shape that itemToRawText itself emits and that a
-// pasted LLM reply looks like - so web/Android users got corrupted cards where
-// desktop users did not. This is the sqlite (canonical) implementation moved
-// here verbatim; the only edits were dropping its private copies of `text` and
-// `normalizeDailyKind` in favour of this package's already-identical ones.
+// It handles the canonical AI output format and its markdown-bulleted variants,
+// notably the `- \`天気\` (てんき): 날씨` shape that itemToRawText itself emits and
+// that a pasted LLM reply looks like.
 //
 // It lives in storage-core because it is pure (no injected deps, no closure
-// state, no fs/crypto) and storage-core is the one place both a CommonJS
-// `require` from the sqlite adapter and an ESM `import` from the Vite-bundled
-// idb adapter can reach.
+// state, no fs/crypto).
 import { normalizeDailyKind } from "./kinds.js";
 import { text } from "./values.js";
 

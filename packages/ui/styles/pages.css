@@ -516,10 +516,6 @@
   word-break: keep-all;
 }
 
-.learned-reading {
-  font-size: 12px;
-}
-
 .learned-meaning {
   padding: 8px 0;
   border-top: 1px solid var(--line);
@@ -553,11 +549,6 @@
 
 .source-link:hover {
   text-decoration: underline;
-}
-
-.focus-flash {
-  border-color: rgba(63, 129, 98, 0.8);
-  box-shadow: 0 0 0 4px rgba(63, 129, 98, 0.14), var(--shadow);
 }
 
 .empty-state {
@@ -660,7 +651,6 @@ mark {
     padding: 12px;
   }
 
-  .form-grid,
   .taxonomy-grid,
   .stat-grid,
   .daily-reading-meaning,

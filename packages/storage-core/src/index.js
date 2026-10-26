@@ -1,17 +1,13 @@
-// Helpers that storage-sqlite and storage-idb must agree on byte-for-byte.
-// Anything in here was verified identical in both adapters before it moved;
-// same-name-but-divergent helpers (getState, upsertItem, the normalize*
-// record shapers, reviewDueDateFor, ...) deliberately stay in their adapter.
+// Pure helpers shared by storage-idb and the rest of the app (dates, kinds,
+// review scheduling, tombstones, the daily-entry parser, the sample seed).
+// Adapter-specific helpers (getState, upsertItem, the normalize* record
+// shapers, reviewDueDateFor, ...) stay in storage-idb.
 //
-// This package has no dependencies and must keep none: it is imported by the
-// CommonJS sqlite adapter (via require) and by the ESM idb adapter, which is
-// bundled for the browser.
+// This package has no dependencies and must keep none: it is bundled for the
+// browser and loaded as plain ES modules by the Electron shell.
 //
-// dailyEntryParser.js is here for the same reason: it is the one daily-entry
-// text parser, and both adapters must produce identical cards from identical
-// raw text (see its header for the divergence it replaced). sampleState.js is
-// here for the same reason again: it is the one "샘플 데이터" seed, and
-// resetSampleData() must restore the same content on desktop and web.
+// dailyEntryParser.js is the one daily-entry text parser, and sampleState.js is
+// the one "샘플 데이터" seed that resetSampleData() restores.
 export * from "./dailyEntryParser.js";
 export * from "./dates.js";
 export * from "./kinds.js";
