@@ -27,6 +27,7 @@ describe("desktop preload", () => {
     const bridge = exposed.desktopBridge;
     expect(bridge.platform).toBe("electron");
     expect(Object.keys(bridge.tts).sort()).toEqual(["getConfig", "health", "setConfig", "speakers", "synthesize"]);
+    expect(Object.keys(bridge).sort()).toEqual(["platform", "tts"]);
     expect(bridge.ipcRenderer).toBeUndefined();
 
     await bridge.tts.speakers();

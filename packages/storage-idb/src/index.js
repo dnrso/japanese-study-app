@@ -59,26 +59,6 @@ const storeDefinitions = [
 ];
 const stores = storeDefinitions.map(store => store.name);
 
-// Not part of the storage adapter contract (packages/storage is strict about
-// extra methods and storage-sqlite has no equivalent), so the check lives
-// beside the adapter: see isPristine() below.
-const pristineChecks = new WeakMap();
-
-// True when the database behind `storage` (created by createIdbStorage) holds
-// no user data: every data store is empty, or the contents are byte-for-byte
-// what initDatabase() seeded on first run (any edit, delete or add since then
-// makes this false). Databases seeded by an older build, or re-seeded by
-// resetSampleData()/importFullBackup(), have no snapshot and are conservatively
-// reported as not pristine unless empty. Read-only; call it before getState(),
-// which may promote due reviews.
-export async function isPristine(storage) {
-  const check = pristineChecks.get(storage);
-  if (!check) {
-    throw new TypeError("isPristine() needs a storage created by createIdbStorage().");
-  }
-  return check();
-}
-
 export function createIdbStorage(options = {}) {
   const dbName = options.dbName || "nihongo-study";
   // First-run seeding stays opt-in (the host has to ask for it), but
@@ -102,30 +82,8 @@ export function createIdbStorage(options = {}) {
     const meta = await getValue("meta", "initialized");
     if (!meta && seedState) {
       await seedDatabase(seedState());
-      await putValue("meta", { key: "seedSnapshot", value: await dataSnapshot() });
     }
     return db;
-  }
-
-  // Serialized copy of every data store, used to tell "still exactly the
-  // first-run sample" from "the user has data" (see isPristine).
-  async function dataSnapshot() {
-    const snapshot = {};
-    for (const name of stores.filter(store => store !== "meta")) {
-      snapshot[name] = await getAll(name);
-    }
-    return JSON.stringify(snapshot);
-  }
-
-  async function checkPristine() {
-    await getDb();
-    const current = await dataSnapshot();
-    const empty = JSON.stringify(Object.fromEntries(stores.filter(store => store !== "meta").map(name => [name, []])));
-    if (current === empty) {
-      return true;
-    }
-    const recorded = await getValue("meta", "seedSnapshot");
-    return Boolean(recorded) && recorded.value === current;
   }
 
   async function getState(studyDate = todayKey()) {
@@ -684,7 +642,6 @@ export function createIdbStorage(options = {}) {
     close,
     paths
   };
-  pristineChecks.set(storage, checkPristine);
   return storage;
 }
 

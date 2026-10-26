@@ -30,7 +30,7 @@
       "apps/desktop/src/**/*",
       "apps/desktop/package.json",
       "apps/web/dist/**/*",
-      "packages/**/*",
+      "packages/tts/**/*",
       "package.json"
     ],
     "win": {
