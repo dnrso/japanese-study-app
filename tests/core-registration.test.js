@@ -20,7 +20,7 @@ describe("entryNeedsRegistration", () => {
     expect(entryNeedsRegistration(registeredWord)).toBe(false);
   });
 
-  // Registering a sentence entry creates a 문장 item on both adapters (D9 in
+  // Registering a sentence entry creates a 문장 item (D9 in
   // tests/storage-conformance.test.js) and the 전체 등록 button submits
   // sentences, so a sentence's `registered` flag is a real "needs action"
   // signal - it is not the permanently-false field it used to be.

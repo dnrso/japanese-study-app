@@ -1,15 +1,8 @@
-// The one "샘플 데이터" seed, shared by both storage adapters.
+// The one "샘플 데이터" seed used by storage-idb's resetSampleData().
 //
-// This used to live only in apps/web/src/sampleState.js and reach the storage
-// layer through storage-idb's `seedState` factory option, which storage-sqlite
-// did not have at all - so the desktop "샘플 데이터" button wiped the database
-// instead of restoring anything (tracked as D18 in
-// tests/storage-conformance.test.js). The content is plain data with no host
-// dependencies, so it belongs here, the one module both the CommonJS sqlite
-// adapter (`require`) and the Vite-bundled ESM idb adapter (`import`) can
-// reach. apps/web still injects it explicitly via `seedState` - that
-// indirection is deliberate, it lets a host override the seed - it just
-// re-exports this factory now instead of carrying a second copy.
+// The content is plain data with no host dependencies. apps/web still injects
+// it explicitly via `seedState` - that indirection is deliberate, it lets a
+// host override the seed - it just re-exports this factory.
 //
 // It used to seed a full demo dataset (sample words/kanji/grammar/
 // expressions/tasks/sources) so the app didn't look empty on first run.
@@ -29,9 +22,8 @@ export function createSampleState(todayKeyFn = defaultTodayKey) {
       summary: "",
       note: ""
     },
-    // No studyDays row here on purpose: both adapters synthesize a zeroed-out
-    // row for the seeded entry's date (storage-idb via normalizeStudyDays /
-    // ensureStudyDayPayload, storage-sqlite via ensureStudyDay in seedFromState),
+    // No studyDays row here on purpose: storage-idb synthesizes a zeroed-out
+    // row for the seeded entry's date (normalizeStudyDays / ensureStudyDayPayload),
     // so the calendar/home stats render correctly without one being listed
     // explicitly here.
     studyDays: [],

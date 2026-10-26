@@ -320,15 +320,6 @@
     font-size: 16px;
   }
 
-  /* Modals */
-  .modal {
-    width: calc(100vw - 24px);
-    max-height: calc(100dvh - 48px);
-    overflow-y: auto;
-    margin-top: calc(env(safe-area-inset-top));
-    margin-bottom: calc(env(safe-area-inset-bottom));
-  }
-
   /* Typography */
   h2 {
     font-size: clamp(18px, 5vw, 22px);

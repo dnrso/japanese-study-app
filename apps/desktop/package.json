@@ -3,9 +3,5 @@
   "version": "0.1.0",
   "private": true,
   "description": "Electron desktop app for NihonGo Study",
-  "main": "src/main.js",
-  "scripts": {
-    "start": "electron .",
-    "build": "node scripts/build-windows.js"
-  }
+  "main": "src/main.js"
 }

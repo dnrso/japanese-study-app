@@ -1,14 +1,9 @@
 // Parity + regression tests for the ONE daily-entry parser.
 //
-// Until this suite existed there were two parsers for the same text format:
-// the canonical markdown/regex one in packages/storage-sqlite (used by the
-// since-removed Electron desktop renderer) and an inline reimplementation inside
-// packages/storage-idb (used by web/Android). They agreed exactly on the
-// canonical AI output format (see supabase/functions/_shared/ai.js's [출력 형식]) and
-// diverged on every markdown-bulleted variant of it - including the shape
-// itemToRawText itself emits - so web users got corrupted cards where desktop
-// users did not. The parser now lives in packages/storage-core and both
-// adapters import it.
+// The parser lives in packages/storage-core and storage-idb imports it. It
+// handles the canonical AI output format (see supabase/functions/_shared/ai.js's
+// [출력 형식]) and its markdown-bulleted variants, including the shape
+// itemToRawText itself emits.
 //
 // These assertions are deliberately literal expected values, not "both
 // parsers agree": agreement is now structural (one function), so the thing
@@ -274,8 +269,7 @@ describe("note field", () => {
     const parsed = parseDailyEntry("sentence", bulletedBlock);
     expect(parsed.grammar[0].note).toBe("~이 좋다");
     expect(parsed.expressions[0].note).toBe("좋네요");
-    // Word candidates carry no note of their own; the adapters fall back to
-    // the meaning (sqlite) or to "" (idb).
+    // Word candidates carry no note of their own; storage-idb falls back to "".
     expect(parsed.words[0].note).toBeUndefined();
   });
 
@@ -303,9 +297,9 @@ describe("itemToRawText round-trip", () => {
   });
 
   it("does NOT recover 한자/품사/문자 from '- **한자**:' lines (known shared limitation)", () => {
-    // Both adapters lose these on a bulleted re-parse - the metadata is only
+    // A bulleted re-parse loses these - the metadata is only
     // read from the pipe form (`한자=...`). Pinned so that fixing it is a
-    // deliberate change to both platforms at once rather than a silent drift.
+    // deliberate change rather than a silent drift.
     const item = { title: "天気", reading: "てんき", meaning: "날씨", kanji: "天 (하늘 천)", part: "명사", script: "한자" };
     const [reparsed] = dailyEntryToItems("word", parseDailyEntry("word", itemToRawText(item)));
     expect(reparsed.kanji).toBe("");
