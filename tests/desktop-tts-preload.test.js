@@ -42,16 +42,4 @@ describe("desktop preload", () => {
       [ttsChannels.setConfig, { baseUrl: "http://127.0.0.1:50021" }]
     ]);
   });
-
-  it("keeps the legacy ttsApi exposure on the same channels", async () => {
-    const { exposed, ipcRenderer } = loadPreload();
-    await exposed.ttsApi.getVoicevoxSpeakers();
-    await exposed.ttsApi.synthesizeVoicevox({ text: "x" });
-    expect(ipcRenderer.invoke.mock.calls).toEqual([
-      ["tts:voicevox-speakers"],
-      ["tts:voicevox-synthesize", { text: "x" }]
-    ]);
-    expect(exposed.appInfo).toBeDefined();
-    expect(exposed.studyData).toBeDefined();
-  });
 });

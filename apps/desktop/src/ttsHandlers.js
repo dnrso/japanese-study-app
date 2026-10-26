@@ -34,10 +34,7 @@ function validateSynthesizePayload(payload) {
   if (text.length > MAX_TEXT_LENGTH) {
     throw new Error(`텍스트가 너무 깁니다. (최대 ${MAX_TEXT_LENGTH}자)`);
   }
-  // The legacy renderer sends speakerId as a numeric string; accept both.
-  const speakerValue = typeof payload.speakerId === "string" && /^\d+$/.test(payload.speakerId.trim())
-    ? Number(payload.speakerId)
-    : payload.speakerId;
+  const speakerValue = payload.speakerId;
   if (!Number.isInteger(speakerValue) || speakerValue < 0) {
     throw new Error("speakerId가 올바르지 않습니다.");
   }

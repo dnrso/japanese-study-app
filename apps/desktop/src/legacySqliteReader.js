@@ -6,8 +6,9 @@
 //
 // The SQL and the row shaping below are a deliberate port of storage-sqlite's
 // allStudyDaysRaw / allDailyEntriesRaw / allDailyEntryLinksRaw / allTasksRaw /
-// allItemsRaw (+ allDailyEntryLinksMap). tests/desktop-legacy-reader.test.js has a
-// parity test against the real storage-sqlite while that package still exists.
+// allItemsRaw (+ allDailyEntryLinksMap), a package that has since been removed.
+// tests/desktop-legacy-reader.test.js checks the output against a frozen fixture
+// and expected JSON that package generated.
 //
 // Safety: the original database is never opened. db (+ -wal) is copied into a
 // temp directory and the copy is opened read-only, which also makes WAL content

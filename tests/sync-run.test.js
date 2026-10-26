@@ -1,17 +1,12 @@
 // Drives runSnapshotSync() (the pull-merge-push sequence behind syncNow) against
-// both real storage adapters with fake pull/push functions. The point is the
+// the storage adapter with fake pull/push functions. The point is the
 // ordering guarantee: local rows are read AFTER the pull finishes, inside the
 // storage transaction, so a write made while the pull was in flight survives.
 import "fake-indexeddb/auto";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createIdbStorage } from "@nihongo-study/storage-idb";
 import { mergeBackupData } from "../packages/core/src/index.js";
 import { runSnapshotSync } from "../packages/sync/src/syncRun.js";
-import { createTmpDirs, describeStorageSuite, loadSqliteAdapter } from "./helpers/storage-adapters.js";
-
-const sqlite = loadSqliteAdapter();
-const tmpDirs = createTmpDirs("sync-run");
-afterAll(() => tmpDirs.cleanup());
 
 const mergeSnapshots = (local, remote) => mergeBackupData(local, remote);
 
@@ -34,26 +29,16 @@ function item(fields) {
 const adapters = [
   {
     name: "storage-idb",
-    loadError: null,
     async create() {
       const store = createIdbStorage({ dbName: unique("sync-run-idb") });
       await store.initDatabase();
-      return store;
-    }
-  },
-  {
-    name: "storage-sqlite",
-    loadError: sqlite.loadError,
-    async create() {
-      const store = tmpDirs.track(sqlite.createSqliteStorage({ appDataDir: tmpDirs.make("sqlite") }));
-      store.initDatabase();
       return store;
     }
   }
 ];
 
 for (const adapter of adapters) {
-  describeStorageSuite(`runSnapshotSync: ${adapter.name}`, adapter.loadError, () => {
+  describe(`runSnapshotSync: ${adapter.name}`, () => {
     it("merges a local write made while the pull was in flight instead of overwriting it", async () => {
       const store = await adapter.create();
       await store.upsertItem(item({ id: "item-a", title: "あ", meaning: "A" }));

@@ -22,7 +22,7 @@ Electron 데스크톱 앱 실행:
 npm.cmd start
 ```
 
-실행 전 스크립트가 설치된 Electron 버전에 맞는 `better-sqlite3` 사전 빌드 바이너리를 확인합니다. 일반 Node용 바이너리가 설치됐거나 Electron 버전이 바뀐 경우에는 올바른 바이너리를 자동으로 내려받아 ABI 불일치를 복구합니다.
+`npm start`는 먼저 웹 앱을 빌드(`npm run web:build`)한 뒤 Electron을 실행합니다. 데스크톱 앱은 `apps/web` 빌드를 그대로 불러옵니다.
 
 Windows unpacked 데스크톱 빌드:
 
@@ -54,7 +54,7 @@ npm.cmd run web:preview
 npm.cmd test
 ```
 
-`vitest`로 `packages/*`와 `apps/web`의 공통 로직을 검증합니다. `storage-sqlite` 테스트는 `better-sqlite3` 네이티브 바인딩이 현재 Node ABI와 맞지 않으면(데스크톱 앱이 Electron용으로 다시 빌드해 둔 경우 등) 자동으로 skip되고 안내 메시지를 출력합니다 — 로컬에서 이 스위트까지 실행하려면 `npm rebuild better-sqlite3`를 먼저 실행하세요. CI는 매번 `npm ci`로 새로 설치하므로 이 문제가 없습니다.
+`vitest`로 `packages/*`, `apps/web`, `apps/desktop`의 로직을 검증합니다.
 
 의존성을 추가하거나 workspace 패키지를 새로 추가하는 경우에만 `package-lock.json`을 함께 갱신합니다.
 
@@ -172,8 +172,7 @@ japanese-study-app/
 │  ├─ core/                # 검색, 필터링, 복습, 퀴즈, 통계 등 공통 계산
 │  ├─ ui/                  # 공통 UI 렌더러, 컴포넌트, 스타일, 설정
 │  ├─ storage/             # 저장소 adapter 런타임 계약
-│  ├─ storage-core/        # SQLite/IndexedDB 저장소가 공유하는 순수 helper (복습 간격, 날짜, 일일 항목 파서, 샘플 데이터)
-│  ├─ storage-sqlite/      # 데스크톱 SQLite 저장소 구현
+│  ├─ storage-core/        # IndexedDB 저장소가 쓰는 순수 helper (복습 간격, 날짜, 일일 항목 파서, 샘플 데이터)
 │  ├─ storage-idb/         # 웹 IndexedDB 저장소 구현
 │  ├─ sync/                # Supabase 로그인/동기화/Edge Function 호출 공통 로직
 │  └─ tts/                 # 브라우저 TTS와 VOICEVOX 공통 로직
@@ -184,7 +183,7 @@ japanese-study-app/
 │
 ├─ tests/                  # Vitest 테스트 (core, storage conformance, sync, UI)
 │
-├─ scripts/                # Electron native 모듈 준비, AI 코드 동기화 스크립트
+├─ scripts/                # AI 코드 동기화 스크립트
 │
 ├─ .github/workflows/
 │  ├─ static.yml           # GitHub Pages 웹 앱 배포 workflow
@@ -204,14 +203,13 @@ japanese-study-app/
 Electron 데스크톱 앱입니다.
 
 - `src/main.js`: Electron 앱 생명주기, BrowserWindow 생성, IPC 등록
-- `src/preload.js`: renderer에 안전한 `window.studyData`, `window.ttsApi`, `window.appInfo` 노출
-- `src/dataStore.js`: `packages/storage-sqlite`를 생성하고 `packages/storage` 계약으로 검증하는 desktop adapter
-- `src/dataHandlers.js`: 데이터 IPC 요청을 storage adapter로 연결
+- `src/preload.js`: renderer에 안전한 `window.desktopBridge`(platform, VOICEVOX tts, 일회성 마이그레이션) 노출
+- `src/appProtocol.js`: `apps/web/dist`를 `app://nihongo/`로 제공하는 프로토콜 handler
+- `src/legacyMigration.js`, `src/legacySqliteReader.js`: 기존 `app-data/nihongo.sqlite`를 읽어 IndexedDB로 한 번 이전하는 마이그레이션 (`node:sqlite` 사용)
 - `src/ttsHandlers.js`: VOICEVOX IPC handler
-- `src/renderer/`: 데스크톱 renderer shell, 이벤트, 상태, DOM adapter
-- `apps/desktop/scripts/build-windows.js`: Windows unpacked 빌드 및 schema 변경 시 app-data 백업
+- `apps/desktop/scripts/build-windows.js`: Windows unpacked 빌드 (기존 `app-data/`와 `user-data/`는 빌드 후에도 보존)
 
-데스크톱 renderer는 아직 Electron 전용 shell을 가지고 있습니다. 다만 페이지별 동적 렌더링, 공통 스타일, config, DOM patch 적용은 `packages/ui`를 사용합니다.
+데스크톱 앱은 별도 renderer 없이 `apps/web` 빌드를 그대로 사용합니다.
 
 ### `apps/web`
 
@@ -270,18 +268,6 @@ DOM, Electron, 브라우저 저장소에 의존하지 않는 순수 계산 로�
 - `paths` 객체 계약
 - `assertStorageAdapter(store)` 검증
 
-### `packages/storage-sqlite`
-
-데스크톱 앱용 SQLite 저장소 구현입니다.
-
-- SQLite DB 초기화와 schema 보정
-- 마이그레이션
-- 학습일, 오늘 공부 기록, 할 일, 항목, 복습, 퀴즈 결과 저장
-- CSV/YAML export
-- CSV import
-- full-backup YAML 복원
-- 문장/단어/문법/표현 입력 parser
-
 ### `packages/storage-idb`
 
 웹 앱(+ 같은 코드를 쓰는 안드로이드 앱)용 IndexedDB 저장소 구현입니다.
@@ -327,27 +313,21 @@ TTS 공통 패키지입니다.
 - TTS 설정 정규화
 
 
-데스크톱 웹 UI 모드 (기본)
---------------------------
+데스크톱 앱
+-----------
 
-데스크톱 앱은 기본적으로 `apps/web` Vite 빌드를 `app://nihongo/` 프로토콜로 불러옵니다. 이 모드에서는 SQLite(`better-sqlite3`)를 초기화하지 않습니다. `apps/web/dist`가 없으면 오류 대화상자가 표시되므로 먼저 `npm run web:build`가 필요합니다.
-
-```
-npm run desktop:web      # 웹 앱을 빌드한 뒤 Electron 실행
-```
-
-롤백용으로 기존 `apps/desktop/src/renderer` UI(SQLite 기반)도 남아 있습니다. 환경변수 `NIHONGO_DESKTOP_UI=legacy`(PowerShell은 `$env:NIHONGO_DESKTOP_UI="legacy"`)를 지정하거나 `npm run desktop:legacy`로 실행하세요.
+데스크톱 앱은 `apps/web` Vite 빌드를 `app://nihongo/` 프로토콜로 불러오는 Electron 셸입니다. 웹 UI에 VOICEVOX 음성과 기존 SQLite 데이터 일회성 이전이 더해진 형태입니다. `apps/web/dist`가 없으면 오류 대화상자가 표시되므로 먼저 `npm run web:build`가 필요합니다(`npm start`는 자동으로 빌드합니다).
 
 ### 기존 SQLite 데이터 자동 이전
 
-기존 버전에서 `app-data/nihongo.sqlite`에 저장된 데이터는 웹 UI로 처음 실행할 때 한 번 IndexedDB로 이전됩니다.
+기존 버전에서 `app-data/nihongo.sqlite`에 저장된 데이터는 새 버전으로 처음 실행할 때 한 번 IndexedDB로 이전됩니다.
 
 - 메인 프로세스가 `node:sqlite`로 DB 복사본을 읽기 전용으로 읽고(WAL 포함, 원본은 수정하지 않음), 웹 UI가 가져옵니다. 상태는 `user-data/migration.json`(`pending`/`done`/`failed`)에 기록됩니다.
 - IndexedDB가 비어 있거나 첫 실행 샘플 데이터 그대로면 교체하고, 이미 사용자 데이터가 있으면 기존 백업 "추가" 기능과 같은 방식으로 병합합니다.
-- 실패하면 화면에 안내가 표시되고 다음 실행 때 다시 시도합니다. 성공 후에도 `nihongo.sqlite` 파일은 삭제하거나 이름을 바꾸지 않으므로 `NIHONGO_DESKTOP_UI=legacy`로 되돌려도 데이터가 보입니다.
+- 실패하면 화면에 안내가 표시되고 다음 실행 때 다시 시도합니다. 성공 후에도 `nihongo.sqlite` 파일은 삭제하거나 이름을 바꾸지 않으므로 필요하면 백업으로 보관할 수 있습니다.
 - 개발/테스트 옵션: `NIHONGO_PORTABLE_ROOT=<디렉터리>`를 지정하면 `user-data/`와 `app-data/`를 그 디렉터리 아래에 만들어 실제 데이터를 건드리지 않고 실행할 수 있습니다.
 
-- 이 모드에서는 계정/동기화와 AI 문장 분석 UI가 숨겨지고 Supabase는 초기화되지 않습니다.
+- 데스크톱 앱에서는 계정/동기화와 AI 문장 분석 UI가 숨겨지고 Supabase는 초기화되지 않습니다.
 - 설정 페이지에 데스크톱 전용 "VOICEVOX 음성" 섹션이 표시됩니다. 엔진 URL(기본 `http://127.0.0.1:50021`, 로컬 주소만 허용, `user-data/tts.json`에 저장), 연결 상태 확인, speaker/재생 속도 선택, 테스트 재생을 지원합니다. 스피커 버튼은 VOICEVOX 엔진이 실행 중이면 VOICEVOX로, 연결할 수 없으면 브라우저 음성(SpeechSynthesis)으로 대체 재생됩니다.
 - 데이터는 Chromium 프로필(`user-data/`)의 IndexedDB에 저장되며 origin `app://nihongo`에 묶입니다. 이 origin은 바꾸면 안 됩니다.
 - `npm run build`(Windows 빌드)는 웹 앱을 먼저 빌드하여 `apps/web/dist`를 패키지에 포함합니다.
@@ -360,10 +340,8 @@ npm run desktop:web      # 웹 앱을 빌드한 뒤 Electron 실행
 
 개발 실행 시 프로젝트 루트 기준으로 아래 폴더가 생성됩니다.
 
-- `app-data/nihongo.sqlite`: SQLite 메인 DB
-- `app-data/exports/`: CSV/YAML export 파일
-- `app-data/backups/full-backup.yaml`: 전체 백업 YAML
-- `user-data/`: Electron/Chromium profile, localStorage, cache, session data
+- `app-data/nihongo.sqlite`: 이전 버전의 SQLite DB (일회성 마이그레이션이 읽기 전용으로만 사용, 새 버전은 쓰지 않음)
+- `user-data/`: Electron/Chromium profile, IndexedDB(학습 데이터), `migration.json`, `tts.json`, cache, session data
 
 Windows unpacked 빌드에서는 실행 파일이 있는 폴더 기준으로 `app-data`와 `user-data`를 사용합니다. 이 폴더를 앱과 함께 보관하면 무설치 앱처럼 사용할 수 있습니다.
 
@@ -417,9 +395,6 @@ Windows unpacked 빌드에서는 실행 파일이 있는 폴더 기준으로 `ap
 - 퀴즈 정답 시 복습 상태 자동 변경 옵션
 - 퀴즈 문제 텍스트 크기 설정
 - 학습 통계
-- 데스크톱 SQLite 저장
-- 데스크톱 CSV/YAML export/import
-- 데스크톱 full-backup YAML 복원
 - 웹 IndexedDB 저장
 - 웹 JSON 백업 다운로드
 - 웹 JSON 백업 전체 로드
@@ -455,8 +430,6 @@ GitHub Pages 배포
 
 런타임:
 
-- `better-sqlite3`: 데스크톱 SQLite 저장소
-- `yaml`: 데스크톱 CSV/YAML import/export
 - `@supabase/supabase-js`: `packages/sync`의 로그인/동기화/Edge Function 호출 (웹 앱)
 - `@capacitor/core`, `@capacitor/android`, `@capacitor/app`, `@capacitor/browser`, `@capacitor/cli`: 안드로이드 네이티브 wrapper, 딥링크, 시스템 브라우저 로그인 (웹 앱)
 

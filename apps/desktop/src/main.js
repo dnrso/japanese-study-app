@@ -2,7 +2,6 @@ const { app, BrowserWindow, dialog, ipcMain, protocol } = require("electron");
 const path = require("path");
 const { registerTtsHandlers } = require("./ttsHandlers");
 const { createLegacyMigration, registerMigrationHandlers } = require("./legacyMigration");
-const { selectDesktopUi } = require("./uiMode");
 const {
   APP_SCHEME,
   APP_ENTRY_URL,
@@ -10,8 +9,6 @@ const {
   webDistExists,
   webDistRoot
 } = require("./appProtocol");
-
-const useWebUi = selectDesktopUi() === "web";
 
 // Must run before the app is ready.
 protocol.registerSchemesAsPrivileged([
@@ -33,11 +30,7 @@ function createWindow() {
     }
   });
 
-  if (useWebUi) {
-    mainWindow.loadURL(APP_ENTRY_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
-  }
+  mainWindow.loadURL(APP_ENTRY_URL);
 }
 
 function appBaseDir() {
@@ -63,28 +56,19 @@ const portablePaths = configurePortablePaths();
 
 app.whenReady().then(() => {
   registerTtsHandlers(ipcMain);
-  if (useWebUi) {
-    // The web UI keeps its data in IndexedDB; the old SQLite file is only read
-    // (never written) by the one-time migration. better-sqlite3 is not loaded.
-    registerMigrationHandlers(ipcMain, createLegacyMigration(portablePaths));
-    const distRoot = webDistRoot();
-    if (!webDistExists(distRoot)) {
-      dialog.showErrorBox(
-        "Web UI build not found",
-        "Could not find " + path.join(distRoot, "index.html") + ".\nRun \"npm run web:build\" first, then start the desktop app again."
-      );
-      app.quit();
-      return;
-    }
-    protocol.handle(APP_SCHEME, createAppProtocolHandler(distRoot));
-  } else {
-    // Legacy renderer (NIHONGO_DESKTOP_UI=legacy): SQLite via data:* IPC. Required
-    // lazily so the native module is never loaded in web mode.
-    const { registerDataHandlers } = require("./dataHandlers");
-    const store = require("./dataStore");
-    store.initDatabase();
-    registerDataHandlers(ipcMain, store);
+  // The web UI keeps its data in IndexedDB; the old SQLite file is only read
+  // (never written) by the one-time migration.
+  registerMigrationHandlers(ipcMain, createLegacyMigration(portablePaths));
+  const distRoot = webDistRoot();
+  if (!webDistExists(distRoot)) {
+    dialog.showErrorBox(
+      "Web UI build not found",
+      "Could not find " + path.join(distRoot, "index.html") + ".\nRun \"npm run web:build\" first, then start the desktop app again."
+    );
+    app.quit();
+    return;
   }
+  protocol.handle(APP_SCHEME, createAppProtocolHandler(distRoot));
   createWindow();
 
   app.on("activate", () => {

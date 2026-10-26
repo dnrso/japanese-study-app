@@ -1,8 +1,6 @@
-const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const asar = require("@electron/asar");
 
 const desktopDir = path.resolve(__dirname, "..");
 const rootDir = path.resolve(desktopDir, "..", "..");
@@ -11,47 +9,10 @@ const unpackedDir = path.join(distDir, "win-unpacked");
 const appDataDir = path.join(unpackedDir, "app-data");
 const userDataDir = path.join(unpackedDir, "user-data");
 const legacyAppDataDir = path.join(distDir, "app-data");
-const schemaPath = path.join(rootDir, "packages", "storage-sqlite", "src", "dataSchema.js");
-const schemaMarkerPath = path.join(appDataDir, ".data-schema-hash");
-const backupRootDir = path.join(distDir, "app-data-backup");
 const preserveDir = path.join(rootDir, ".portable-data-preserve");
 const preservedAppDataDir = path.join(preserveDir, "app-data");
 const preservedUserDataDir = path.join(preserveDir, "user-data");
 const builderCliPath = path.join(rootDir, "node_modules", "electron-builder", "cli.js");
-
-function hash(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function readText(filePath) {
-  return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8").trim() : "";
-}
-
-function previousSchemaHash() {
-  const markerHash = readText(schemaMarkerPath) || readText(path.join(preservedAppDataDir, ".data-schema-hash"));
-  if (markerHash) {
-    return markerHash;
-  }
-
-  const archivePath = path.join(unpackedDir, "resources", "app.asar");
-  if (!fs.existsSync(archivePath)) {
-    return "";
-  }
-
-  for (const schemaArchivePath of ["packages/storage-sqlite/src/dataSchema.js", "apps/desktop/src/dataSchema.js", "src/dataSchema.js"]) {
-    try {
-      return hash(asar.extractFile(archivePath, schemaArchivePath));
-    } catch {
-      // Try the next known layout.
-    }
-  }
-
-  return "";
-}
-
-function timestamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
 
 function removeRootBuildArtifacts() {
   if (!fs.existsSync(distDir)) {
@@ -116,28 +77,6 @@ function copyDirectory(sourceDir, targetDir) {
   });
 }
 
-function backupForSchemaChange(currentSchemaHash) {
-  const sourceDir = fs.existsSync(appDataDir)
-    ? appDataDir
-    : fs.existsSync(preservedAppDataDir)
-      ? preservedAppDataDir
-      : "";
-  if (!sourceDir) {
-    return;
-  }
-
-  const priorSchemaHash = previousSchemaHash();
-  if (!priorSchemaHash || priorSchemaHash === currentSchemaHash) {
-    return;
-  }
-
-  assertDataFilesReadable(sourceDir);
-  const backupDir = path.join(backupRootDir, timestamp());
-  fs.mkdirSync(backupDir, { recursive: true });
-  copyDirectory(sourceDir, path.join(backupDir, "app-data"));
-  console.log(`Data schema changed. Existing app data was preserved and backed up to ${backupDir}`);
-}
-
 function preservePortableData() {
   fs.rmSync(preserveDir, { recursive: true, force: true });
 
@@ -171,7 +110,7 @@ function restorePortableData() {
 }
 
 function buildWebUi() {
-  // The packaged app can load the web UI (NIHONGO_DESKTOP_UI=web), so apps/web/dist must exist.
+  // The packaged app loads the web UI, so apps/web/dist must exist.
   const result = spawnSync("npm", ["run", "web:build"], { cwd: rootDir, env: process.env, stdio: "inherit", shell: true });
   if (result.status !== 0) {
     process.exit(result.status || 1);
@@ -180,10 +119,8 @@ function buildWebUi() {
 
 function run() {
   buildWebUi();
-  const currentSchemaHash = hash(fs.readFileSync(schemaPath));
   removeRootBuildArtifacts();
   preservePortableData();
-  backupForSchemaChange(currentSchemaHash);
 
   const result = spawnSync(process.execPath, [builderCliPath, "--win", "--x64", "--dir"], {
     cwd: rootDir,
@@ -200,7 +137,6 @@ function run() {
 
   restorePortableData();
   fs.mkdirSync(appDataDir, { recursive: true });
-  fs.writeFileSync(schemaMarkerPath, `${currentSchemaHash}\n`, "utf8");
   removeRootBuildArtifacts();
   console.log(`Windows unpacked build created at ${unpackedDir}`);
   console.log(`Portable app data is stored inside the app folder at ${appDataDir}`);

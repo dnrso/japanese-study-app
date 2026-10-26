@@ -12,7 +12,6 @@ const {
   resolveAppRequest,
   webDistExists
 } = require("../apps/desktop/src/appProtocol.js");
-const { selectDesktopUi } = require("../apps/desktop/src/uiMode.js");
 
 let tempRoot;
 let distRoot;
@@ -124,23 +123,5 @@ describe("contentTypeFor", () => {
     ["a.unknown", "application/octet-stream"]
   ])("maps %s", (file, type) => {
     expect(contentTypeFor(file)).toBe(type);
-  });
-});
-
-describe("selectDesktopUi", () => {
-  it("selects the web UI by default", () => {
-    expect(selectDesktopUi({})).toBe("web");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "" })).toBe("web");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "1" })).toBe("web");
-  });
-
-  it("still accepts NIHONGO_DESKTOP_UI=web explicitly", () => {
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "web" })).toBe("web");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: " WEB " })).toBe("web");
-  });
-
-  it("selects the legacy renderer only for NIHONGO_DESKTOP_UI=legacy", () => {
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: "legacy" })).toBe("renderer");
-    expect(selectDesktopUi({ NIHONGO_DESKTOP_UI: " Legacy " })).toBe("renderer");
   });
 });

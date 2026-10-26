@@ -25,7 +25,7 @@ export function parseBackupFile(text) {
 //
 // Every id the app produces fits SAFE_RECORD_ID:
 //   - crypto.randomUUID()                                  hex + "-"
-//     (packages/storage-idb + storage-sqlite createId())
+//     (packages/storage-idb createId())
 //   - `${kind}-${randomUUID()}` (apps/web nextId)           letters + "-" + hex
 //   - `${Date.now()}-${Math.random().toString(16).slice(2)}` (the nextId /
 //     createId fallback when crypto.randomUUID is unavailable)

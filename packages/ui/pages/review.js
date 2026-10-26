@@ -5,9 +5,9 @@ import { empty, speakerButton } from "../components/index.js";
 const ALL_KINDS_LABEL = "전체 종류";
 
 // The <select id="reviewKindFilter"> shell lives in each app's markup (web:
-// apps/web/src/templates.js, desktop: apps/desktop/src/renderer/index.html),
+// apps/web/src/templates.js),
 // exactly like the 단어 page's filter selects; its <option> list and current
-// value are patched from here so neither app owns a copy of the kind list.
+// value are patched from here so the app does not own a copy of the kind list.
 //
 // Only the select's children are replaced, never the select itself, so a
 // keyboard user who changes the filter keeps focus on the control across the
