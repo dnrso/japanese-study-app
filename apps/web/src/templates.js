@@ -426,11 +426,7 @@ function settingsPageTemplate() {
         <div class="table-scroll">
           <table class="table">
             <tbody>
-              <tr><th>저장 방식</th><td>브라우저 IndexedDB</td></tr>
-              <tr><th>데이터 폴더</th><td id="appDataPath">-</td></tr>
-              <tr><th>SQLite</th><td id="sqlitePath">-</td></tr>
-              <tr><th>Export</th><td id="exportPath">-</td></tr>
-              <tr><th>Backup</th><td id="backupPath">-</td></tr>
+              <tr><th>저장소</th><td id="storageLocation">IndexedDB (nihongo-study)</td></tr>
               <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
               <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
             </tbody>

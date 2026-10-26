@@ -276,7 +276,7 @@ function remappedId(id, idMap) {
   return key ? idMap.get(key) || key : "";
 }
 
-export function studyDayKeys(row) {
+function studyDayKeys(row) {
   return compactKeys([key("studyDay", row.studyDate)]);
 }
 

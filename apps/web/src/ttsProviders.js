@@ -6,7 +6,7 @@ import { voicevoxSpeakerOptions } from "@nihongo-study/tts";
 
 export const VOICEVOX_FALLBACK_NOTICE = "VOICEVOX 엔진을 사용할 수 없어 브라우저 음성으로 재생합니다.";
 
-export function toAudioBlobPart(audioData) {
+function toAudioBlobPart(audioData) {
   if (audioData instanceof ArrayBuffer || ArrayBuffer.isView(audioData)) {
     return audioData;
   }

@@ -168,22 +168,18 @@ japanese-study-app/
 │  └─ web/                 # Vite 기반 웹 앱 + Capacitor 안드로이드 앱, GitHub Pages 배포 대상
 │
 ├─ packages/
-│  ├─ ai/                  # Gemini 기반 일본어 문장 분석 공통 로직 (Supabase Edge Function에 복사되어 사용)
 │  ├─ core/                # 검색, 필터링, 복습, 퀴즈, 통계 등 공통 계산
 │  ├─ ui/                  # 공통 UI 렌더러, 컴포넌트, 스타일, 설정
-│  ├─ storage/             # 저장소 adapter 런타임 계약
 │  ├─ storage-core/        # IndexedDB 저장소가 쓰는 순수 helper (복습 간격, 날짜, 일일 항목 파서, 샘플 데이터)
 │  ├─ storage-idb/         # 웹 IndexedDB 저장소 구현
 │  ├─ sync/                # Supabase 로그인/동기화/Edge Function 호출 공통 로직
-│  └─ tts/                 # 브라우저 TTS와 VOICEVOX 공통 로직
+│  └─ tts/                 # VOICEVOX client와 speaker option
 │
 ├─ supabase/
-│  ├─ functions/           # Supabase Edge Functions (analyze-sentence 등)
+│  ├─ functions/           # Supabase Edge Functions (analyze-sentence 등), _shared/ai.js = Gemini 분석 로직의 원본
 │  └─ migrations/          # Supabase Postgres 마이그레이션 (study_snapshots, ai_usage)
 │
 ├─ tests/                  # Vitest 테스트 (core, storage conformance, sync, UI)
-│
-├─ scripts/                # AI 코드 동기화 스크립트
 │
 ├─ .github/workflows/
 │  ├─ static.yml           # GitHub Pages 웹 앱 배포 workflow
@@ -219,12 +215,11 @@ Vanilla JS + Vite 웹 앱입니다.
 - `src/templates.js`: 앱 shell과 페이지별 HTML 템플릿 조합
 - `src/quiz.js`: 단어/한자/문장 퀴즈 세션 로직
 - `src/syncSetup.js`: Supabase Google 로그인, 딥링크 콜백 처리, 계정 상태 UI 연결
-- `src/sampleState.js`: 최초 IndexedDB 초기화 시 보여줄 안내용 문장 카드 1개 (예전에는 단어/한자/과제 등 전체 샘플 데이터를 seed했으나, 지금은 오늘 공부 탭 사용법을 안내하는 문장 카드 하나만 만듭니다)
 - `vite.config.js`: GitHub Pages 호환을 위해 `base: "./"` 사용
 - `dist/`: `npm run web:build` 산출물
 - `android/`: Capacitor 안드로이드 네이티브 프로젝트 (Android Studio로 열어 빌드)
 
-웹 앱은 `packages/core`, `packages/ui`, `packages/storage-idb`, `packages/sync`를 사용합니다. AI 문장 분석은 웹 앱이 Gemini를 직접 호출하지 않고 `packages/sync`로 Supabase Edge Function(`analyze-sentence`)을 호출하는 방식이며, `packages/ai`의 분석 로직은 Deno 런타임인 그 edge function에 그대로 복사되어 사용됩니다(워크스페이스 패키지를 직접 import할 수 없어서 — 자세한 내용은 위 "Supabase 연동 설정" 참고). 현재는 브라우저 IndexedDB에 데이터를 저장하며(Capacitor 안드로이드 앱도 내장 WebView의 같은 IndexedDB를 사용), GitHub Pages 배포 workflow는 `apps/web/dist`를 업로드합니다.
+웹 앱은 `packages/core`, `packages/ui`, `packages/storage-idb`, `packages/sync`를 사용합니다. AI 문장 분석은 웹 앱이 Gemini를 직접 호출하지 않고 `packages/sync`로 Supabase Edge Function(`analyze-sentence`)을 호출하는 방식이며, 분석 로직의 원본은 `supabase/functions/_shared/ai.js`이며 Deno 런타임인 그 edge function에서 직접 사용됩니다(자세한 내용은 위 "Supabase 연동 설정" 참고). 현재는 브라우저 IndexedDB에 데이터를 저장하며(Capacitor 안드로이드 앱도 내장 WebView의 같은 IndexedDB를 사용), GitHub Pages 배포 workflow는 `apps/web/dist`를 업로드합니다.
 
 
 공통 패키지
@@ -257,15 +252,7 @@ DOM, Electron, 브라우저 저장소에 의존하지 않는 순수 계산 로�
 - `dom/applyPagePatch.js`: `{ text, html, value, style, hidden, disabled }` patch를 DOM에 적용
 - `styles/`: 공통 CSS entry, base, layout, components, pages (모바일 반응형 레이아웃/하단 탭 내비게이션 포함)
 
-현재 `packages/ui/pages`는 동적 페이지 렌더링과 일부 공통 패널을 담당합니다. 웹과 데스크톱의 전체 app shell, 이벤트 바인딩, storage/TTS/AI adapter는 각 앱에 남아 있습니다.
-
-### `packages/storage`
-
-저장소 adapter가 제공해야 하는 런타임 계약 패키지입니다.
-
-- 필수 메서드 목록
-- `paths` 객체 계약
-- `assertStorageAdapter(store)` 검증
+현재 `packages/ui/pages`는 동적 페이지 렌더링과 일부 공통 패널을 담당합니다. app shell, 이벤트 바인딩, storage/TTS adapter는 `apps/web`에 남아 있습니다.
 
 ### `packages/storage-idb`
 
@@ -279,18 +266,6 @@ DOM, Electron, 브라우저 저장소에 의존하지 않는 순수 계산 로�
 - JSON 백업 export
 - JSON 백업 전체 로드
 - JSON 백업 병합 로드, 중복 제외
-
-### `packages/ai`
-
-AI 문장 분석 공통 패키지입니다.
-
-- 일본어 학습용 분석 시스템 프롬프트
-- Gemini REST client
-- 기본 모델: `gemini-3.1-flash-lite`
-- `analyzeJapaneseSentenceForStudy()` 공통 분석 흐름
-- 빈 문장, API 키 누락, API 응답 오류 처리
-
-현재 웹 앱은 브라우저에 Gemini API 키나 모델명을 저장하지 않으며, 설정 화면에도 Gemini API 설정을 노출하지 않습니다. 이 패키지는 웹/데스크톱 앱이 직접 import하지 않고, `supabase/functions/_shared/ai.js`에 그대로 복사되어 Edge Function(Deno) 안에서만 실행됩니다 — 두 파일은 손으로 동기화해야 하며, 각 파일 상단에 서로를 가리키는 주석이 있습니다.
 
 ### `packages/sync`
 
@@ -306,10 +281,10 @@ AI 문장 분석 공통 패키지입니다.
 
 TTS 공통 패키지입니다.
 
-- 브라우저 Web Speech API용 일본어 음성 선택 로직
-- VOICEVOX speaker option 생성
-- VOICEVOX client
-- TTS 설정 정규화
+- VOICEVOX client (`createVoicevoxClient`: speaker 조회, 음성 합성; 데스크톱 main process가 사용)
+- VOICEVOX speaker option 생성 (`voicevoxSpeakerOptions`; 웹 설정 화면이 사용)
+
+브라우저 Web Speech API 재생 로직은 `apps/web/src/ttsProviders.js`에 있습니다.
 
 
 데스크톱 앱
@@ -393,7 +368,6 @@ Windows unpacked 빌드에서는 실행 파일이 있는 폴더 기준으로 `us
 - 브라우저 기본 TTS 기반 일본어 음성 재생
 - 데스크톱 VOICEVOX 기반 일본어 음성 재생
 - Windows unpacked 빌드
-- 데스크톱 schema 변경 시 기존 앱 데이터 백업
 
 
 GitHub Pages 배포
@@ -406,10 +380,10 @@ GitHub Pages 배포
 - `apps/web/**`
 - `packages/core/**`
 - `packages/ui/**`
-- `packages/ai/**`
 - `packages/storage-idb/**`
 - `packages/storage-core/**`
 - `packages/sync/**`
+- `packages/tts/**`
 - `.github/workflows/static.yml`
 - `package*.json`
 
@@ -428,7 +402,6 @@ GitHub Pages 배포
 
 - `electron`: 데스크톱 앱 실행 환경
 - `electron-builder`: Windows unpacked 빌드
-- `@electron/asar`: 빌드 스크립트의 packaged schema 확인
 - `vite`: 웹 앱 개발 서버와 번들링
 - `vitest`: 테스트 러너 (`npm test`)
 - `fake-indexeddb`: 테스트에서 `storage-idb`를 브라우저 없이 실행

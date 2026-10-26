@@ -1,17 +1,3 @@
-export function renderStoragePathsPage({ storagePaths }) {
-  if (!storagePaths) {
-    return {};
-  }
-  return {
-    text: {
-      appDataPath: storagePaths.appDataDir,
-      sqlitePath: storagePaths.dbPath,
-      exportPath: storagePaths.exportsDir,
-      backupPath: storagePaths.backupsDir
-    }
-  };
-}
-
 export function renderQuizSettingsPage({
   quizQuestionFontSize,
   quizReviewOnCorrect,

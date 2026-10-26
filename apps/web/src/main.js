@@ -36,7 +36,7 @@ import {
   scriptOptions,
   tocByPage
 } from "@nihongo-study/ui";
-import { createSampleState } from "./sampleState.js";
+import { createSampleState } from "../../../packages/storage-core/src/index.js";
 import { escapeHtml, renderAppShell } from "./templates.js";
 import {
   emptyQuiz,
@@ -843,10 +843,6 @@ function renderListPageSizeSettings() {
 function renderStorageStatus() {
   applyPagePatch({
     text: {
-      appDataPath: store.paths.appDataDir,
-      sqlitePath: "사용 안 함",
-      exportPath: store.paths.exportsDir,
-      backupPath: store.paths.backupsDir,
       storageStatus
     }
   });
