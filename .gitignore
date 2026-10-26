@@ -1,6 +1,7 @@
 node_modules/
 .env
 .env.local
+app-data/
 user-data/
 .portable-data-preserve/
 dist/
