@@ -29,7 +29,7 @@
 #today-calendar .calendar-actions .ghost-btn {
   min-height: 28px;
   padding: 5px 9px;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -55,7 +55,7 @@
   padding: 0;
   display: inline-grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
 }
 
@@ -89,7 +89,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   list-style: none;
@@ -133,7 +133,7 @@
 .calendar-weekdays {
   margin-bottom: 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 850;
   text-align: center;
 }
@@ -161,14 +161,14 @@
 
 .calendar-day strong {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
 }
 
 .calendar-day-flag {
   margin-left: 2px;
   color: var(--red);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1;
 }
@@ -177,7 +177,7 @@
   display: block;
   margin-top: 4px;
   color: var(--muted-strong);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.15;
 }
 
@@ -216,7 +216,7 @@
   border-radius: 999px;
   background: var(--surface);
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
@@ -248,7 +248,7 @@
 
 .ai-sentence-analysis-status {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .ai-sentence-analysis-toggle {
@@ -264,7 +264,7 @@
   align-items: center;
   gap: 4px;
   color: #c65149;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -277,7 +277,7 @@
   border-radius: 999px;
   background: var(--red-soft);
   color: #c65149;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1;
 }
@@ -360,14 +360,14 @@
   display: block;
   margin-bottom: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .daily-reading-meaning p {
   margin: 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .word-candidate-grid {
@@ -405,13 +405,13 @@
 
 .word-candidate-main span {
   color: var(--muted-strong);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .word-candidate p {
   margin: 0 0 5px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.35;
 }
 
@@ -419,7 +419,7 @@
 .grammar-candidate .item-meaning-text,
 .learned-card .item-meaning-text {
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
   font-weight: 650;
   letter-spacing: 0;
@@ -451,7 +451,7 @@
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-deep);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -459,7 +459,7 @@
   width: 20px;
   height: 20px;
   min-height: 20px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .grammar-candidate-list {
@@ -490,7 +490,7 @@
 .grammar-candidate p {
   margin: 0;
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   word-break: keep-all;
 }
@@ -513,7 +513,7 @@
 .compact-action-btn {
   min-height: 28px;
   padding: 5px 9px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .compact-cards {
@@ -554,7 +554,7 @@
   min-height: 26px;
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .learned-card h4 {
@@ -564,7 +564,7 @@
 
 .learned-inline-reading {
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -595,7 +595,7 @@
   padding: 0;
   background: transparent;
   color: var(--accent-deep);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 850;
   text-align: left;
 }

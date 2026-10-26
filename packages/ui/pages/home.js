@@ -4,20 +4,6 @@ export function homeSummaryPanel() {
   return `<div class="panel home-summary" id="homeSummary"></div>`;
 }
 
-export function homeProgressPanel() {
-  return `
-    <div class="panel home-progress" id="home-progress">
-      <div class="progress-ring" id="progressRing">
-        <div class="progress-ring-inner"><strong id="progressPercent">0%</strong><span>오늘 목표</span></div>
-      </div>
-      <div class="home-progress-text">
-        <strong id="progressMinutes">0분 / 90분</strong>
-        <span id="progressText"></span>
-      </div>
-    </div>
-  `;
-}
-
 export function homeSentencePanel() {
   return `
     <section class="panel section home-sentence-panel" id="home-sentence">
@@ -98,9 +84,6 @@ export function renderHomePage({ overview, helpers }) {
 
   return {
     text: {
-      progressPercent: `${overview.progress}%`,
-      progressMinutes: `${overview.minutes}분 / ${overview.goalMinutes}분`,
-      progressText: overview.progress >= 100 ? "오늘 목표를 달성했습니다." : `목표까지 ${overview.remainingMinutes}분 남았습니다.`,
       focusText: overview.focusText
     },
     html: {
@@ -119,11 +102,6 @@ export function renderHomePage({ overview, helpers }) {
     hidden: {
       // The seeded instructional sentence repeats the getting-started guide.
       "home-sentence": overview.isFirstRun
-    },
-    style: {
-      progressRing: {
-        background: `conic-gradient(var(--accent) ${overview.progress * 3.6}deg, var(--line) 0deg)`
-      }
     }
   };
 }

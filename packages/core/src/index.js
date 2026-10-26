@@ -469,18 +469,12 @@ const ONBOARDING_ENTRY_ID = "sentence-onboarding";
 
 export function homeOverview(state = {}, searchTerm = "") {
   const items = state.items || [];
-  const minutes = Number(state.studyLog?.minutes || 0);
-  const progress = Math.min(100, Math.round((minutes / 90) * 100));
   const allEntries = state.allDailyEntries || state.dailyEntries || [];
   const studyItems = items.filter(item => item.kind !== "source");
   return {
     // Nothing studied yet beyond the seeded instructional card: the home
     // page shows its getting-started guide instead of the daily summary.
     isFirstRun: !studyItems.length && allEntries.every(entry => entry.id === ONBOARDING_ENTRY_ID),
-    progress,
-    goalMinutes: 90,
-    remainingMinutes: Math.max(0, 90 - minutes),
-    minutes,
     focusText: state.studyLog?.summary || "새 항목을 추가하고 복습 큐를 정리하세요.",
     todaySentenceCount: (state.dailyEntries || [])
       .filter(entry => entry.kind === "sentence" && entry.id !== ONBOARDING_ENTRY_ID).length,

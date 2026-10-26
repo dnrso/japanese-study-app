@@ -1,5 +1,4 @@
 import {
-  homeProgressPanel,
   homeSentencePanel,
   homeSummaryPanel,
   icon,
@@ -110,12 +109,10 @@ function homePageTemplate() {
     <section class="page" id="home">
       <div class="hero" id="home-overview">
         ${homeSummaryPanel()}
-        ${homeProgressPanel()}
+        <div class="stat-grid" id="home-stats"></div>
       </div>
 
       ${homeSentencePanel()}
-
-      <div class="stat-grid" id="home-stats"></div>
 
       <div class="content-grid">
         <div>
