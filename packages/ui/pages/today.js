@@ -93,7 +93,7 @@ function dailyEntryCard(entry, helpers) {
   const children = [...childWords, ...childGrammar, ...childExpressions];
   // The 전체 등록 button targets the sentence itself as well as its
   // word/grammar/expression children (registering a sentence creates a 문장
-  // item - D9 in tests/storage-conformance.test.js), so the "needs
+  // item), so the "needs
   // registration" mark is a rollup over the sentence AND its children. Both
   // halves matter: a sentence whose children are all registered but which is
   // itself unregistered is still a 전체 등록 target (and still flags its day in

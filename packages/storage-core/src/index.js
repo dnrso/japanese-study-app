@@ -4,7 +4,8 @@
 // shapers, reviewDueDateFor, ...) stay in storage-idb.
 //
 // This package has no dependencies and must keep none: it is bundled for the
-// browser and loaded as plain ES modules by the Electron shell.
+// browser and shared by the web app, the Android build and the Windows desktop shell (all
+// of which load the apps/web bundle).
 //
 // dailyEntryParser.js is the one daily-entry text parser, and sampleState.js is
 // the one "샘플 데이터" seed that resetSampleData() restores.

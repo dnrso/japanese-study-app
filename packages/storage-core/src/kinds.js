@@ -5,7 +5,7 @@ export function normalizeDailyKind(kind) {
 // What registerDailyEntries reports for an id that matches no live daily
 // entry. It lives beside kindLabel because it is the other user-facing Korean
 // string the register flow puts into its `result`; it is pushed into
-// `result.errors` (D11 in tests/storage-conformance.test.js).
+// `result.errors` (an unknown id is an error, not a duplicate).
 export const missingDailyEntryMessage = "항목을 찾을 수 없습니다.";
 
 export function kindLabel(kind) {

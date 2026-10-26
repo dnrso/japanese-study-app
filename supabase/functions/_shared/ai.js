@@ -168,8 +168,8 @@ export async function analyzeJapaneseSentence({
   return text;
 }
 
-// Minimal structural contract mirrored from packages/storage-idb's
-// parseSentenceBlock: the raw text must open with a "# " heading line and
+// Minimal structural contract mirrored from packages/storage-core's
+// parseDailyEntry: the raw text must open with a "# " heading line and
 // contain at least a 읽기 line and a 해석 line. This is the same shape the
 // client validates before saving a card, so a conversational reply (no
 // leading "# ", no 읽기/해석 lines) is rejected here before it ever reaches

@@ -1,7 +1,6 @@
 node_modules/
 .env
 .env.local
-app-data/
 user-data/
 .portable-data-preserve/
 dist/
@@ -17,7 +16,6 @@ Thumbs.db
 
 # Claude Code local project config (not synced to GitHub)
 .claude/
-CLAUDE.md
 
 # Android (Capacitor)
 apps/web/android/.idea/

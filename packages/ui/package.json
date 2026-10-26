@@ -6,11 +6,6 @@
   "main": "./render.js",
   "exports": {
     ".": "./render.js",
-    "./render": "./render.js",
-    "./config": "./config.js",
-    "./pages": "./pages/index.js",
-    "./components": "./components/index.js",
-    "./dom/applyPagePatch": "./dom/applyPagePatch.js",
     "./styles": "./styles/index.css"
   }
 }

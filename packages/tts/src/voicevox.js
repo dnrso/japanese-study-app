@@ -1,7 +1,7 @@
-const VOICEVOX_BASE_URL = "http://localhost:50021";
+export const VOICEVOX_DEFAULT_BASE_URL = "http://127.0.0.1:50021";
 
 export function createVoicevoxClient(options = {}) {
-  const baseUrl = options.baseUrl || VOICEVOX_BASE_URL;
+  const baseUrl = options.baseUrl || VOICEVOX_DEFAULT_BASE_URL;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   if (typeof fetchImpl !== "function") {
     throw new Error("VOICEVOX 요청에 사용할 fetch 구현이 없습니다.");

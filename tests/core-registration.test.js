@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as core from "@nihongo-study/core";
 import { badgeClassByKind, kindLabels, renderTodayPage } from "@nihongo-study/ui";
 
-const { entryNeedsRegistration, hasUnregisteredEntries, unregisteredStudyDates } = core;
+const { entryNeedsRegistration, unregisteredStudyDates } = core;
 
 const unregisteredWord = { kind: "word", registered: false, studyDate: "2026-07-09" };
 const registeredWord = { kind: "word", registered: true, studyDate: "2026-07-09" };
@@ -20,8 +20,7 @@ describe("entryNeedsRegistration", () => {
     expect(entryNeedsRegistration(registeredWord)).toBe(false);
   });
 
-  // Registering a sentence entry creates a 문장 item (D9 in
-  // tests/storage-conformance.test.js) and the 전체 등록 button submits
+  // Registering a sentence entry creates a 문장 item and the 전체 등록 button submits
   // sentences, so a sentence's `registered` flag is a real "needs action"
   // signal - it is not the permanently-false field it used to be.
   it("is true for an unregistered sentence entry (sentences ARE registerDailyEntries targets)", () => {
@@ -40,23 +39,6 @@ describe("entryNeedsRegistration", () => {
   });
 });
 
-describe("hasUnregisteredEntries", () => {
-  it("is true when at least one entry still needs registration", () => {
-    expect(hasUnregisteredEntries([registeredWord, unregisteredWord])).toBe(true);
-  });
-
-  it("is true when the only unregistered entry is a sentence", () => {
-    expect(hasUnregisteredEntries([registeredWord, unregisteredSentence])).toBe(true);
-  });
-
-  it("is false when every registerable entry - sentences included - is registered", () => {
-    expect(hasUnregisteredEntries([registeredWord, registeredSentence])).toBe(false);
-  });
-
-  it("is false for an empty list", () => {
-    expect(hasUnregisteredEntries([])).toBe(false);
-  });
-});
 
 describe("unregisteredStudyDates", () => {
   it("collects the dates with a registerable-but-unregistered entry, sentences included", () => {

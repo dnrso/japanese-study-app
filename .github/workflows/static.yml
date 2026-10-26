@@ -2,31 +2,14 @@
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
-  push:
+  # Deploy only after the Test workflow has succeeded on main
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
     branches: ["main"]
-    paths:
-      - "apps/web/**"
-      - "packages/core/**"
-      - "packages/ui/**"
-      - "packages/storage-idb/**"
-      - "packages/storage-core/**"
-      - "packages/sync/**"
-      - "packages/tts/**"
-      - ".github/workflows/static.yml"
-      - "package*.json"
 
+  # Build check on pull requests (tests run in the Test workflow)
   pull_request:
-    paths:
-      - "apps/web/**"
-      - "packages/core/**"
-      - "packages/ui/**"
-      - "packages/storage-idb/**"
-      - "packages/storage-core/**"
-      - "packages/sync/**"
-      - "packages/tts/**"
-      - ".github/workflows/static.yml"
-      - "package*.json"
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -36,10 +19,13 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -47,8 +33,6 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run tests
-        run: npm test
       - name: Build web app
         run: npm run web:build
       - name: Setup Pages

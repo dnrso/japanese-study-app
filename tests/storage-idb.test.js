@@ -203,8 +203,8 @@ describe("storage-idb (fake-indexeddb)", () => {
     expect(imported.parsed).toEqual(legacyParsed);
   });
 
-  // The transaction-boundary half of D13 (tests/storage-conformance.test.js),
-  // which the shared conformance test cannot reach: its invalid record never
+  // The transaction-boundary half of the per-entry failure rule
+  // (see tests/storage-conformance.test.js), which the shared conformance test cannot reach: its invalid record never
   // gets as far as a write.
   // registerDailyEntries used to wrap the WHOLE batch in one runTransaction
   // with the try/catch inside the callback, so a failing put aborted everything

@@ -1,11 +1,7 @@
 // Single definition of the SRS intervals lives in packages/storage-core, which
 // the storage adapter also reads, so the review queue's due-date arithmetic
 // can never drift from the intervals the adapter actually persists.
-//
-// Imported by relative path, not by package name, so this file also loads as a
-// plain ES module without a bundler; Vite resolves the relative form just as
-// happily.
-import { reviewIntervals as REVIEW_QUEUE_INTERVALS } from "../../storage-core/src/index.js";
+import { addDays, dateKey, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
 
 export * from "./merge.js";
 
@@ -44,8 +40,8 @@ export function clampQuizQuestionFontSize(value) {
 }
 
 // Minimal structural contract for an AI-generated (or manually written)
-// sentence analysis block, mirrored from packages/storage-idb's
-// parseSentenceBlock and supabase/functions/_shared/ai.js's
+// sentence analysis block, mirrored from packages/storage-core's
+// parseDailyEntry and supabase/functions/_shared/ai.js's
 // hasValidSentenceBlockStructure: the raw text must open with a "# "
 // heading line and contain at least a 읽기 line and a 해석 line. Used to
 // reject conversational AI replies (no structured block) before they are
@@ -78,7 +74,7 @@ export function hasValidSentenceBlockStructure(rawText) {
 }
 
 // Lenient pre-check used only to decide whether the manual 문장 추가 flow
-// should bother validating at all: parseSentenceBlock (packages/storage-idb)
+// should bother validating at all: parseDailyEntry (packages/storage-core)
 // happily accepts plain single-line/free text with no "#"/읽기/해석 markers
 // at all - it just becomes a sentence card titled with that text and empty
 // reading/meaning. That's a legitimate, long-standing quick-entry style and
@@ -112,7 +108,7 @@ export function reviewQueueReview(item, drafts = new Map()) {
   return drafts.get(item.id) || "대기";
 }
 
-export function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
+function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
   const days = REVIEW_QUEUE_INTERVALS[review];
   if (!days) {
     return "";
@@ -352,7 +348,7 @@ export function uniqueSourceSentences(sourceSentences = []) {
 // Every daily entry kind gets promoted into the permanent study collections
 // by registerDailyEntries: word/grammar/expression become items of their own
 // kind (plus derived 한자 items), and a sentence becomes a 문장 item
-// (part=문장, script=혼합 - D9 in tests/storage-conformance.test.js). So a
+// (part=문장, script=혼합). So a
 // sentence's own `registered` flag IS a meaningful "needs action" signal, and
 // the 전체 등록 button targets sentences too: a sentence card "needs
 // registration" when the sentence itself or any of its
@@ -361,10 +357,6 @@ const REGISTERABLE_DAILY_KINDS = ["word", "grammar", "expression", "sentence"];
 
 export function entryNeedsRegistration(entry) {
   return REGISTERABLE_DAILY_KINDS.includes(entry?.kind) && !entry?.registered;
-}
-
-export function hasUnregisteredEntries(dailyEntries = []) {
-  return (dailyEntries || []).some(entryNeedsRegistration);
 }
 
 export function unregisteredStudyDates(dailyEntries = []) {
@@ -511,20 +503,6 @@ function sourceSentenceKey(sentence) {
     sentence.studyDate || "",
     String(sentence.title || "").trim().replace(/\s+/g, " ")
   ].join("::");
-}
-
-function addDays(dateValue, days) {
-  const [year, month, day] = dateValue.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + days);
-  return dateKey(date);
-}
-
-function dateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function randomItem(list, random) {

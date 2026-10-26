@@ -1,8 +1,3 @@
-// Imported by relative path, not by package name: nothing in this repo
-// resolves bare @nihongo-study specifiers at runtime. Shared packages load as
-// plain ES modules where no bundler is involved, and the packaged
-// app.asar carries no @nihongo-study scope in node_modules, so the relative
-// form is the one that works everywhere. Vite handles it fine too.
 import {
   addDays,
   createSampleState,
@@ -22,7 +17,7 @@ import {
   todayKey,
   toNumber,
   withKanjiItems
-} from "../../storage-core/src/index.js";
+} from "@nihongo-study/storage-core";
 
 const databaseVersion = 2;
 
@@ -198,8 +193,8 @@ export function createIdbStorage(options = {}) {
     return getState(studyDate || entry.studyDate);
   }
 
-  // ONE TRANSACTION PER ENTRY, on purpose (D13 in
-  // tests/storage-conformance.test.js). The catch used to sit inside a single
+  // ONE TRANSACTION PER ENTRY, on purpose: a failure in
+  // one entry must not abort the others. The catch used to sit inside a single
   // runTransaction callback spanning the whole batch, where it could only ever
   // see a synchronous throw: an IndexedDB request fails asynchronously, so a
   // failed put aborted the transaction, rejected runTransaction's promise and
@@ -230,7 +225,7 @@ export function createIdbStorage(options = {}) {
       // key and would throw DataError instead of reporting anything.
       const entry = entries.find(candidate => candidate.id === id);
       if (!entry) {
-        // D11: an unknown id is an error, not a duplicate.
+        // An unknown id is an error, not a duplicate.
         errors.push(missingDailyEntryMessage);
         continue;
       }
@@ -926,18 +921,18 @@ function mergeDailyCandidate(existing, candidate) {
 // Every collection item a single daily entry registers into: the entry itself
 // plus, for a word carrying 한자=..., one 한자 item per character.
 //
-// A sentence entry registers as a `sentence` item (D9): fixed part 문장 / script 혼합,
+// A sentence entry registers as a `sentence` item: fixed part 문장 / script 혼합,
 // note = the parsed raw text, no `source` (a sentence has no parent sentence to
 // name, so it keeps an empty one rather than gaining the "오늘 공부" fallback)
 // and no 한자 items
 // (withKanjiItems only derives them from a `word`).
 //
 // The 한자 derivation is withKanjiItems from @nihongo-study/storage-core - the
-// same shared helper upsertItem runs (D10 in tests/storage-conformance.test.js).
+// same shared helper upsertItem runs.
 // Re-registering an entry is a no-op because the duplicate check below already
 // covers the derived items.
 //
-// `source` is the provenance (D8): the title of the
+// `source` is the provenance: the title of the
 // sentence this entry came from, resolved by parentSentenceTitle below and
 // passed in. `level` is deliberately NOT set - this adapter used to stamp "웹"
 // on every registered item, encoding the platform in a field the UI presents as
@@ -1076,7 +1071,7 @@ function parseDailyEntry(kind, rawText) {
 }
 
 // The title of the sentence a word/grammar/expression entry came from - the
-// `source` every registered item gets (D8). Resolution order is the one
+// `source` every registered item gets. Resolution order is the one
 // the legacy desktop backups used, so imported data produces the
 // same string: a stored parentTitle (only legacy desktop imports carry one), else
 // the parent entry looked up by parentId, else the first linked sentence.

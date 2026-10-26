@@ -1,5 +1,7 @@
 const fs = require("node:fs");
 
+// Kept as a literal: this file is CommonJS and @nihongo-study/tts is an ES
+// module. tests/desktop-tts-ipc.test.js asserts it equals VOICEVOX_DEFAULT_BASE_URL.
 const DEFAULT_BASE_URL = "http://127.0.0.1:50021";
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 const ALLOWED_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
