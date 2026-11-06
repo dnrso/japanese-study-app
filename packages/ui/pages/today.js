@@ -1,35 +1,87 @@
-import { empty, speakerButton } from "../components/index.js";
+import { empty, icon, speakerButton } from "../components/index.js";
+import { manualEntryPlaceholders, sentenceEntryExample } from "../config.js";
+
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+export const ENTRY_MODES = [
+  ["sentence", "문장"],
+  ["word", "단어"],
+  ["grammar", "문법"],
+  ["expression", "표현"]
+];
 
 export function sentenceEntryPanel() {
   return `
     <section class="panel section" id="today-log">
       <div class="panel-header">
-        <h2 class="panel-title" id="selectedDateTitle">문장 추가</h2>
-        <div class="panel-header-actions">
+        <h2 class="panel-title" id="selectedDateTitle">기록</h2>
+      </div>
+      <div class="entry-mode-tabs" role="tablist" aria-label="입력 종류">
+        ${ENTRY_MODES.map(([mode, label], index) => `
+          <button class="entry-mode-tab ${index ? "" : "active"}" type="button" role="tab" data-entry-mode="${mode}" aria-selected="${index ? "false" : "true"}">${label}</button>
+        `).join("")}
+      </div>
+      <div id="sentenceEntryFields">
+        <label class="settings-check ai-sentence-analysis-toggle">
+          <input id="aiSentenceAnalysisCheckbox" type="checkbox" />
+          <span>AI 문장 분석</span>
+          <span class="login-only-marker">${icon("lock")}로그인 후 사용 가능</span>
+        </label>
+        <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="일본어 문장과 읽기·해석, 단어·문법·표현을 입력 형식에 맞춰 입력하세요."></textarea>
+      </div>
+      <div id="manualEntryFields" hidden>
+        <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder=""></textarea>
+      </div>
+      <p class="muted ai-sentence-analysis-status" id="aiSentenceAnalysisStatus"></p>
+      <div class="entry-footer">
+        <button class="entry-help-toggle" id="entryHelpToggle" type="button" aria-expanded="false" aria-controls="entryFormatHelp">입력 형식 도움말</button>
+        <div class="entry-footer-actions">
+          <span class="entry-shortcut-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
           <button class="primary-btn" id="addDailyEntryBtn" type="button">문장 추가</button>
+          <button class="primary-btn" id="addManualEntryBtn" type="button" hidden>단어 추가</button>
         </div>
       </div>
-      <label class="settings-check ai-sentence-analysis-toggle">
-        <input id="aiSentenceAnalysisCheckbox" type="checkbox" />
-        <span>AI 문장 분석</span>
-        <span class="login-only-marker"><span class="login-only-icon" aria-hidden="true">!</span>(로그인 유저만 사용 가능)</span>
-      </label>
-      <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="# 私なんか気に障ることしたかな
-읽기 わたし なんか きにさわる こと したかな
-해석 나 따위가 기분 상할 만한 일을 한 걸까
-단어장
-\`気に障る\` (きにさわる) 기분에 거슬리다 | 한자=気, 障 | 품사=동사표현 | 문자=한자+히라가나
-문법
-\`なんか\` 자신을 낮추거나 가볍게 말할 때 쓰는 표현"></textarea>
-      <p class="muted ai-sentence-analysis-status" id="aiSentenceAnalysisStatus"></p>
+      <div class="entry-format-help" id="entryFormatHelp" hidden></div>
     </section>
   `;
 }
 
-export function renderTodayPage({ selectedDate, sentenceEntries, helpers }) {
+// Format guide shown under the input for the active entry mode.
+export function entryFormatHelp(mode, { escapeHtml }) {
+  const rules = mode === "sentence"
+    ? [
+        "<code># 문장</code> 첫 줄에 일본어 문장",
+        "<code>읽기 …</code> / <code>해석 …</code> 줄로 읽기와 뜻",
+        "<code>단어장</code> 다음 줄부터 <code>`단어` (읽기) 뜻 | 한자=… | 품사=… | 문자=…</code>",
+        "<code>문법</code> · <code>표현</code> 다음 줄부터 <code>`항목` 설명</code>"
+      ]
+    : mode === "word"
+      ? ["<code>`단어` (읽기) 뜻 | 한자=… | 품사=… | 문자=…</code>"]
+      : mode === "grammar"
+        ? ["<code>`문법` 설명</code>"]
+        : ["<code>`표현` (읽기) 뜻과 쓰임</code>"];
+  const example = mode === "sentence" ? sentenceEntryExample : manualEntryPlaceholders[mode];
+  return `
+    <ul>${rules.map(rule => `<li>${rule}</li>`).join("")}</ul>
+    <pre lang="ja">${escapeHtml(example)}</pre>
+    <button class="ghost-btn tiny-action-btn" id="insertEntryExampleBtn" type="button">예시 넣기</button>
+  `;
+}
+
+function dateParts(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return { year, month, day, weekday: WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()] };
+}
+
+export function renderTodayPage({ selectedDate, sentenceEntries, unregisteredCount = 0, helpers }) {
+  const { month, day, weekday } = dateParts(selectedDate);
   return {
     text: {
-      selectedDateTitle: `${selectedDate} 문장 추가`
+      selectedDateTitle: `${month}월 ${day}일 (${weekday}) 기록`,
+      todayUnregisteredCount: String(unregisteredCount)
+    },
+    hidden: {
+      todayRegisterBar: !unregisteredCount
     },
     html: {
       dailyEntryCards: sentenceEntries.length
@@ -39,7 +91,7 @@ export function renderTodayPage({ selectedDate, sentenceEntries, helpers }) {
   };
 }
 
-export function renderCalendarPage({ calendarMonth, selectedDate, studyDays, toDateKey, unregisteredDates }) {
+export function renderCalendarPage({ calendarMonth, selectedDate, todayDate, studyDays, toDateKey, unregisteredDates }) {
   const days = new Map((studyDays || []).map(day => [day.studyDate, day]));
   const [year, month] = calendarMonth.split("-").map(Number);
   const first = new Date(year, month - 1, 1);
@@ -48,7 +100,7 @@ export function renderCalendarPage({ calendarMonth, selectedDate, studyDays, toD
 
   return {
     text: {
-      calendarTitle: `${calendarMonth.replace("-", ".")} 학습 캘린더`
+      calendarTitle: `${year}년 ${month}월`
     },
     html: {
       calendarGrid: Array.from({ length: 42 }, (_, index) => {
@@ -56,13 +108,24 @@ export function renderCalendarPage({ calendarMonth, selectedDate, studyDays, toD
         date.setDate(start.getDate() + index);
         const key = toDateKey(date);
         const day = days.get(key);
-        const isSelected = key === selectedDate;
+        const studied = Boolean(day && (day.minutes || day.entryCount));
         const isOtherMonth = date.getMonth() !== month - 1;
         const needsRegistration = Boolean(unregisteredDates && unregisteredDates.has(key));
+        const classes = [
+          "calendar-day",
+          key === selectedDate ? "selected" : "",
+          key === todayDate ? "is-today" : "",
+          isOtherMonth ? "other-month" : ""
+        ].filter(Boolean).join(" ");
+        const details = [
+          `${date.getMonth() + 1}월 ${date.getDate()}일`,
+          studied ? `${day.minutes || 0}분 · ${day.entryCount || 0}개 기록` : "",
+          needsRegistration ? "등록 필요" : ""
+        ].filter(Boolean).join(" · ");
         return `
-          <button class="calendar-day ${isSelected ? "selected" : ""} ${isOtherMonth ? "other-month" : ""}" data-calendar-date="${key}">
-            <strong>${date.getDate()}${needsRegistration ? `<sup class="calendar-day-flag" title="등록 필요">!</sup>` : ""}</strong>
-            ${day ? `<span>${day.minutes || 0}분 · ${day.entryCount || 0}개</span>` : ""}
+          <button class="${classes}" type="button" data-calendar-date="${key}" title="${details}" aria-label="${details}">
+            <strong>${date.getDate()}</strong>
+            <span class="calendar-day-marks">${studied ? `<i class="calendar-dot studied"></i>` : ""}${needsRegistration ? `<i class="calendar-dot pending"></i>` : ""}</span>
           </button>
         `;
       }).join("")
@@ -133,12 +196,12 @@ function dailyEntryCard(entry, helpers) {
         <div class="daily-entry-tags">
           <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind] || helpers.escapeHtml(entry.kind)}</span>
           ${needsRegistration
-            ? `<span class="badge red">등록 필요</span>`
+            ? `<span class="badge yellow">등록 필요</span>`
             : children.length
               ? `<span class="badge green">전체 등록됨</span>`
               : `<span class="badge green">등록됨</span>`}
-          <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
         </div>
+        ${deleteButton(entry, helpers)}
       </div>
       <h3 class="daily-sentence-title">${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span></h3>
       <div class="daily-reading-meaning">
@@ -156,6 +219,12 @@ function dailyEntryCard(entry, helpers) {
   `;
 }
 
+function deleteButton(entry, helpers) {
+  return `<button class="icon-btn row-delete-btn" type="button" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}" title="삭제" aria-label="삭제">${icon("trash")}</button>`;
+}
+
+// One checklist row per learned entry: registration state, title/reading,
+// meaning and where it came from. The full card lives on the sentence card.
 function learnedCard(entry, helpers) {
   const parsed = entry.parsed || {};
   const sourceSentences = entry.sourceSentences?.length
@@ -163,25 +232,26 @@ function learnedCard(entry, helpers) {
     : entry.parentId
       ? [{ id: entry.parentId, title: entry.parentTitle || "문장 보기" }]
       : [];
+  const meta = entry.kind === "word"
+    ? [
+        parsed.kanji ? `한자 ${helpers.highlight(parsed.kanji)}` : "",
+        parsed.part ? `품사 ${helpers.highlight(parsed.part)}` : ""
+      ].filter(Boolean).join(" · ")
+    : "";
   return `
-    <article class="learned-card" data-daily-entry-id="${helpers.escapeHtml(entry.id)}">
-      <div class="learned-card-head">
-        <div class="learned-card-tags">
-          <span class="badge ${helpers.badgeClassByKind[entry.kind] || "green"}">${helpers.kindLabels[entry.kind]}</span>
-          ${entry.registered ? `<span class="badge green">등록됨</span>` : `<span class="badge red">등록 필요</span>`}
-          <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
-        </div>
+    <article class="learned-card ${entry.registered ? "is-registered" : ""}" data-daily-entry-id="${helpers.escapeHtml(entry.id)}">
+      <span class="learned-status" title="${entry.registered ? "등록됨" : "등록 필요"}" aria-label="${entry.registered ? "등록됨" : "등록 필요"}"></span>
+      <div class="learned-card-main">
+        <h4>${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span>${entry.reading ? `<span class="learned-inline-reading">${helpers.highlight(entry.reading)}</span>` : ""}</h4>
+        <p class="learned-meaning">${helpers.highlight(entry.meaning || "-")}${meta ? `<span class="learned-meta"> · ${meta}</span>` : ""}</p>
+        ${sourceSentences.length
+          ? sourceSentences.map(sentence => `<button class="source-link" data-jump-sentence="${helpers.escapeHtml(sentence.id)}">사용 문장: ${helpers.highlight(sentence.title || "문장 보기")}</button>`).join("")
+          : `<span class="source-link muted">직접 추가</span>`}
       </div>
-      <h4>${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span>${entry.reading ? `<span class="learned-inline-reading">${helpers.highlight(entry.reading)}</span>` : ""}</h4>
-      <p class="learned-meaning item-meaning-text">${helpers.highlight(entry.meaning || "-")}</p>
-      ${entry.kind === "word" ? `<div class="word-meta learned-meta">
-        ${parsed.kanji ? `<span>한자 ${helpers.highlight(parsed.kanji)}</span>` : ""}
-        ${parsed.part ? `<span>품사 ${helpers.highlight(parsed.part)}</span>` : ""}
-        ${parsed.script ? `<span>문자 ${helpers.highlight(parsed.script)}</span>` : ""}
-      </div>` : ""}
-      ${sourceSentences.length ? `<div class="source-link-list">
-        ${sourceSentences.map(sentence => `<button class="source-link" data-jump-sentence="${helpers.escapeHtml(sentence.id)}">사용 문장: ${helpers.highlight(sentence.title || "문장 보기")}</button>`).join("")}
-      </div>` : `<span class="source-link muted">직접 추가</span>`}
+      <div class="learned-card-actions">
+        ${entry.registered ? "" : `<button class="ghost-btn tiny-action-btn" type="button" data-register-daily-entry="${helpers.escapeHtml(entry.id)}">등록</button>`}
+        ${deleteButton(entry, helpers)}
+      </div>
     </article>
   `;
 }

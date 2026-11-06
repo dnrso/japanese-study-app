@@ -59,7 +59,7 @@ function sentenceCard(entry, helpers) {
           <span class="badge ${helpers.badgeClassByKind.sentence || "purple"}">문장</span>
           <span class="badge yellow">${helpers.escapeHtml(entry.studyDate || "")}</span>
           ${needsRegistration
-            ? `<span class="badge red">등록 필요</span>`
+            ? `<span class="badge yellow">등록 필요</span>`
             : children.length
               ? `<span class="badge green">전체 등록됨</span>`
               : `<span class="badge green">등록됨</span>`}

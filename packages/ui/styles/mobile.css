@@ -142,10 +142,6 @@
     gap: 6px;
   }
 
-  #today .daily-kind-radios {
-    margin-bottom: 6px;
-  }
-
   #today .panel-header {
     margin-bottom: 8px;
   }
@@ -259,6 +255,16 @@
     min-height: 30px;
     width: 30px;
     height: 30px;
+  }
+
+  .row-delete-btn {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .entry-shortcut-hint {
+    display: none;
   }
 
   /* 한자 tab: desktop's minmax(164px, 1fr) only fits a single column at
