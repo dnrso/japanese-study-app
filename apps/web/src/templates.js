@@ -1,7 +1,9 @@
 import {
   homeSentencePanel,
-  homeWelcomePanel,
-  manualEntryPlaceholders,
+  homeSummaryPanel,
+  icon,
+  SENTENCE_PERIOD_FILTERS,
+  SENTENCE_STATUS_FILTERS,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
 import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
@@ -43,7 +45,7 @@ export function renderAppShell(byId) {
         </nav>
 
         <label class="search" aria-label="전체 검색">
-          <span>⌕</span>
+          <span class="search-icon">${icon("search")}</span>
           <input id="globalSearch" placeholder="단어, 문법, 표현, 자료 검색" />
           <span class="shortcut">Ctrl K</span>
         </label>
@@ -107,17 +109,11 @@ function homePageTemplate() {
   return `
     <section class="page" id="home">
       <div class="hero" id="home-overview">
-        ${homeWelcomePanel()}
-        ${homeSentencePanel()}
+        ${homeSummaryPanel()}
+        <div class="stat-grid" id="home-stats"></div>
       </div>
 
-      <div class="stat-grid" id="home-stats">
-        <div class="stat-card"><div class="stat-label">오늘 공부 항목</div><div class="stat-value" id="todayDoneCount">0개</div><div class="stat-note">완료한 할 일 기준</div></div>
-        <div class="stat-card"><div class="stat-label">새 항목</div><div class="stat-value" id="newItemCount">0개</div><div class="stat-note">단어 · 문법 · 표현 · 한자</div></div>
-        <div class="stat-card"><div class="stat-label">복습 항목</div><div class="stat-value" id="reviewItemCount">0개</div><div class="stat-note">오늘/대기 복습 대상</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 복습한 단어</div><div class="stat-value" id="reviewedWordCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
-        <div class="stat-card"><div class="stat-label">오늘 복습한 한자</div><div class="stat-value" id="reviewedKanjiCount">0개</div><div class="stat-note">오늘 복습 완료 기준</div></div>
-      </div>
+      ${homeSentencePanel()}
 
       <div class="content-grid">
         <div>
@@ -142,7 +138,7 @@ function homePageTemplate() {
           <section class="panel section" id="home-queue">
             <div class="panel-header">
               <h2 class="panel-title">복습 큐</h2>
-              <button class="primary-btn" type="button" data-open-page="review">복습 보기</button>
+              <button class="ghost-btn" type="button" data-open-page="review">복습 보기</button>
             </div>
             <div class="table-scroll">
               <table class="table">
@@ -163,34 +159,30 @@ function todayPageTemplate() {
       <div class="today-top-grid">
         ${sentenceEntryPanel()}
 
-        <section class="panel section" id="today-manual-entry">
-          <div class="panel-header">
-            <h2 class="panel-title">새 항목 추가</h2>
-            <button class="primary-btn" id="addManualEntryBtn" type="button" hidden>추가</button>
-          </div>
-          <div class="daily-kind-radios">
-            <label><input type="radio" name="dailyManualKind" value="word" /> 새 단어</label>
-            <label><input type="radio" name="dailyManualKind" value="grammar" /> 새 문법</label>
-            <label><input type="radio" name="dailyManualKind" value="expression" /> 새 표현</label>
-          </div>
-          <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder="${escapeHtml(manualEntryPlaceholders.word)}" hidden></textarea>
-        </section>
-
         <section class="panel section" id="today-calendar">
           <div class="panel-header">
             <h2 class="panel-title" id="calendarTitle">학습 캘린더</h2>
             <div class="calendar-actions">
-              <button class="ghost-btn" id="prevMonthBtn" type="button">이전달</button>
+              <button class="ghost-btn calendar-nav-btn" id="prevMonthBtn" type="button" title="이전 달" aria-label="이전 달">${icon("chevronLeft")}</button>
               <button class="ghost-btn" id="todayBtn" type="button">오늘</button>
-              <button class="ghost-btn" id="nextMonthBtn" type="button">다음달</button>
+              <button class="ghost-btn calendar-nav-btn" id="nextMonthBtn" type="button" title="다음 달" aria-label="다음 달">${icon("chevronRight")}</button>
               <button class="icon-btn calendar-toggle-btn" id="calendarToggleBtn" type="button" aria-expanded="true" aria-label="캘린더 접기/펼치기">⌄</button>
             </div>
           </div>
           <div class="calendar-body" id="calendarBody">
             <div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
             <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="calendar-legend">
+              <span><i class="calendar-dot studied"></i>공부한 날</span>
+              <span><i class="calendar-dot pending"></i>등록 필요</span>
+            </div>
           </div>
         </section>
+      </div>
+
+      <div class="today-register-bar" id="todayRegisterBar" hidden>
+        <p><strong>등록 안 된 항목 <span id="todayUnregisteredCount">0</span>개</strong><span>등록하면 단어장 · 복습 큐 · 퀴즈에서 이어서 쓸 수 있습니다.</span></p>
+        <button class="primary-btn" id="registerLearnedBtn" type="button">전체 등록</button>
       </div>
 
       <section class="panel section" id="today-sentences">
@@ -201,7 +193,6 @@ function todayPageTemplate() {
       <section class="panel section" id="today-learned">
         <div class="panel-header">
           <h2 class="panel-title">오늘 배운 항목</h2>
-          <button class="primary-btn compact-action-btn" id="registerLearnedBtn" type="button">전체 등록</button>
         </div>
         <div class="learned-grid">
           <section class="learned-section"><h3>새 단어</h3><div class="cards compact-cards" id="learnedWordCards"></div></section>
@@ -228,17 +219,31 @@ function sourcesPageTemplate() {
 }
 
 function sentencesPageTemplate() {
+  const filterGroup = (name, filters) => `
+    <div class="segmented" role="group">
+      ${filters.map(([value, label], index) => `<button class="segmented-btn ${index ? "" : "active"}" type="button" data-sentence-${name}="${value}" aria-pressed="${index ? "false" : "true"}">${label}</button>`).join("")}
+    </div>
+  `;
   return `
     <section class="page hidden-page" id="sentences">
       <section class="panel section" id="sentences-list">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">문장 노트</h2>
-            <p class="muted" id="sentencePageDate"></p>
+            <p class="muted sentence-summary" id="sentencePageDate"></p>
           </div>
           <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
         </div>
-        <div class="cards daily-entry-list" id="sentenceCards"></div>
+        <div class="sentence-toolbar">
+          ${filterGroup("status", SENTENCE_STATUS_FILTERS)}
+          ${filterGroup("period", SENTENCE_PERIOD_FILTERS)}
+          <label class="sentence-hide-toggle"><input id="sentenceHideMeaning" type="checkbox" /> 해석 가리기</label>
+        </div>
+        <div class="today-register-bar" id="sentenceRegisterBar" hidden>
+          <p><strong>등록 안 된 문장 <span id="sentenceUnregisteredCount">0</span>개</strong><span>문장과 연결된 단어 · 문법 · 표현을 한 번에 등록합니다.</span></p>
+          <button class="primary-btn" id="registerSentencesBtn" type="button">전체 등록</button>
+        </div>
+        <div class="sentence-list" id="sentenceCards"></div>
         <div id="sentencePagination"></div>
       </section>
     </section>

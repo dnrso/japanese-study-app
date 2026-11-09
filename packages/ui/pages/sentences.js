@@ -1,87 +1,123 @@
-import { empty, speakerButton } from "../components/index.js";
-import { grammarCandidate, wordCandidate } from "./today.js";
+import { empty, icon, speakerButton } from "../components/index.js";
 
-export function renderSentencesPage({ sentences, caption, helpers }) {
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+const CHILD_KINDS = [["word", "단어"], ["grammar", "문법"], ["expression", "표현"]];
+
+export const SENTENCE_STATUS_FILTERS = [["all", "전체"], ["pending", "등록 필요"], ["registered", "등록됨"]];
+export const SENTENCE_PERIOD_FILTERS = [["all", "전체 기간"], ["week", "최근 7일"], ["month", "이번 달"]];
+
+export function sentenceDateLabel(dateKey) {
+  if (!dateKey) {
+    return "날짜 없음";
+  }
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return `${month}월 ${day}일 (${WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()]})`;
+}
+
+// sentences arrive already filtered, sorted (newest date first) and paged;
+// consecutive sentences sharing a studyDate are grouped under one heading.
+export function renderSentencesPage({ sentences, summary, searchTerm = "", helpers }) {
+  const groups = [];
+  sentences.forEach(entry => {
+    const last = groups[groups.length - 1];
+    if (last && last.date === (entry.studyDate || "")) {
+      last.entries.push(entry);
+    } else {
+      groups.push({ date: entry.studyDate || "", entries: [entry] });
+    }
+  });
+
   return {
-    text: {
-      sentencePageDate: caption
-    },
     html: {
-      sentenceCards: sentences.length
-        ? sentences.map(entry => sentenceCard(entry, helpers)).join("")
-        : empty("오늘 공부에서 문장을 저장하면 이곳에 표시됩니다.")
+      sentencePageDate: [
+        `전체 ${summary.total}개`,
+        summary.pending ? `<span class="sentence-summary-pending">등록 필요 ${summary.pending}개</span>` : "",
+        summary.shown !== summary.total ? `표시 ${summary.shown}개` : "",
+        searchTerm ? `<span class="sentence-search-chip">'${helpers.escapeHtml(searchTerm)}' 검색 중 <button type="button" data-clear-search aria-label="검색 지우기">✕</button></span>` : ""
+      ].filter(Boolean).join(" · "),
+      sentenceCards: groups.length
+        ? groups.map(group => `
+          <section class="sentence-date-group">
+            <h3 class="sentence-date-heading">
+              <button type="button" data-open-study-date="${helpers.escapeHtml(group.date)}" title="오늘 공부에서 이 날짜 보기">${sentenceDateLabel(group.date)}</button>
+              <span>${group.entries.length}개</span>
+            </h3>
+            ${group.entries.map(entry => sentenceRow(entry, helpers)).join("")}
+          </section>
+        `).join("")
+        : empty(summary.total ? "조건에 맞는 문장이 없습니다." : "오늘 공부에서 문장을 저장하면 이곳에 표시됩니다.")
+    },
+    text: {
+      sentenceUnregisteredCount: String(summary.pending)
+    },
+    hidden: {
+      sentenceRegisterBar: !summary.pending
     }
   };
 }
 
-function sentenceCard(entry, helpers) {
-  const childWords = helpers.linkedEntriesForSentence("word", entry.id);
-  const childGrammar = helpers.linkedEntriesForSentence("grammar", entry.id);
-  const childExpressions = helpers.linkedEntriesForSentence("expression", entry.id);
-  const children = [...childWords, ...childGrammar, ...childExpressions];
+export function sentenceChildren(entry, helpers) {
+  return Object.fromEntries(CHILD_KINDS.map(([kind]) => [kind, helpers.linkedEntriesForSentence(kind, entry.id)]));
+}
+
+function sentenceRow(entry, helpers) {
+  const children = sentenceChildren(entry, helpers);
+  const allChildren = CHILD_KINDS.flatMap(([kind]) => children[kind]);
   // Same rollup as today.js's dailyEntryCard: 전체 등록 targets the sentence
   // itself (which becomes a 문장 item) as well as its
   // word/grammar/expression children, so the "needs registration" mark covers
   // the sentence AND its children.
-  const needsRegistration = [entry, ...children].some(item => helpers.core.entryNeedsRegistration(item));
-
-  const leftCandidates = childWords.length ? `
-    <section class="candidate-section">
-      <div class="candidate-title">단어</div>
-      <div class="word-candidate-grid">${childWords.map(helpers.entryToCandidate).map(word => wordCandidate(word, helpers)).join("")}</div>
-    </section>
-  ` : "";
-  const rightCandidates = [
-    childGrammar.length ? `
-      <section class="candidate-section">
-        <div class="candidate-title">문법</div>
-        <div class="grammar-candidate-list">${childGrammar.map(item => grammarCandidate(item, helpers)).join("")}</div>
-      </section>
-    ` : "",
-    childExpressions.length ? `
-      <section class="candidate-section">
-        <div class="candidate-title">표현</div>
-        <div class="grammar-candidate-list">${childExpressions.map(item => grammarCandidate(item, helpers)).join("")}</div>
-      </section>
-    ` : ""
-  ].join("");
-  const candidateLayout = leftCandidates || rightCandidates ? `
-    <div class="daily-candidate-layout">
-      ${leftCandidates ? `<div class="daily-candidate-column">${leftCandidates}</div>` : ""}
-      ${rightCandidates ? `<div class="daily-candidate-column">${rightCandidates}</div>` : ""}
-    </div>
-  ` : "";
+  const needsRegistration = [entry, ...allChildren].some(item => helpers.core.entryNeedsRegistration(item));
+  const counts = CHILD_KINDS
+    .filter(([kind]) => children[kind].length)
+    .map(([kind, label]) => `${label} ${children[kind].length}`)
+    .join(" · ");
+  const id = helpers.escapeHtml(entry.id);
 
   return `
-    <article class="study-card daily-entry-card sentence-card" id="sentence-card-${helpers.escapeHtml(entry.id)}" data-daily-entry-id="${helpers.escapeHtml(entry.id)}">
-      <div class="daily-entry-card-head">
-        <div class="daily-entry-tags">
-          <span class="badge ${helpers.badgeClassByKind.sentence || "purple"}">문장</span>
-          <span class="badge yellow">${helpers.escapeHtml(entry.studyDate || "")}</span>
-          ${needsRegistration
-            ? `<span class="badge red">등록 필요</span>`
-            : children.length
-              ? `<span class="badge green">전체 등록됨</span>`
-              : `<span class="badge green">등록됨</span>`}
+    <details class="sentence-row ${needsRegistration ? "" : "is-registered"}" id="sentence-card-${id}" data-daily-entry-id="${id}">
+      <summary>
+        <span class="sentence-row-title" lang="ja">${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span></span>
+        <span class="sentence-row-counts">${counts || "연결 항목 없음"}</span>
+        ${needsRegistration
+          ? `<span class="badge yellow">등록 필요</span>`
+          : `<span class="badge green">${allChildren.length ? "전체 등록됨" : "등록됨"}</span>`}
+        <span class="sentence-row-chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="sentence-row-body">
+        <div class="daily-reading-meaning">
+          <section>
+            <span>읽기</span>
+            <p lang="ja">${helpers.highlight(entry.reading || "-")}</p>
+          </section>
+          <section>
+            <span>해석</span>
+            <p class="sentence-meaning" data-reveal-meaning>${helpers.highlight(entry.meaning || "-")}</p>
+          </section>
         </div>
-        <button class="danger-btn tiny-action-btn" data-delete-daily-entry="${helpers.escapeHtml(entry.id)}">삭제</button>
+        ${allChildren.length ? `
+          <div class="sentence-items">
+            ${CHILD_KINDS.filter(([kind]) => children[kind].length).map(([kind, label]) => `
+              <div class="sentence-item-group">
+                <span class="sentence-item-kind">${label}</span>
+                <ul>
+                  ${children[kind].map(item => `
+                    <li>
+                      <strong lang="ja">${helpers.highlight(item.title)}</strong>
+                      ${item.reading ? `<span class="sentence-item-reading" lang="ja">${helpers.highlight(item.reading)}</span>` : ""}
+                      <span class="sentence-meaning" data-reveal-meaning>${helpers.highlight(item.meaning || "-")}</span>
+                    </li>
+                  `).join("")}
+                </ul>
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+        <div class="sentence-row-actions">
+          ${needsRegistration ? `<button class="ghost-btn tiny-action-btn" type="button" data-register-sentence="${id}">등록</button>` : ""}
+          <button class="icon-btn row-delete-btn" type="button" data-delete-daily-entry="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
+        </div>
       </div>
-      <h3 class="daily-sentence-title">${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span></h3>
-      <div class="daily-reading-meaning">
-        <section>
-          <span>읽기</span>
-          <p>${helpers.highlight(entry.reading || "-")}</p>
-        </section>
-        <section>
-          <span>해석</span>
-          <p>${helpers.highlight(entry.meaning || "-")}</p>
-        </section>
-      </div>
-      ${candidateLayout}
-      <div class="card-actions">
-        ${children.length ? "" : `<span class="source-link muted">연결된 항목 없음</span>`}
-        <button class="ghost-btn" data-jump-sentence="${helpers.escapeHtml(entry.id)}" data-source-date="${helpers.escapeHtml(entry.studyDate || "")}">오늘 공부에서 보기</button>
-      </div>
-    </article>
+    </details>
   `;
 }

@@ -1,6 +1,6 @@
 export const tocByPage = {
-  home: [["home-overview", "오늘 개요", ""], ["home-progress", "진행률", ""], ["home-stats", "요약 지표", "4"], ["home-today", "오늘 할 일", ""], ["home-recent", "최근 추가", ""], ["home-queue", "복습 큐", ""]],
-  today: [["today-log", "문장 추가", ""], ["today-calendar", "학습 캘린더", ""], ["today-sentences", "문장 카드", ""], ["today-learned", "오늘 배운 항목", ""]],
+  home: [["home-overview", "오늘 개요", ""], ["home-stats", "요약 지표", "4"], ["home-today", "오늘 할 일", ""], ["home-recent", "최근 추가", ""], ["home-queue", "복습 큐", ""]],
+  today: [["today-log", "기록 입력", ""], ["today-calendar", "학습 캘린더", ""], ["today-sentences", "문장 카드", ""], ["today-learned", "오늘 배운 항목", ""]],
   sources: [["sources-library", "자료 라이브러리", ""]],
   sentences: [["sentences-list", "문장 목록", ""]],
   words: [["words-list", "단어 목록", ""], ["words-taxonomy", "품사·문자 분류", ""]],
@@ -35,6 +35,14 @@ export const reviewOptions = ["오늘", "내일", "3일 후", "일주일", "2주
 export const scheduledReviewOptions = ["내일", "3일 후", "일주일", "2주일", "한달"];
 export const partOptions = ["명사", "대명사", "동사", "い형용사", "な형용사", "부사", "조사", "조동사", "접속사", "감탄사", "표현", "동사표현", "형용사표현", "부사표현", "문법표현", "サ변동사"];
 export const scriptOptions = ["한자", "히라가나", "가타카나", "한자+히라가나", "한자+가타카나", "혼합"];
+
+export const sentenceEntryExample = `# 私なんか気に障ることしたかな
+읽기 わたし なんか きにさわる こと したかな
+해석 나 따위가 기분 상할 만한 일을 한 걸까
+단어장
+\`気に障る\` (きにさわる) 기분에 거슬리다 | 한자=気, 障 | 품사=동사표현 | 문자=한자+히라가나
+문법
+\`なんか\` 자신을 낮추거나 가볍게 말할 때 쓰는 표현`;
 
 export const manualEntryPlaceholders = {
   word: "`私` (わたし) 나, 저 | 한자=私 (사사 사) | 품사=대명사 | 문자=한자",

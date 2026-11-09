@@ -20,8 +20,12 @@
     font-size: 18px;
   }
 
-  .panel.welcome h1 {
-    font-size: 26px;
+  .home-summary h1 {
+    font-size: 22px;
+  }
+
+  .home-sentence-title {
+    font-size: 22px;
   }
 
   .search {
@@ -136,10 +140,6 @@
 
   #today .daily-entry-list {
     gap: 6px;
-  }
-
-  #today .daily-kind-radios {
-    margin-bottom: 6px;
   }
 
   #today .panel-header {
@@ -257,6 +257,16 @@
     height: 30px;
   }
 
+  .row-delete-btn {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .entry-shortcut-hint {
+    display: none;
+  }
+
   /* 한자 tab: desktop's minmax(164px, 1fr) only fits a single column at
      375px (~321px of usable width once .main/.panel padding is
      subtracted), making each ~250px-tall card take a whole screen row by
@@ -346,5 +356,22 @@
   .tab {
     padding: 7px 8px;
     font-size: 11px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 문장 노트 rows: title on its own line, meta below it. */
+  .sentence-row summary {
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    gap: 6px 10px;
+  }
+
+  .sentence-row-title {
+    grid-column: 1 / -1;
+    font-size: 17px;
+  }
+
+  .sentence-hide-toggle {
+    margin-left: 0;
   }
 }
