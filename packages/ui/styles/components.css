@@ -548,7 +548,7 @@ h1 {
 
 /* 원본 문장: always shown, one line each, long sentences end in "…". */
 .word-source-cell .word-source-links {
-  width: clamp(140px, 16vw, 240px);
+  width: clamp(120px, 11vw, 170px);
   min-width: 0;
 }
 
