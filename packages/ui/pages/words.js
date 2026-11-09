@@ -1,9 +1,9 @@
 import { empty, icon, sourceSentenceLinks, speakerButton } from "../components/index.js";
 
-export function renderWordsPage({ rows, reviewOptions = [], helpers }) {
+export function renderWordsPage({ rows, reviewOptions = [], emptyMessage = "조건에 맞는 단어가 없습니다.", helpers }) {
   return {
     html: {
-      wordRows: rows.length ? rows.map(item => wordRow(item, reviewOptions, helpers)).join("") : `<tr><td colspan="8">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`
+      wordRows: rows.length ? rows.map(item => wordRow(item, reviewOptions, helpers)).join("") : `<tr><td colspan="8">${empty(emptyMessage)}</td></tr>`
     }
   };
 }

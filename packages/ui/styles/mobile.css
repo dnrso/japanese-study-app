@@ -208,9 +208,7 @@
   .primary-btn,
   .ghost-btn,
   .danger-btn,
-  .icon-btn,
-  .word-row-actions .ghost-btn,
-  .word-row-actions .danger-btn {
+  .icon-btn {
     min-height: 40px;
   }
 

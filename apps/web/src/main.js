@@ -831,13 +831,20 @@ function renderWords() {
   pageIndex.words = paged.page;
   const filtering = WORD_FILTER_IDS.some(id => byId(id).value);
   renderWordSortHeaders();
-  applyPagePatch(renderWordsPage({ rows: paged.pageItems, reviewOptions, helpers: renderHelpers() }));
+  applyPagePatch(renderWordsPage({
+    rows: paged.pageItems,
+    reviewOptions,
+    emptyMessage: words.length
+      ? "조건에 맞는 단어가 없습니다."
+      : "아직 등록된 단어가 없습니다. 오늘 공부에서 문장을 등록하거나 + 단어 추가로 직접 넣어 보세요.",
+    helpers: renderHelpers()
+  }));
   applyPagePatch({
     text: {
       wordTotalCount: `${words.length}개`,
       wordFilterSummary: [
         filtering || searchTerm ? `${rows.length}개 표시` : "",
-        wordSort.key ? "" : "최근 등록순"
+        wordSort.key || !rows.length ? "" : "최근 등록순"
       ].filter(Boolean).join(" · ")
     },
     hidden: {
