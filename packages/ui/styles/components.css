@@ -530,9 +530,13 @@ h1 {
   padding-left: 28px;
 }
 
+.word-table .word-source-cell {
+  width: 1%;
+}
+
 .word-table .word-review-col {
   width: 1%;
-  padding-left: 28px;
+  padding-left: 12px;
   white-space: nowrap;
 }
 
