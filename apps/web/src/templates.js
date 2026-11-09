@@ -279,6 +279,7 @@ function wordsPageTemplate() {
                 ${sortHeader("meaning", "뜻")}
                 ${sortHeader("kanji", "한자")}
                 ${sortHeader("part", "품사 · 문자")}
+                ${sortHeader("sourceSentence", "원본 문장")}
                 <th>복습</th>
                 <th><span class="visually-hidden">동작</span></th>
               </tr>

@@ -462,21 +462,20 @@ h1 {
 }
 
 .word-table td {
-  padding-top: 8px;
-  padding-bottom: 8px;
+  height: 50px;
 }
 
 .word-table tbody tr:hover {
   background: var(--surface-soft);
 }
 
+
 .word-reading {
-  color: var(--muted-strong);
   white-space: nowrap;
 }
 
 .word-meaning {
-  min-width: 140px;
+  min-width: 120px;
   font-size: 15px;
 }
 
@@ -547,10 +546,10 @@ h1 {
   }
 }
 
-.word-sentence-link {
-  margin-right: 4px;
-  font-size: 13px;
-  white-space: nowrap;
+/* 원본 문장: always shown, one line each, long sentences end in "…". */
+.word-source-cell .word-source-links {
+  width: clamp(140px, 16vw, 240px);
+  min-width: 0;
 }
 
 .row-action-btn {

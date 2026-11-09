@@ -1,9 +1,9 @@
-import { empty, icon, speakerButton } from "../components/index.js";
+import { empty, icon, sourceSentenceLinks, speakerButton } from "../components/index.js";
 
 export function renderWordsPage({ rows, reviewOptions = [], helpers }) {
   return {
     html: {
-      wordRows: rows.length ? rows.map(item => wordRow(item, reviewOptions, helpers)).join("") : `<tr><td colspan="7">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`
+      wordRows: rows.length ? rows.map(item => wordRow(item, reviewOptions, helpers)).join("") : `<tr><td colspan="8">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`
     }
   };
 }
@@ -14,7 +14,6 @@ function wordRow(item, reviewOptions, helpers) {
   // Kana-only words read the same as they're written: skip the duplicate.
   const reading = item.reading && item.reading !== item.title ? helpers.highlight(item.reading) : "";
   const meta = [item.part, item.script].filter(Boolean).map(value => helpers.highlight(value)).join(" · ");
-  const sentences = helpers.core.uniqueSourceSentences(item.sourceSentences || []);
   const dueDate = item.reviewDueDate && !["오늘", "대기"].includes(review) ? item.reviewDueDate : "";
   return `
     <tr data-item-id="${id}">
@@ -23,6 +22,7 @@ function wordRow(item, reviewOptions, helpers) {
       <td class="word-meaning">${helpers.highlight(item.meaning || "")}</td>
       <td class="word-kanji" lang="ja">${item.kanji ? helpers.highlight(item.kanji) : `<span class="muted">–</span>`}</td>
       <td class="word-meta-cell">${meta || `<span class="muted">–</span>`}</td>
+      <td class="word-source-cell">${sourceSentenceLinks(item.sourceSentences, helpers)}</td>
       <td>
         <div class="review-cell">
           <select class="review-select ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
@@ -33,9 +33,6 @@ function wordRow(item, reviewOptions, helpers) {
       </td>
       <td>
         <div class="word-row-actions">
-          ${sentences.length
-            ? `<button class="source-link word-sentence-link" type="button" data-jump-sentence="${helpers.escapeHtml(sentences[0].id)}" data-source-date="${helpers.escapeHtml(sentences[0].studyDate || "")}" title="${helpers.escapeHtml(sentences.map(sentence => sentence.title).join("\n"))}">문장${sentences.length > 1 ? ` ${sentences.length}` : ""} ↗</button>`
-            : ""}
           <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
           <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
         </div>

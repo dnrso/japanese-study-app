@@ -188,10 +188,10 @@
     min-width: 760px;
   }
 
-  /* Words table needs extra breathing room: 7 columns including
+  /* Words table needs extra breathing room: 8 columns including
      reading/meaning text that must not collapse to one char per line. */
   #words-list .table-scroll .table {
-    min-width: 820px;
+    min-width: 1000px;
   }
 
   #words-list .table-scroll .table td:nth-child(2) {
