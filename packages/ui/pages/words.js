@@ -14,7 +14,6 @@ function wordRow(item, reviewOptions, helpers) {
   // Kana-only words read the same as they're written: skip the duplicate.
   const reading = item.reading && item.reading !== item.title ? helpers.highlight(item.reading) : "";
   const meta = [item.part, item.script].filter(Boolean).map(value => helpers.highlight(value)).join(" · ");
-  const dueDate = item.reviewDueDate && !["오늘", "대기"].includes(review) ? item.reviewDueDate : "";
   return `
     <tr data-item-id="${id}">
       <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span></div></td>
@@ -28,7 +27,6 @@ function wordRow(item, reviewOptions, helpers) {
           <select class="review-select ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
             ${reviewOptions.map(option => `<option value="${helpers.escapeHtml(option)}" ${option === review ? "selected" : ""}>${helpers.escapeHtml(option)}</option>`).join("")}
           </select>
-          ${dueDate ? `<span class="review-due">${helpers.escapeHtml(dueDate)}</span>` : ""}
         </div>
       </td>
       <td>

@@ -497,9 +497,9 @@ h1 {
 }
 
 .review-select {
-  width: auto;
+  width: 66px;
   min-height: 28px;
-  padding: 3px 6px;
+  padding: 3px 2px 3px 6px;
   border-color: transparent;
   background: var(--surface-soft);
   color: var(--muted-strong);
@@ -519,11 +519,6 @@ h1 {
 .review-select.is-today {
   background: var(--red-soft);
   color: #cb574f;
-}
-
-.review-due {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .word-row-actions {
