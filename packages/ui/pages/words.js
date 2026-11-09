@@ -22,14 +22,14 @@ function wordRow(item, reviewOptions, helpers) {
       <td class="word-kanji" lang="ja">${item.kanji ? helpers.highlight(item.kanji) : `<span class="muted">–</span>`}</td>
       <td class="word-meta-cell">${meta || `<span class="muted">–</span>`}</td>
       <td class="word-source-cell">${sourceSentenceLinks(item.sourceSentences, helpers)}</td>
-      <td>
+      <td class="word-review-col">
         <div class="review-cell">
           <select class="review-select ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
             ${reviewOptions.map(option => `<option value="${helpers.escapeHtml(option)}" ${option === review ? "selected" : ""}>${helpers.escapeHtml(option)}</option>`).join("")}
           </select>
         </div>
       </td>
-      <td>
+      <td class="word-edit-col">
         <div class="word-row-actions">
           <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
           <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>

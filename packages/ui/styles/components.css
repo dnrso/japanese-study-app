@@ -525,20 +525,19 @@ h1 {
   justify-content: flex-end;
 }
 
-.word-table .word-row-actions > * {
-  opacity: 0;
-  transition: opacity 0.12s ease;
+.word-table .word-review-col {
+  padding-left: 28px;
 }
 
-.word-table tr:hover .word-row-actions > *,
-.word-table tr:focus-within .word-row-actions > * {
-  opacity: 1;
+.word-table .word-edit-col {
+  width: 1%;
+  padding-left: 16px;
+  white-space: nowrap;
 }
 
-@media (hover: none) {
-  .word-table .word-row-actions > * {
-    opacity: 1;
-  }
+.word-table .word-edit-col .word-row-actions {
+  justify-content: flex-start;
+  gap: 2px;
 }
 
 /* 원본 문장: always shown, one line each, long sentences end in "…". */
