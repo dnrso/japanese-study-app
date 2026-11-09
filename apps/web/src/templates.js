@@ -66,7 +66,7 @@ export function renderAppShell(byId) {
             <p class="sidebar-title">빠른 필터</p>
             <div class="toc-list">
               <button class="toc-item filter-btn" type="button" data-filter="review"><span>복습 필요</span><span class="count" id="reviewFilterCount">0</span></button>
-              <button class="toc-item filter-btn" type="button" data-filter="source"><span>자료 연결됨</span><span class="count" id="sourceFilterCount">0</span></button>
+              <button class="toc-item filter-btn" type="button" data-filter="source"><span>문장 연결 단어</span><span class="count" id="sourceFilterCount">0</span></button>
               <button class="toc-item filter-btn" type="button" data-filter="pending"><span>미완료</span><span class="count" id="pendingFilterCount">0</span></button>
             </div>
           </div>
@@ -251,31 +251,36 @@ function sentencesPageTemplate() {
 }
 
 function wordsPageTemplate() {
+  const sortHeader = (key, label) => `<th><button class="sort-btn" data-word-sort="${key}" type="button">${label} <span data-word-sort-indicator="${key}">↕</span></button></th>`;
   return `
     <section class="page hidden-page" id="words">
       <section class="panel section" id="words-list">
         <div class="panel-header">
-          <h2 class="panel-title">단어장</h2>
+          <h2 class="panel-title">단어장 <span class="panel-count" id="wordTotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="word" data-add-item>+ 단어 추가</button>
         </div>
         <div class="table-tools">
-          <select id="wordPartFilter"><option value="">전체 품사</option></select>
-          <select id="wordScriptFilter"><option value="">전체 문자</option></select>
-          <select id="wordReviewFilter"><option value="">전체 복습</option></select>
+          <select id="wordPartFilter" aria-label="품사"><option value="">전체 품사</option></select>
+          <select id="wordScriptFilter" aria-label="문자"><option value="">전체 문자</option></select>
+          <select id="wordReviewFilter" aria-label="복습"><option value="">전체 복습</option></select>
+          <select id="wordSourceFilter" aria-label="출처">
+            <option value="">전체 출처</option>
+            <option value="sentence">문장에서 등록</option>
+            <option value="manual">직접 추가</option>
+          </select>
+          <p class="table-tools-summary"><span id="wordFilterSummary"></span><button class="link-btn" id="wordFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="table-scroll">
-          <table class="table">
+          <table class="table word-table">
             <thead>
               <tr>
-                <th><button class="sort-btn" data-word-sort="title" type="button">단어 <span data-word-sort-indicator="title"></span></button></th>
+                ${sortHeader("title", "단어")}
                 <th>읽기</th>
-                <th><button class="sort-btn" data-word-sort="meaning" type="button">뜻 <span data-word-sort-indicator="meaning"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="kanji" type="button">한자 <span data-word-sort-indicator="kanji"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="part" type="button">품사 <span data-word-sort-indicator="part"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="script" type="button">문자 <span data-word-sort-indicator="script"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="sourceSentence" type="button">원본 문장 <span data-word-sort-indicator="sourceSentence"></span></button></th>
+                ${sortHeader("meaning", "뜻")}
+                ${sortHeader("kanji", "한자")}
+                ${sortHeader("part", "품사 · 문자")}
                 <th>복습</th>
-                <th></th>
+                <th><span class="visually-hidden">동작</span></th>
               </tr>
             </thead>
             <tbody id="wordRows"></tbody>
@@ -283,15 +288,18 @@ function wordsPageTemplate() {
         </div>
         <div id="wordsPagination"></div>
       </section>
-
-      <section class="taxonomy-section" id="words-taxonomy">
-        <div class="panel-header"><h3 class="panel-title">단어장 분류 체계</h3><span class="badge green">검색 · 필터 기준</span></div>
-        <div class="taxonomy-grid">
-          <article class="taxonomy-card"><h4>품사</h4><div class="taxonomy-chip-wrap" id="partChips"></div></article>
-          <article class="taxonomy-card"><h4>문자</h4><div class="taxonomy-chip-wrap" id="scriptChips"></div></article>
-        </div>
-      </section>
     </section>
+
+    <dialog class="item-dialog" id="wordDialog" aria-labelledby="wordDialogTitle">
+      <form method="dialog" id="wordDialogForm">
+        <h2 class="panel-title" id="wordDialogTitle">단어 추가</h2>
+        <div id="wordDialogFields"></div>
+        <div class="item-dialog-actions">
+          <button class="ghost-btn" type="button" value="cancel" id="wordDialogCancel">취소</button>
+          <button class="primary-btn" type="submit" value="save">저장</button>
+        </div>
+      </form>
+    </dialog>
   `;
 }
 

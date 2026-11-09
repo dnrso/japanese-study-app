@@ -3,7 +3,7 @@ export const tocByPage = {
   today: [["today-log", "기록 입력", ""], ["today-calendar", "학습 캘린더", ""], ["today-sentences", "문장 카드", ""], ["today-learned", "오늘 배운 항목", ""]],
   sources: [["sources-library", "자료 라이브러리", ""]],
   sentences: [["sentences-list", "문장 목록", ""]],
-  words: [["words-list", "단어 목록", ""], ["words-taxonomy", "품사·문자 분류", ""]],
+  words: [["words-list", "단어 목록", ""]],
   grammar: [["grammar-detail", "문법 상세", ""]],
   expressions: [["expressions-list", "표현 목록", ""]],
   kanji: [["kanji-grid", "한자 목록", ""]],

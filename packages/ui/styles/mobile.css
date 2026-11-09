@@ -188,10 +188,10 @@
     min-width: 760px;
   }
 
-  /* Words table needs extra breathing room: 9 columns including
+  /* Words table needs extra breathing room: 7 columns including
      reading/meaning text that must not collapse to one char per line. */
   #words-list .table-scroll .table {
-    min-width: 1000px;
+    min-width: 820px;
   }
 
   #words-list .table-scroll .table td:nth-child(2) {
@@ -257,7 +257,8 @@
     height: 30px;
   }
 
-  .row-delete-btn {
+  .row-delete-btn,
+  .row-action-btn {
     width: 32px;
     height: 32px;
     min-height: 32px;

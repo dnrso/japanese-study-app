@@ -459,7 +459,8 @@ export function quickFilterCounts(state = {}, searchTerm = "") {
   const tasks = state.tasks || [];
   return {
     review: reviewItems(items, searchTerm).length,
-    source: items.filter(item => item.source && item.kind !== "source").length,
+    // Words that came from a saved sentence (the 단어 tab's "문장에서 등록" filter).
+    source: items.filter(item => item.kind === "word" && uniqueSourceSentences(item.sourceSentences).length).length,
     pending: tasks.filter(task => !task.done).length
   };
 }

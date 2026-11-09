@@ -1,35 +1,69 @@
-import { empty, sourceSentenceLinks, speakerButton, taxonomyChip } from "../components/index.js";
+import { empty, icon, speakerButton } from "../components/index.js";
 
-export function renderWordsPage({ rows, helpers }) {
+export function renderWordsPage({ rows, reviewOptions = [], helpers }) {
   return {
     html: {
-      wordRows: rows.length ? rows.map(item => `
-        <tr data-item-id="${helpers.escapeHtml(item.id)}">
-          <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span>${helpers.highlight(item.title)}</span></div></td>
-          <td>${helpers.highlight(item.reading || "-")}</td>
-          <td>${helpers.highlight(item.meaning)}</td>
-          <td>${helpers.highlight(item.kanji || "없음")}</td>
-          <td><span class="badge blue">${helpers.highlight(item.part || "-")}</span></td>
-          <td><span class="badge green">${helpers.highlight(item.script || "-")}</span></td>
-          <td>${sourceSentenceLinks(item.sourceSentences, helpers)}</td>
-          <td><button class="badge ${item.review === "오늘" ? "red" : "yellow"}" data-cycle-review="${helpers.escapeHtml(item.id)}">${helpers.highlight(helpers.reviewStatusText(item))}</button></td>
-          <td>
-            <div class="word-row-actions">
-              <button class="ghost-btn" data-edit-item="${helpers.escapeHtml(item.id)}">수정</button>
-              <button class="danger-btn" data-delete-item="${helpers.escapeHtml(item.id)}">삭제</button>
-            </div>
-          </td>
-        </tr>
-      `).join("") : `<tr><td colspan="9">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`
+      wordRows: rows.length ? rows.map(item => wordRow(item, reviewOptions, helpers)).join("") : `<tr><td colspan="7">${empty("조건에 맞는 단어가 없습니다.")}</td></tr>`
     }
   };
 }
 
-export function renderTaxonomyPage({ partOptions, scriptOptions, selectedPart, selectedScript, helpers }) {
-  return {
-    html: {
-      partChips: partOptions.map(option => taxonomyChip("part", option, selectedPart === option, helpers)).join(""),
-      scriptChips: scriptOptions.map(option => taxonomyChip("script", option, selectedScript === option, helpers)).join("")
-    }
-  };
+function wordRow(item, reviewOptions, helpers) {
+  const id = helpers.escapeHtml(item.id);
+  const review = item.review || "대기";
+  // Kana-only words read the same as they're written: skip the duplicate.
+  const reading = item.reading && item.reading !== item.title ? helpers.highlight(item.reading) : "";
+  const meta = [item.part, item.script].filter(Boolean).map(value => helpers.highlight(value)).join(" · ");
+  const sentences = helpers.core.uniqueSourceSentences(item.sourceSentences || []);
+  const dueDate = item.reviewDueDate && !["오늘", "대기"].includes(review) ? item.reviewDueDate : "";
+  return `
+    <tr data-item-id="${id}">
+      <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span></div></td>
+      <td class="word-reading" lang="ja">${reading}</td>
+      <td class="word-meaning">${helpers.highlight(item.meaning || "")}</td>
+      <td class="word-kanji" lang="ja">${item.kanji ? helpers.highlight(item.kanji) : `<span class="muted">–</span>`}</td>
+      <td class="word-meta-cell">${meta || `<span class="muted">–</span>`}</td>
+      <td>
+        <div class="review-cell">
+          <select class="review-select ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
+            ${reviewOptions.map(option => `<option value="${helpers.escapeHtml(option)}" ${option === review ? "selected" : ""}>${helpers.escapeHtml(option)}</option>`).join("")}
+          </select>
+          ${dueDate ? `<span class="review-due">${helpers.escapeHtml(dueDate)}</span>` : ""}
+        </div>
+      </td>
+      <td>
+        <div class="word-row-actions">
+          ${sentences.length
+            ? `<button class="source-link word-sentence-link" type="button" data-jump-sentence="${helpers.escapeHtml(sentences[0].id)}" data-source-date="${helpers.escapeHtml(sentences[0].studyDate || "")}" title="${helpers.escapeHtml(sentences.map(sentence => sentence.title).join("\n"))}">문장${sentences.length > 1 ? ` ${sentences.length}` : ""} ↗</button>`
+            : ""}
+          <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
+          <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+// 단어 추가/수정 dialog fields; `word` is empty for a new word.
+export function wordFormFields({ word = {}, partOptions = [], scriptOptions = [], escapeHtml }) {
+  const value = key => escapeHtml(word[key] || "");
+  const select = (name, label, options, current) => `
+    <label class="form-field">
+      <span>${label}</span>
+      <select name="${name}">
+        <option value="">선택 안 함</option>
+        ${options.map(option => `<option value="${escapeHtml(option)}" ${option === current ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+  return `
+    <div class="form-grid">
+      <label class="form-field"><span>단어 <em>*</em></span><input name="title" lang="ja" required value="${value("title")}" placeholder="例) 傘" /></label>
+      <label class="form-field"><span>읽기</span><input name="reading" lang="ja" value="${value("reading")}" placeholder="かさ" /></label>
+      <label class="form-field form-field-wide"><span>뜻 <em>*</em></span><input name="meaning" required value="${value("meaning")}" placeholder="우산" /></label>
+      <label class="form-field"><span>한자</span><input name="kanji" lang="ja" value="${value("kanji")}" placeholder="傘" /></label>
+      ${select("part", "품사", partOptions, word.part)}
+      ${select("script", "문자", scriptOptions, word.script)}
+    </div>
+  `;
 }

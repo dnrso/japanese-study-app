@@ -165,7 +165,7 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
-    expect(html).toContain(`data-cycle-review="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
   });
 
   it("renderKanjiPage does not let an id break out of its attributes", () => {

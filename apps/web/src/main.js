@@ -29,10 +29,10 @@ import {
   renderStatsPage,
   renderStudyCardsPage,
   renderTasksPage,
-  renderTaxonomyPage,
   renderTodayPage,
   renderWordQuizPage,
   renderWordsPage,
+  wordFormFields,
   reviewOptions,
   scheduledReviewOptions,
   scriptOptions,
@@ -293,17 +293,6 @@ function bindEvents() {
       return;
     }
 
-    const taxonomyTarget = event.target.closest("[data-word-taxonomy]");
-    if (taxonomyTarget) {
-      const select = byId(taxonomyTarget.dataset.wordTaxonomy === "part" ? "wordPartFilter" : "wordScriptFilter");
-      const value = taxonomyTarget.dataset.wordTaxonomyValue;
-      select.value = select.value === value ? "" : value;
-      resetPageIndex("words");
-      renderWords();
-      renderTaxonomy();
-      return;
-    }
-
     const addTarget = event.target.closest("[data-add-item]");
     if (addTarget) {
       await promptAddItem(addTarget.dataset.kind);
@@ -447,20 +436,26 @@ function bindEvents() {
     renderAll();
   });
 
-  byId("wordPartFilter").addEventListener("change", () => {
-    resetPageIndex("words");
-    renderWords();
-    renderTaxonomy();
+  WORD_FILTER_IDS.forEach(id => {
+    byId(id).addEventListener("change", () => {
+      resetPageIndex("words");
+      renderWords();
+    });
   });
-  byId("wordScriptFilter").addEventListener("change", () => {
-    resetPageIndex("words");
-    renderWords();
-    renderTaxonomy();
-  });
-  byId("wordReviewFilter").addEventListener("change", () => {
+  byId("wordFilterResetBtn").addEventListener("click", () => {
+    WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
     resetPageIndex("words");
     renderWords();
   });
+  document.body.addEventListener("change", async event => {
+    const reviewSelect = event.target.closest("[data-review-select]");
+    if (reviewSelect) {
+      state = await store.updateItemReview(reviewSelect.dataset.reviewSelect, reviewSelect.value, selectedDate);
+      renderAll();
+    }
+  });
+  byId("wordDialogCancel").addEventListener("click", () => byId("wordDialog").close());
+  byId("wordDialogForm").addEventListener("submit", saveWordDialog);
   // Only the 복습 큐 needs re-rendering: the sidebar 복습 필요 count and the
   // home 복습 항목 stat intentionally stay whole-queue numbers.
   byId("reviewKindFilter").addEventListener("change", renderReview);
@@ -625,7 +620,6 @@ function renderAll() {
   renderSentenceQuiz();
   renderReview();
   renderStats();
-  renderTaxonomy();
   renderQuickFilters();
   renderQuizSettings();
   renderListPageSizeSettings();
@@ -818,20 +812,37 @@ function renderWordFilters() {
   renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
 }
 
+const WORD_FILTER_IDS = ["wordPartFilter", "wordScriptFilter", "wordReviewFilter", "wordSourceFilter"];
+
 function renderWords() {
   const part = byId("wordPartFilter").value;
   const script = byId("wordScriptFilter").value;
   const review = byId("wordReviewFilter").value;
-  const rows = core.sortWords(items("word").filter(item =>
-    (!part || item.part === part) &&
-    (!script || item.script === script) &&
-    (!review || item.review === review)
-  ), wordSort);
+  const source = byId("wordSourceFilter").value;
+  const words = items("word");
+  const rows = core.sortWords(words.filter(item => {
+    const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
+    return (!part || item.part === part) &&
+      (!script || item.script === script) &&
+      (!review || (item.review || "대기") === review) &&
+      (!source || (source === "sentence") === fromSentence);
+  }), wordSort);
   const paged = paginate(rows, pageIndex.words, pageSizeFor("words"));
   pageIndex.words = paged.page;
+  const filtering = WORD_FILTER_IDS.some(id => byId(id).value);
   renderWordSortHeaders();
-  applyPagePatch(renderWordsPage({ rows: paged.pageItems, helpers: renderHelpers() }));
+  applyPagePatch(renderWordsPage({ rows: paged.pageItems, reviewOptions, helpers: renderHelpers() }));
   applyPagePatch({
+    text: {
+      wordTotalCount: `${words.length}개`,
+      wordFilterSummary: [
+        filtering || searchTerm ? `${rows.length}개 표시` : "",
+        wordSort.key ? "" : "최근 등록순"
+      ].filter(Boolean).join(" · ")
+    },
+    hidden: {
+      wordFilterResetBtn: !filtering
+    },
     html: {
       wordsPagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "words" })
     }
@@ -937,16 +948,6 @@ function renderStats() {
   }));
 }
 
-function renderTaxonomy() {
-  applyPagePatch(renderTaxonomyPage({
-    partOptions,
-    scriptOptions,
-    selectedPart: byId("wordPartFilter").value,
-    selectedScript: byId("wordScriptFilter").value,
-    helpers: renderHelpers()
-  }));
-}
-
 function renderQuickFilters() {
   applyPagePatch(renderQuickFiltersPage({
     counts: core.quickFilterCounts(state, searchTerm)
@@ -1035,7 +1036,7 @@ function renderWordSortHeaders() {
   });
   document.querySelectorAll("[data-word-sort-indicator]").forEach(indicator => {
     const isActive = indicator.dataset.wordSortIndicator === wordSort.key;
-    indicator.textContent = isActive && wordSort.direction === "asc" ? "▲" : isActive && wordSort.direction === "desc" ? "▼" : "";
+    indicator.textContent = isActive && wordSort.direction === "asc" ? "▲" : isActive && wordSort.direction === "desc" ? "▼" : "↕";
   });
 }
 
@@ -1119,7 +1120,9 @@ function applyQuickFilter(filter) {
     return;
   }
   if (filter === "source") {
-    setSearch("뉴스");
+    setSearch("");
+    WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
+    byId("wordSourceFilter").value = "sentence";
     openPage("words");
     return;
   }
@@ -1327,6 +1330,10 @@ async function registerEntries(ids, { quiet = false } = {}) {
 }
 
 async function promptAddItem(kind) {
+  if (kind === "word") {
+    openWordDialog();
+    return;
+  }
   const title = window.prompt(`${kindLabels[kind] || "항목"} 제목을 입력하세요.`);
   if (!title) {
     return;
@@ -1377,6 +1384,10 @@ async function promptEditItem(id) {
   if (!item) {
     return;
   }
+  if (item.kind === "word") {
+    openWordDialog(item);
+    return;
+  }
   const title = window.prompt("제목을 수정하세요.", item.title);
   if (!title) {
     return;
@@ -1404,6 +1415,44 @@ async function promptEditItem(id) {
   }
   state = await store.upsertItem(payload);
   renderAll();
+}
+
+let wordDialogItemId = "";
+
+function openWordDialog(word = null) {
+  wordDialogItemId = word?.id || "";
+  byId("wordDialogTitle").textContent = word ? "단어 수정" : "단어 추가";
+  byId("wordDialogFields").innerHTML = wordFormFields({ word: word || {}, partOptions, scriptOptions, escapeHtml });
+  byId("wordDialog").showModal();
+  byId("wordDialogForm").elements.title.focus();
+}
+
+async function saveWordDialog(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const fields = Object.fromEntries(["title", "reading", "meaning", "kanji", "part", "script"]
+    .map(name => [name, String(form.elements[name].value || "").trim()]));
+  if (!fields.title || !fields.meaning) {
+    form.reportValidity();
+    return;
+  }
+  const existing = state.items.find(item => item.id === wordDialogItemId);
+  state = await store.upsertItem(existing
+    ? { ...existing, ...fields, studyDate: selectedDate }
+    : {
+        id: nextId("word"),
+        kind: "word",
+        ...fields,
+        review: "대기",
+        source: "웹 미리보기",
+        note: "",
+        studyDate: selectedDate
+      });
+  byId("wordDialog").close();
+  renderAll();
+  if (!existing) {
+    openPage("words");
+  }
 }
 
 function sourceProgressInputValue(item) {
