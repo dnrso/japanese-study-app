@@ -127,6 +127,8 @@ let selectedDate = state.selectedDate;
 let calendarMonth = selectedDate.slice(0, 7);
 let calendarCollapsed = false;
 let entryMode = "sentence";
+let sentenceStatusFilter = "all";
+let sentencePeriodFilter = "all";
 let searchTerm = "";
 let wordSort = { key: "", direction: "" };
 let wordQuizMode = "random";
@@ -243,6 +245,10 @@ function bindEvents() {
   document.body.addEventListener("click", async event => {
     const speakTarget = event.target.closest("[data-speak-text]");
     if (speakTarget) {
+      if (speakTarget.closest("summary")) {
+        // Don't also toggle the 문장 노트 row the button sits in.
+        event.preventDefault();
+      }
       speak(speakTarget.dataset.speakText);
       return;
     }
@@ -344,6 +350,43 @@ function bindEvents() {
     const jumpTarget = event.target.closest("[data-jump-sentence]");
     if (jumpTarget) {
       jumpToSentence(jumpTarget.dataset.jumpSentence, jumpTarget.dataset.sourceDate || selectedDate);
+      return;
+    }
+
+    const registerSentenceTarget = event.target.closest("[data-register-sentence]");
+    if (registerSentenceTarget) {
+      const entry = (state.allDailyEntries || state.dailyEntries).find(candidate => candidate.id === registerSentenceTarget.dataset.registerSentence);
+      if (entry) {
+        await registerEntries(sentenceRegistrationTargets(entry).map(target => target.id), { quiet: true });
+      }
+      return;
+    }
+
+    const sentenceFilterTarget = event.target.closest("[data-sentence-status], [data-sentence-period]");
+    if (sentenceFilterTarget) {
+      const name = sentenceFilterTarget.dataset.sentenceStatus ? "status" : "period";
+      setSentenceFilter(name, sentenceFilterTarget.dataset.sentenceStatus || sentenceFilterTarget.dataset.sentencePeriod);
+      return;
+    }
+
+    const studyDateTarget = event.target.closest("[data-open-study-date]");
+    if (studyDateTarget && studyDateTarget.dataset.openStudyDate) {
+      selectedDate = studyDateTarget.dataset.openStudyDate;
+      calendarMonth = selectedDate.slice(0, 7);
+      await refreshState();
+      openPage("today");
+      return;
+    }
+
+    if (event.target.closest("[data-clear-search]")) {
+      setSearch("");
+      renderAll();
+      return;
+    }
+
+    const revealTarget = event.target.closest("[data-reveal-meaning]");
+    if (revealTarget && byId("sentenceCards").classList.contains("hide-meaning")) {
+      revealTarget.classList.toggle("revealed");
       return;
     }
 
@@ -457,6 +500,10 @@ function bindEvents() {
   });
   byId("addManualEntryBtn").addEventListener("click", addManualEntryFromInput);
   byId("registerLearnedBtn").addEventListener("click", registerLearnedEntries);
+  byId("registerSentencesBtn").addEventListener("click", registerVisibleSentences);
+  byId("sentenceHideMeaning").addEventListener("change", event => {
+    byId("sentenceCards").classList.toggle("hide-meaning", event.target.checked);
+  });
   byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
   byId("quizExitBtn").addEventListener("click", exitQuizSession);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
@@ -679,23 +726,90 @@ function renderSources() {
 }
 
 function renderSentences() {
-  const sentenceEntries = core.rootSentenceEntries(allDailyEntriesForSentences());
-  const paged = paginate(sentenceEntries, pageIndex.sentences, pageSizeFor("sentences"));
+  const helpers = {
+    ...renderHelpers(),
+    linkedEntriesForSentence: linkedEntriesForAnySentence
+  };
+  const { sentenceEntries, pending, filtered } = sentenceNoteEntries();
+  const paged = paginate(filtered, pageIndex.sentences, pageSizeFor("sentences"));
   pageIndex.sentences = paged.page;
   applyPagePatch(renderSentencesPage({
-    caption: searchTerm ? `검색 결과 ${sentenceEntries.length}개` : `오늘 공부에서 저장한 문장 ${sentenceEntries.length}개`,
     sentences: paged.pageItems,
-    helpers: {
-      ...renderHelpers(),
-      entryToCandidate: core.dailyEntryToCandidate,
-      linkedEntriesForSentence: linkedEntriesForAnySentence
-    }
+    summary: {
+      total: sentenceEntries.length,
+      pending: filtered.filter(entry => pending.has(entry)).length,
+      shown: filtered.length
+    },
+    searchTerm,
+    helpers
   }));
   applyPagePatch({
     html: {
       sentencePagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "sentences" })
     }
   });
+}
+
+// 문장 노트 list: search-matched sentences, newest study date first (same-date
+// sentences keep their stored order), then the status/period filters.
+function sentenceNoteEntries() {
+  const sentenceEntries = core.rootSentenceEntries(allDailyEntriesForSentences())
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => String(right.entry.studyDate || "").localeCompare(String(left.entry.studyDate || "")) || left.index - right.index)
+    .map(({ entry }) => entry);
+  const pending = new Set(sentenceEntries.filter(entry => sentenceRegistrationTargets(entry).length));
+  const filtered = sentenceEntries.filter(entry =>
+    sentenceMatchesPeriod(entry) &&
+    (sentenceStatusFilter === "all" || (sentenceStatusFilter === "pending") === pending.has(entry))
+  );
+  return { sentenceEntries, pending, filtered };
+}
+
+// Unregistered entries a sentence's 등록 covers: the sentence itself plus its
+// linked word/grammar/expression entries (same rollup as its badge).
+function sentenceRegistrationTargets(entry) {
+  const children = ["word", "grammar", "expression"].flatMap(kind => linkedEntriesForAnySentence(kind, entry.id));
+  return [entry, ...children].filter(item => core.entryNeedsRegistration(item));
+}
+
+function sentenceMatchesPeriod(entry) {
+  if (sentencePeriodFilter === "all") {
+    return true;
+  }
+  const studyDate = entry.studyDate || "";
+  const today = todayKey();
+  if (sentencePeriodFilter === "month") {
+    return studyDate.slice(0, 7) === today.slice(0, 7);
+  }
+  const weekStart = new Date(`${today}T00:00:00`);
+  weekStart.setDate(weekStart.getDate() - 6);
+  return studyDate >= toDateKey(weekStart) && studyDate <= today;
+}
+
+function setSentenceFilter(name, value) {
+  if (name === "status") {
+    sentenceStatusFilter = value;
+  } else {
+    sentencePeriodFilter = value;
+  }
+  document.querySelectorAll(`[data-sentence-${name}]`).forEach(button => {
+    const active = button.dataset[name === "status" ? "sentenceStatus" : "sentencePeriod"] === value;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  resetPageIndex("sentences");
+  renderSentences();
+}
+
+// 전체 등록 covers every pending sentence that passes the current search and
+// filters, not just the page on screen.
+async function registerVisibleSentences() {
+  const targets = sentenceNoteEntries().filtered.flatMap(sentenceRegistrationTargets);
+  if (!targets.length) {
+    window.alert("등록할 문장이 없습니다.");
+    return;
+  }
+  await registerEntries([...new Set(targets.map(entry => entry.id))]);
 }
 
 function renderWordFilters() {

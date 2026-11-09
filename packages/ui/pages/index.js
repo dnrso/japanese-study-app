@@ -1,7 +1,7 @@
 export { homeSentencePanel, homeSummaryPanel, renderHomePage, renderHomeSentencePanel, renderQuickFiltersPage, renderTasksPage } from "./home.js";
 export { ENTRY_MODES, entryFormatHelp, renderCalendarPage, renderLearnedSectionsPage, renderTodayPage, sentenceEntryPanel } from "./today.js";
 export { renderSourcesPage, safeSourceUrl } from "./sources.js";
-export { renderSentencesPage } from "./sentences.js";
+export { SENTENCE_PERIOD_FILTERS, SENTENCE_STATUS_FILTERS, renderSentencesPage, sentenceChildren } from "./sentences.js";
 export { renderTaxonomyPage, renderWordsPage } from "./words.js";
 export { renderStudyCardsPage } from "./studyCards.js";
 export { renderKanjiPage } from "./kanji.js";

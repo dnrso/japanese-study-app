@@ -2,6 +2,8 @@ import {
   homeSentencePanel,
   homeSummaryPanel,
   icon,
+  SENTENCE_PERIOD_FILTERS,
+  SENTENCE_STATUS_FILTERS,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
 import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
@@ -217,17 +219,31 @@ function sourcesPageTemplate() {
 }
 
 function sentencesPageTemplate() {
+  const filterGroup = (name, filters) => `
+    <div class="segmented" role="group">
+      ${filters.map(([value, label], index) => `<button class="segmented-btn ${index ? "" : "active"}" type="button" data-sentence-${name}="${value}" aria-pressed="${index ? "false" : "true"}">${label}</button>`).join("")}
+    </div>
+  `;
   return `
     <section class="page hidden-page" id="sentences">
       <section class="panel section" id="sentences-list">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">문장 노트</h2>
-            <p class="muted" id="sentencePageDate"></p>
+            <p class="muted sentence-summary" id="sentencePageDate"></p>
           </div>
           <button class="primary-btn" type="button" data-open-page="today">+ 문장 추가</button>
         </div>
-        <div class="cards daily-entry-list" id="sentenceCards"></div>
+        <div class="sentence-toolbar">
+          ${filterGroup("status", SENTENCE_STATUS_FILTERS)}
+          ${filterGroup("period", SENTENCE_PERIOD_FILTERS)}
+          <label class="sentence-hide-toggle"><input id="sentenceHideMeaning" type="checkbox" /> 해석 가리기</label>
+        </div>
+        <div class="today-register-bar" id="sentenceRegisterBar" hidden>
+          <p><strong>등록 안 된 문장 <span id="sentenceUnregisteredCount">0</span>개</strong><span>문장과 연결된 단어 · 문법 · 표현을 한 번에 등록합니다.</span></p>
+          <button class="primary-btn" id="registerSentencesBtn" type="button">전체 등록</button>
+        </div>
+        <div class="sentence-list" id="sentenceCards"></div>
         <div id="sentencePagination"></div>
       </section>
     </section>

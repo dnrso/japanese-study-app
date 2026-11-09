@@ -926,3 +926,263 @@ mark {
     font-size: 32px;
   }
 }
+
+/* 문장 노트 */
+.sentence-summary {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.sentence-summary-pending {
+  color: #ad7320;
+  font-weight: 800;
+}
+
+.sentence-search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.sentence-search-chip button {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.sentence-search-chip button:hover {
+  background: var(--line);
+}
+
+.sentence-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.segmented-btn {
+  min-height: 28px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.segmented-btn:hover {
+  color: var(--text);
+}
+
+.segmented-btn.active {
+  background: var(--surface);
+  color: var(--accent-deep);
+  box-shadow: 0 1px 2px rgba(38, 36, 31, 0.12);
+}
+
+.sentence-hide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sentence-hide-toggle input {
+  accent-color: var(--accent);
+}
+
+.sentence-list {
+  display: grid;
+  gap: 18px;
+}
+
+.sentence-date-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.sentence-date-heading button {
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 850;
+}
+
+.sentence-date-heading button:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
+}
+
+.sentence-date-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.sentence-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.sentence-row + .sentence-row {
+  margin-top: 6px;
+}
+
+.sentence-row summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sentence-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.sentence-row summary:hover {
+  background: var(--surface-soft);
+  border-radius: var(--radius-md);
+}
+
+.sentence-row-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.sentence-row-counts {
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.sentence-row-chevron::before {
+  content: "";
+  display: block;
+  width: 7px;
+  height: 7px;
+  border: solid var(--muted);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  transition: transform 0.16s ease;
+}
+
+.sentence-row[open] .sentence-row-chevron::before {
+  transform: rotate(-135deg);
+}
+
+.sentence-row[open] summary {
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.sentence-row-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 12px;
+}
+
+.sentence-row-body .daily-reading-meaning {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.sentence-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.sentence-item-kind {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sentence-items ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sentence-items li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 14px;
+}
+
+.sentence-items li strong {
+  font-size: 15px;
+}
+
+.sentence-item-reading {
+  color: var(--muted-strong);
+  font-size: 13px;
+}
+
+.sentence-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+.hide-meaning .sentence-meaning:not(.revealed) {
+  border-radius: 4px;
+  background: var(--surface-soft);
+  color: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hide-meaning .sentence-meaning:not(.revealed) mark {
+  background: transparent;
+  color: transparent;
+}
+
+#sentenceRegisterBar {
+  margin-bottom: 16px;
+}
