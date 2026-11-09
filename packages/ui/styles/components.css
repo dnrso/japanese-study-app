@@ -525,13 +525,20 @@ h1 {
   justify-content: flex-end;
 }
 
-.word-table .word-review-col {
+.word-table .word-meaning-col,
+.word-table .word-meta-col {
   padding-left: 28px;
+}
+
+.word-table .word-review-col {
+  width: 1%;
+  padding-left: 28px;
+  white-space: nowrap;
 }
 
 .word-table .word-edit-col {
   width: 1%;
-  padding-left: 16px;
+  padding-left: 4px;
   white-space: nowrap;
 }
 

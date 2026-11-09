@@ -18,9 +18,9 @@ function wordRow(item, reviewOptions, helpers) {
     <tr data-item-id="${id}">
       <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span></div></td>
       <td class="word-reading" lang="ja">${reading}</td>
-      <td class="word-meaning">${helpers.highlight(item.meaning || "")}</td>
+      <td class="word-meaning word-meaning-col">${helpers.highlight(item.meaning || "")}</td>
       <td class="word-kanji" lang="ja">${item.kanji ? helpers.highlight(item.kanji) : `<span class="muted">–</span>`}</td>
-      <td class="word-meta-cell">${meta || `<span class="muted">–</span>`}</td>
+      <td class="word-meta-cell word-meta-col">${meta || `<span class="muted">–</span>`}</td>
       <td class="word-source-cell">${sourceSentenceLinks(item.sourceSentences, helpers)}</td>
       <td class="word-review-col">
         <div class="review-cell">

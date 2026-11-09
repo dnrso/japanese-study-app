@@ -251,7 +251,7 @@ function sentencesPageTemplate() {
 }
 
 function wordsPageTemplate() {
-  const sortHeader = (key, label) => `<th><button class="sort-btn" data-word-sort="${key}" type="button">${label} <span data-word-sort-indicator="${key}">↕</span></button></th>`;
+  const sortHeader = (key, label, className = "") => `<th${className ? ` class="${className}"` : ""}><button class="sort-btn" data-word-sort="${key}" type="button">${label} <span data-word-sort-indicator="${key}">↕</span></button></th>`;
   return `
     <section class="page hidden-page" id="words">
       <section class="panel section" id="words-list">
@@ -276,9 +276,9 @@ function wordsPageTemplate() {
               <tr>
                 ${sortHeader("title", "단어")}
                 <th>읽기</th>
-                ${sortHeader("meaning", "뜻")}
+                ${sortHeader("meaning", "뜻", "word-meaning-col")}
                 ${sortHeader("kanji", "한자")}
-                ${sortHeader("part", "품사 · 문자")}
+                ${sortHeader("part", "품사 · 문자", "word-meta-col")}
                 ${sortHeader("sourceSentence", "원본 문장")}
                 <th class="word-review-col">복습</th>
                 <th class="word-edit-col">수정</th>
