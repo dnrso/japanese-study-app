@@ -233,7 +233,7 @@ describe("record ids rendered into HTML attributes", () => {
       { id: "w4", title: "梅雨", reading: "つゆ", meaning: "장마" }
     ];
     const html = patchHtml(renderKanjiPage({ kanji: [item], reviewOptions: ["대기"], wordsFor: () => words, helpers: helpers() }));
-    expect(html).toContain("쓰인 단어");
+    expect(html).toContain("kanji-words");
     expect(html.match(/class="kanji-word"/g)).toHaveLength(3);
     expect(html).toContain("단어 4개 모두 보기");
     expect(html).toContain("뜻·읽기 추가");
@@ -243,7 +243,7 @@ describe("record ids rendered into HTML attributes", () => {
       wordsFor: () => [],
       helpers: helpers()
     }));
-    expect(bare).not.toContain("쓰인 단어");
+    expect(bare).not.toContain("kanji-words");
     expect(bare).not.toContain("뜻·읽기 추가");
     expect(bare).toContain("내 메모");
   });

@@ -35,7 +35,6 @@ export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => []
           </div>
           ${shown.length ? `
           <div class="kanji-words">
-            <span class="kanji-words-label">쓰인 단어</span>
             <ul class="kanji-word-list">
               ${shown.map(word => `
               <li class="kanji-word">

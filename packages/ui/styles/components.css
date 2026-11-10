@@ -730,7 +730,7 @@ h1 {
 
 .kanji-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 12px;
   align-items: stretch;
 }
@@ -834,12 +834,6 @@ h1 {
   padding-top: 10px;
   border-top: 1px solid var(--line);
   justify-items: start;
-}
-
-.kanji-words-label {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 750;
 }
 
 .kanji-word-list {
