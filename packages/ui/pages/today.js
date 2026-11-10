@@ -27,7 +27,7 @@ export function sentenceEntryPanel() {
           <span>AI 문장 분석</span>
           <span class="login-only-marker">${icon("lock")}로그인 후 사용 가능</span>
         </label>
-        <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="일본어 문장과 읽기·해석, 단어·문법·표현을 입력 형식에 맞춰 입력하세요."></textarea>
+        <textarea id="dailyEntryInput" class="daily-entry-input" placeholder="${sentenceEntryExample.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"></textarea>
       </div>
       <div id="manualEntryFields" hidden>
         <textarea id="manualEntryInput" class="daily-entry-input manual-entry-input" placeholder=""></textarea>
@@ -53,10 +53,14 @@ export function entryFormatHelp(mode, { escapeHtml }) {
         "<code># 문장</code> 첫 줄에 일본어 문장",
         "<code>읽기 …</code> / <code>해석 …</code> 줄로 읽기와 뜻",
         "<code>단어장</code> 다음 줄부터 <code>`단어` (읽기) 뜻 | 한자=… | 품사=… | 문자=…</code>",
+        "<code>한자=雨(비 우)</code>처럼 괄호 안에 한자의 뜻·음을 쓰면 한자 노트에 함께 등록",
         "<code>문법</code> · <code>표현</code> 다음 줄부터 <code>`항목` 설명</code>"
       ]
     : mode === "word"
-      ? ["<code>`단어` (읽기) 뜻 | 한자=… | 품사=… | 문자=…</code>"]
+      ? [
+          "<code>`단어` (읽기) 뜻 | 한자=… | 품사=… | 문자=…</code>",
+          "<code>한자=雨(비 우)</code>처럼 괄호 안에 한자의 뜻·음을 쓰면 한자 노트에 함께 등록"
+        ]
       : mode === "grammar"
         ? ["<code>`문법` 설명</code>"]
         : ["<code>`표현` (읽기) 뜻과 쓰임</code>"];
