@@ -850,7 +850,7 @@ h1 {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .kanji-word-text {
@@ -883,7 +883,7 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .kanji-word-meaning {
@@ -892,7 +892,7 @@ h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted-strong);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 @media (max-width: 768px) {
