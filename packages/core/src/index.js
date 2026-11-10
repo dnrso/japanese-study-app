@@ -22,18 +22,7 @@ export const AI_ANALYSIS_LIMITS = {
   maxChars: 300
 };
 
-const SEARCH_FIELDS = [
-  "title",
-  "reading",
-  "meaning",
-  "level",
-  "part",
-  "script",
-  "review",
-  "kanji",
-  "source",
-  "note"
-];
+const SEARCH_FIELDS = ["title", "reading", "meaning", "kanji", "note"];
 
 export function clampQuizQuestionFontSize(value) {
   return Math.min(64, Math.max(24, Number(value) || 32));
@@ -191,16 +180,67 @@ export function reviewSnapshot(item = {}) {
   };
 }
 
-export function matchesSearch(item, searchTerm = "") {
-  const needle = String(searchTerm || "").trim().toLowerCase();
-  if (!needle) {
+// NFKC + lowercase + katakana -> hiragana, so "アメ" finds "あめ". Kana and
+// ASCII keep their UTF-16 length, which lets highlight ranges map back onto
+// the original text (searchHighlightRanges bails out when the length differs).
+export function normalizeSearchText(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\u30a1-\u30f6]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60));
+}
+
+export function searchTerms(searchTerm = "") {
+  return normalizeSearchText(searchTerm).split(/[\s\u3000]+/).filter(Boolean);
+}
+
+// AND semantics: every whitespace-separated term must appear in the text.
+export function matchesSearchText(text, searchTerm = "") {
+  const terms = searchTerms(searchTerm);
+  if (!terms.length) {
     return true;
   }
-  return SEARCH_FIELDS
-    .map(field => item[field] || "")
-    .join(" ")
-    .toLowerCase()
-    .includes(needle);
+  const haystack = normalizeSearchText(text);
+  return terms.every(term => haystack.includes(term));
+}
+
+export function matchesSearch(item, searchTerm = "") {
+  // 문장의 note는 입력 원문 전체(품사·문자 줄 포함)라 검색 대상에서 뺀다.
+  const fields = item.kind === "sentence" ? SEARCH_FIELDS.filter(field => field !== "note") : SEARCH_FIELDS;
+  return matchesSearchText(fields.map(field => item[field] || "").join(" "), searchTerm);
+}
+
+// Merged, sorted [start, end) ranges of `text` covered by any search term.
+// Returns [] when normalization changed the text length (ranges would not map).
+export function searchHighlightRanges(text, searchTerm = "") {
+  const source = String(text ?? "");
+  const terms = searchTerms(searchTerm);
+  if (!terms.length || !source) {
+    return [];
+  }
+  const haystack = normalizeSearchText(source);
+  if (haystack.length !== source.length) {
+    return [];
+  }
+  const ranges = [];
+  terms.forEach(term => {
+    let index = haystack.indexOf(term);
+    while (index !== -1) {
+      ranges.push([index, index + term.length]);
+      index = haystack.indexOf(term, index + term.length);
+    }
+  });
+  ranges.sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  const merged = [];
+  ranges.forEach(range => {
+    const last = merged[merged.length - 1];
+    if (last && range[0] <= last[1]) {
+      last[1] = Math.max(last[1], range[1]);
+    } else {
+      merged.push([...range]);
+    }
+  });
+  return merged;
 }
 
 export function itemsByKind(items = [], kind, searchTerm = "") {
@@ -580,11 +620,12 @@ export function reviewedTodayCount(items = [], kind, todayDate = dateKey(new Dat
   return items.filter(item => item.kind === kind && String(item.lastReviewedAt || "").slice(0, 10) === todayDate).length;
 }
 
-export function quickFilterCounts(state = {}, searchTerm = "") {
+// Home/sidebar counts are global summaries: never filtered by the search box.
+export function quickFilterCounts(state = {}) {
   const items = state.items || [];
   const tasks = state.tasks || [];
   return {
-    review: reviewItems(items, searchTerm).length,
+    review: reviewItems(items).length,
     // Words that came from a saved sentence (the 단어 tab's "문장에서 등록" filter).
     source: items.filter(item => item.kind === "word" && uniqueSourceSentences(item.sourceSentences).length).length,
     pending: tasks.filter(task => !task.done).length
@@ -594,7 +635,7 @@ export function quickFilterCounts(state = {}, searchTerm = "") {
 const HOME_STUDY_KINDS = ["word", "grammar", "expression", "kanji"];
 const ONBOARDING_ENTRY_ID = "sentence-onboarding";
 
-export function homeOverview(state = {}, searchTerm = "") {
+export function homeOverview(state = {}) {
   const items = state.items || [];
   const allEntries = state.allDailyEntries || state.dailyEntries || [];
   const studyItems = items.filter(item => item.kind !== "source");
@@ -606,7 +647,7 @@ export function homeOverview(state = {}, searchTerm = "") {
     todaySentenceCount: (state.dailyEntries || [])
       .filter(entry => entry.kind === "sentence" && entry.id !== ONBOARDING_ENTRY_ID).length,
     newItemCount: studyItems.length,
-    reviewItemCount: reviewItems(items, searchTerm).length,
+    reviewItemCount: reviewItems(items).length,
     recentItems: studyItems.slice(0, 3),
     reviewedTodayCount: HOME_STUDY_KINDS.reduce(
       (total, kind) => total + reviewedTodayCount(items, kind, state.selectedDate || undefined),

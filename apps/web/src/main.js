@@ -137,6 +137,9 @@ let entryMode = "sentence";
 let sentenceStatusFilter = "all";
 let sentencePeriodFilter = "all";
 let searchTerm = "";
+let searchComposing = false;
+let searchTimer = 0;
+const SEARCH_DEBOUNCE_MS = 150;
 let wordSort = { key: "", direction: "" };
 let wordQuizMode = "random";
 let kanjiQuizMode = "random";
@@ -462,8 +465,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-clear-search]")) {
-      setSearch("");
-      renderAll();
+      clearSearch();
       return;
     }
 
@@ -520,10 +522,20 @@ function bindEvents() {
     }
   });
 
-  byId("globalSearch").addEventListener("input", event => {
-    searchTerm = event.target.value.trim();
-    resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
-    renderAll();
+  // Debounced, and never mid-IME-composition (Japanese/Korean input fires
+  // `input` for every uncommitted syllable); compositionend commits it.
+  const searchInput = byId("globalSearch");
+  searchInput.addEventListener("compositionstart", () => { searchComposing = true; });
+  searchInput.addEventListener("compositionend", () => {
+    searchComposing = false;
+    scheduleSearch(searchInput.value, 0);
+  });
+  searchInput.addEventListener("input", event => {
+    syncSearchClearButton();
+    if (searchComposing || event.isComposing) {
+      return;
+    }
+    scheduleSearch(event.target.value, SEARCH_DEBOUNCE_MS);
   });
 
   WORD_FILTER_IDS.forEach(id => {
@@ -721,6 +733,15 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !document.querySelector("dialog[open]")) {
+      const searchInput = byId("globalSearch");
+      if (event.target === searchInput ? searchInput.value : searchTerm) {
+        event.preventDefault();
+        clearSearch();
+        searchInput.focus();
+        return;
+      }
+    }
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
       event.preventDefault();
       byId("globalSearch").focus();
@@ -764,6 +785,7 @@ function renderAll() {
   renderListPageSizeSettings();
   renderStorageStatus();
   renderAccountStatus();
+  renderSearchStatus();
 }
 
 async function refreshState(studyDate = selectedDate) {
@@ -775,9 +797,9 @@ async function refreshState(studyDate = selectedDate) {
 
 function renderHome() {
   applyPagePatch(renderHomePage({
-    overview: core.homeOverview(state, searchTerm),
+    overview: core.homeOverview(state),
     reviewOptions,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
   renderHomeSentence();
 }
@@ -788,14 +810,14 @@ function renderHomeSentence({ reroll = false } = {}) {
   homeSentenceEntryId = sentence ? sentence.id : null;
   applyPagePatch(renderHomeSentencePanel({
     sentence,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
 }
 
 function renderTasks() {
   applyPagePatch(renderTasksPage({
     tasks: state.tasks.filter(task => !task.studyDate || task.studyDate === selectedDate),
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
 }
 
@@ -807,7 +829,7 @@ function renderToday() {
     sentenceEntries: core.rootSentenceEntries(entries),
     unregisteredCount: entries.filter(entry => core.entryNeedsRegistration(entry)).length,
     helpers: {
-      ...renderHelpers(),
+      ...renderHelpers({ marks: false }),
       entryToCandidate: core.dailyEntryToCandidate,
       linkedEntriesForSentence
     }
@@ -848,7 +870,7 @@ function renderLearnedSections() {
       grammar: dailyEntriesByKind("grammar"),
       expression: dailyEntriesByKind("expression")
     },
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
 }
 
@@ -874,7 +896,6 @@ function renderSentences() {
       pending: filtered.filter(entry => pending.has(entry)).length,
       shown: filtered.length
     },
-    searchTerm,
     helpers
   }));
   applyPagePatch({
@@ -1099,7 +1120,7 @@ function renderKanji() {
 function renderWordQuiz() {
   applyPagePatch(renderWordQuizPage({
     quiz: wordQuiz,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
 }
@@ -1107,7 +1128,7 @@ function renderWordQuiz() {
 function renderKanjiQuiz() {
   applyPagePatch(renderKanjiQuizPage({
     quiz: kanjiQuiz,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
 }
@@ -1115,7 +1136,7 @@ function renderKanjiQuiz() {
 function renderSentenceQuiz() {
   applyPagePatch(renderSentenceQuizPage({
     quiz: sentenceQuiz,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
 }
@@ -1311,7 +1332,7 @@ function renderStats() {
 
 function renderQuickFilters() {
   applyPagePatch(renderQuickFiltersPage({
-    counts: core.quickFilterCounts(state, searchTerm)
+    counts: core.quickFilterCounts(state)
   }));
 }
 
@@ -1475,7 +1496,8 @@ function openPage(pageId) {
   }
   currentPage = pageId;
   renderAll();
-  byId(pageId).scrollIntoView({ block: "start" });
+  // 검색 중에는 페이지 위의 검색 상태 칩이 가려지지 않게 그쪽으로 맞춘다.
+  (searchTerm ? byId("searchStatus") : byId(pageId)).scrollIntoView({ block: "start" });
 }
 
 function applyQuickFilter(filter) {
@@ -2117,21 +2139,77 @@ function applyQuizQuestionFontSize() {
 }
 
 function setSearch(value) {
+  window.clearTimeout(searchTimer);
   searchTerm = String(value || "").trim();
   byId("globalSearch").value = searchTerm;
   resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
+  syncSearchClearButton();
+}
+
+function scheduleSearch(value, delay) {
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => {
+    const next = String(value || "").trim();
+    if (next === searchTerm) {
+      return;
+    }
+    searchTerm = next;
+    resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
+    renderAll();
+  }, delay);
+}
+
+function clearSearch() {
+  setSearch("");
+  renderAll();
+}
+
+function syncSearchClearButton() {
+  const button = byId("searchClearBtn");
+  if (button) {
+    button.hidden = !byId("globalSearch").value;
+  }
+}
+
+// Result count for the tab being viewed; null where the tab lists no results.
+function searchResultCount() {
+  switch (currentPage) {
+    case "sources": return items("source").length;
+    case "sentences": return sentenceNoteEntries().filtered.length;
+    case "words": return items("word").length;
+    case "grammar": return items("grammar").length;
+    case "expressions": return items("expression").length;
+    case "kanji": return items("kanji").length;
+    case "review": return core.reviewItems(state.items, searchTerm, reviewKindFilter).length;
+    default: return null;
+  }
+}
+
+function renderSearchStatus() {
+  syncSearchClearButton();
+  let html = "";
+  if (searchTerm) {
+    const term = escapeHtml(searchTerm);
+    const count = searchResultCount();
+    html = currentPage === "home"
+      ? `<span class="search-chip">'${term}' 검색 중 <button type="button" data-clear-search aria-label="검색 지우기">✕</button></span><span class="search-status-hint">단어·문장·문법·표현·한자 탭에서 결과를 확인하세요</span>`
+      : `<span class="search-chip">'${term}' 검색 중${count === null ? "" : ` · ${count}건`} <button type="button" data-clear-search aria-label="검색 지우기">✕</button></span>`;
+  }
+  applyPagePatch({ html: { searchStatus: html }, hidden: { searchStatus: !searchTerm } });
 }
 
 function applyPagePatch(patch) {
   applySharedPagePatch(patch, { document });
 }
 
-function renderHelpers() {
+// marks: false for tabs that search never filters (home, today, quiz), so
+// they don't show stale search highlights.
+function renderHelpers({ marks = true } = {}) {
   return {
     badgeClassByKind,
     core,
     escapeHtml,
-    highlight,
+    highlight: marks ? highlight : escapeHtml,
     kindLabels,
     reviewStatusText: core.reviewStatusText
   };
@@ -2145,18 +2223,21 @@ function dailyEntriesForSelectedDate() {
   return state.dailyEntries.filter(entry => !entry.studyDate || entry.studyDate === selectedDate);
 }
 
+// A sentence matches when every search term appears in its own title/reading/
+// meaning plus those of its linked word/grammar/expression/kanji entries.
 function allDailyEntriesForSentences() {
   const entries = state.allDailyEntries || state.dailyEntries;
   if (!searchTerm) {
     return entries;
   }
-  const normalizedSearch = searchTerm.toLowerCase();
-  return entries.filter(entry => [
-    entry.title,
-    entry.reading,
-    entry.meaning,
-    entry.studyDate
-  ].some(value => String(value || "").toLowerCase().includes(normalizedSearch)));
+  return entries.filter(entry => {
+    const children = ["word", "grammar", "expression", "kanji"]
+      .flatMap(kind => linkedEntriesForAnySentence(kind, entry.id));
+    return core.matchesSearchText(
+      [entry, ...children].map(row => [row.title, row.reading, row.meaning].join(" ")).join(" "),
+      searchTerm
+    );
+  });
 }
 
 function dailyEntriesByKind(kind) {
@@ -2189,7 +2270,19 @@ function nextId(prefix) {
 }
 
 function highlight(value) {
-  return escapeHtml(value);
+  const text = String(value ?? "");
+  const ranges = searchTerm ? core.searchHighlightRanges(text, searchTerm) : [];
+  if (!ranges.length) {
+    return escapeHtml(text);
+  }
+  let html = "";
+  let cursor = 0;
+  ranges.forEach(([start, end]) => {
+    html += escapeHtml(text.slice(cursor, start));
+    html += `<mark class="search-hit">${escapeHtml(text.slice(start, end))}</mark>`;
+    cursor = end;
+  });
+  return html + escapeHtml(text.slice(cursor));
 }
 
 function quizCtx() {

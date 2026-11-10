@@ -16,7 +16,7 @@ export function sentenceDateLabel(dateKey) {
 
 // sentences arrive already filtered, sorted (newest date first) and paged;
 // consecutive sentences sharing a studyDate are grouped under one heading.
-export function renderSentencesPage({ sentences, summary, searchTerm = "", helpers }) {
+export function renderSentencesPage({ sentences, summary, helpers }) {
   const groups = [];
   sentences.forEach(entry => {
     const last = groups[groups.length - 1];
@@ -32,8 +32,7 @@ export function renderSentencesPage({ sentences, summary, searchTerm = "", helpe
       sentencePageDate: [
         `전체 ${summary.total}개`,
         summary.pending ? `<span class="sentence-summary-pending">등록 필요 ${summary.pending}개</span>` : "",
-        summary.shown !== summary.total ? `표시 ${summary.shown}개` : "",
-        searchTerm ? `<span class="sentence-search-chip">'${helpers.escapeHtml(searchTerm)}' 검색 중 <button type="button" data-clear-search aria-label="검색 지우기">✕</button></span>` : ""
+        summary.shown !== summary.total ? `표시 ${summary.shown}개` : ""
       ].filter(Boolean).join(" · "),
       sentenceCards: groups.length
         ? groups.map(group => `

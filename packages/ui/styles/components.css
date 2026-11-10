@@ -1571,3 +1571,67 @@ label {
   color: #b42318;
   font-weight: 800;
 }
+
+mark.search-hit {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+}
+
+.search-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted-strong);
+  scroll-margin-top: calc(var(--topbar-height) + 18px);
+}
+
+.search-status-hint {
+  color: var(--muted);
+}
+
+.search-status[hidden] {
+  display: none;
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.search-chip button,
+.search-clear {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.search-chip button:hover,
+.search-clear:hover {
+  background: var(--line);
+}
+
+.search-clear[hidden] {
+  display: none;
+}
