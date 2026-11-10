@@ -326,19 +326,20 @@ export function createQuizSession(poolSize, size = QUIZ_SESSION_SIZE) {
   return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false };
 }
 
-export function quizMissedEntry(question) {
+export function quizMissedEntry(question, selectedAnswer = "") {
   const { item, answerType, mode } = question;
+  const base = { id: item.id, item, selectedAnswer: String(selectedAnswer || "") };
   if (mode === "listen") {
-    return { id: item.id, prompt: item.title, answer: item.meaning };
+    return { ...base, prompt: item.title, answer: item.meaning };
   }
-  return { id: item.id, prompt: answerType === "title" ? item.meaning : item.title, answer: question.correctAnswer };
+  return { ...base, prompt: answerType === "title" ? item.meaning : item.title, answer: question.correctAnswer };
 }
 
-export function recordQuizAnswer(session, question, correct) {
+export function recordQuizAnswer(session, question, correct, selectedAnswer = "") {
   return {
     ...session,
     correct: session.correct + (correct ? 1 : 0),
-    missed: correct ? session.missed : [...session.missed, quizMissedEntry(question)],
+    missed: correct ? session.missed : [...session.missed, quizMissedEntry(question, selectedAnswer)],
     seenIds: session.seenIds.includes(question.item.id) ? session.seenIds : [...session.seenIds, question.item.id]
   };
 }

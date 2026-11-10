@@ -1126,8 +1126,10 @@ function renderWordQuiz() {
 }
 
 function renderKanjiQuiz() {
+  const words = core.itemsByKind(state.items, "word");
   applyPagePatch(renderKanjiQuizPage({
     quiz: kanjiQuiz,
+    wordsFor: item => wordsUsingKanji(item, words),
     helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();

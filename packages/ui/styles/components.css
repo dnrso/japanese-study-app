@@ -1232,7 +1232,7 @@ h1 {
   display: grid;
   justify-items: center;
   gap: 12px;
-  width: min(100%, 640px);
+  width: min(100%, 960px);
   margin: 0 auto;
   padding: 12px 0;
 }
@@ -1247,38 +1247,98 @@ h1 {
 }
 
 .quiz-missed-title {
-  margin: 8px 0 0;
+  width: 100%;
+  margin: 12px 0 0;
   font-size: 14px;
 }
 
-.quiz-missed-list {
+.quiz-missed-grid {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
   width: 100%;
+}
+
+.quiz-missed-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.quiz-missed-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.quiz-missed-kanji {
+  font-size: 40px;
+  line-height: 1.1;
+}
+
+.quiz-missed-reading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.quiz-missed-meaning {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.quiz-missed-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quiz-missed-words {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
   padding: 0;
   list-style: none;
+  font-size: 13px;
 }
 
-.quiz-missed-list li {
+.quiz-missed-words li {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  align-items: center;
+  gap: 6px;
 }
 
-.quiz-missed-arrow {
-  color: var(--muted);
+.quiz-missed-word-meaning {
+  color: var(--muted-strong);
+}
+
+.quiz-missed-wrong {
+  margin: 6px 0 0;
+  color: #c65149;
+  font-size: 12px;
 }
 
 .quiz-missed-empty {
   margin: 0;
   color: var(--muted-strong);
   font-weight: 800;
+}
+
+@media (max-width: 480px) {
+  .quiz-missed-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .quiz-result-actions {

@@ -23,12 +23,13 @@ export function renderWordQuizPage({ quiz, helpers }) {
   };
 }
 
-export function renderKanjiQuizPage({ quiz, helpers }) {
+export function renderKanjiQuizPage({ quiz, wordsFor = () => [], helpers }) {
   const panel = quizPanel({
     quiz,
     family: "kanji",
     title: "한자 퀴즈",
     restartKind: "kanji",
+    wordsFor,
     cumulativeLabel: "한자",
     promptText: question => question.answerType === "title" ? "뜻" : "한자",
     promptHtml: question => question.answerType === "title"
