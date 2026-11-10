@@ -20,8 +20,7 @@ import {
   renderTasksPage,
   renderTodayPage,
   noteCard,
-  renderWordsPage,
-  studyCard
+  renderWordsPage
 } from "@nihongo-study/ui";
 import * as core from "@nihongo-study/core";
 
@@ -139,23 +138,41 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(vulnerable)).toEqual(["autofocus", "onfocus"]);
   });
 
-  it("studyCard does not let an id break out of its attributes", () => {
-    const html = studyCard(hostileWord(), helpers());
+  it("noteCard with showKind does not let an id break out of its attributes", () => {
+    const html = noteCard(hostileWord(), ["대기", "오늘"], helpers(), { showKind: true });
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
-    // Still round-trips for the click handlers, just escaped.
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
   });
 
-  it("studyCard also escapes an unknown `kind` (which falls through kindLabels)", () => {
-    const html = studyCard(hostileWord({ kind: `<img src=x onerror="alert(1)">` }), helpers());
+  it("noteCard also escapes an unknown `kind` (which falls through kindLabels)", () => {
+    const html = noteCard(hostileWord({ kind: `<img src=x onerror="alert(1)">` }), ["대기"], helpers(), { showKind: true });
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain("<img");
   });
 
-  it("studyCard escapes the sourceSentences ids it renders as jump links", () => {
-    const html = studyCard(hostileWord({ kind: "grammar" }), helpers());
+  it("noteCard shows the kind badge and review select only as configured", () => {
+    const withKind = noteCard(hostileWord({ id: "w1" }), ["대기", "오늘"], helpers(), { showKind: true });
+    expect(withKind).toContain("badge");
+    expect(withKind).toContain("review-select-sm");
+    const noReview = noteCard(hostileWord({ id: "w1", review: undefined }), ["대기"], helpers(), { showKind: true });
+    expect(noReview).not.toContain("data-review-select");
+    const tab = noteCard(hostileWord({ id: "g1", kind: "grammar", review: undefined }), ["대기"], helpers());
+    expect(tab).not.toContain('class="badge');
+    expect(tab).toContain("data-review-select");
+    expect(tab).not.toContain("note-card-footer");
+  });
+
+  it("noteCard hides a note that merely repeats the title/reading/meaning", () => {
+    const sentence = { id: "s1", kind: "sentence", title: "水を飲む", reading: "みずをのむ", meaning: "물을 마신다", sourceSentences: [] };
+    const html = noteCard({ ...sentence, note: "水を飲む みずをのむ 물을 마신다" }, [], helpers(), { showKind: true });
+    expect(html).not.toContain("note-card-note");
+  });
+
+  it("noteCard escapes the sourceSentences ids it renders as jump links", () => {
+    const html = noteCard(hostileWord({ kind: "grammar" }), ["대기"], helpers(), { showKind: true });
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-source-date="${escapeHtml(HOSTILE_ID)}"`);

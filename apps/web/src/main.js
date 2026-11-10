@@ -653,6 +653,7 @@ async function refreshState(studyDate = selectedDate) {
 function renderHome() {
   applyPagePatch(renderHomePage({
     overview: core.homeOverview(state, searchTerm),
+    reviewOptions,
     helpers: renderHelpers()
   }));
   renderHomeSentence();

@@ -275,12 +275,16 @@ h1 {
 
 .note-card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
 .study-card .note-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   margin: 0;
   font-size: 20px;
   line-height: 1.35;
@@ -288,8 +292,23 @@ h1 {
 
 .note-card-actions {
   display: flex;
+  flex: 0 0 auto;
+  align-items: center;
   gap: 2px;
-  margin: -3px -5px 0 0;
+  margin: -3px -5px -3px 0;
+}
+
+.note-card-kind {
+  flex: 0 0 auto;
+}
+
+.review-select-sm {
+  width: 60px;
+  min-height: 0;
+  height: 25px;
+  margin-right: 4px;
+  padding: 0 2px 0 6px;
+  font-size: 12px;
 }
 
 .study-card .note-card-reading {
@@ -323,8 +342,7 @@ h1 {
   font-size: 13px;
 }
 
-.note-card-source-label,
-.note-card-footer-label {
+.note-card-source-label {
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 12px;
@@ -344,14 +362,6 @@ h1 {
 .note-card-source .source-link:hover {
   color: var(--accent-deep);
   text-decoration: underline;
-}
-
-.note-card-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 8px;
 }
 
 /* Shared pagination control bar (문장/단어/문법/표현/한자 list pages) - see
