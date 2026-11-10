@@ -730,7 +730,7 @@ h1 {
 
 .kanji-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
   align-items: stretch;
 }
@@ -742,14 +742,17 @@ h1 {
 .kanji-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
 }
 
-.kanji-card-main {
+.kanji-card-head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
 }
 
 .kanji-char {
@@ -759,9 +762,34 @@ h1 {
   font-weight: 900;
 }
 
+.kanji-side {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 4px;
+  justify-items: end;
+  align-content: space-between;
+  min-height: 44px;
+}
+
+.kanji-side .review-select-sm {
+  margin-right: 0;
+}
+
+.kanji-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.kanji-actions .row-action-btn,
+.kanji-actions .row-delete-btn {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+}
+
 .kanji-info {
   display: grid;
-  flex: 1 1 auto;
   gap: 3px;
   align-content: start;
   justify-items: start;
@@ -772,12 +800,14 @@ h1 {
   font-size: 15px;
   font-weight: 800;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .kanji-info p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .kanji-info .link-btn {
@@ -791,7 +821,8 @@ h1 {
 .kanji-words {
   display: grid;
   gap: 6px;
-  padding-top: 10px;
+  min-width: 0;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
   justify-items: start;
 }
@@ -804,7 +835,7 @@ h1 {
 
 .kanji-word-list {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -814,18 +845,40 @@ h1 {
 .kanji-word {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   font-size: 14px;
 }
 
-.kanji-word strong {
-  flex: 0 0 auto;
+.kanji-word-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.kanji-word-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.kanji-word-line strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 800;
 }
 
 .kanji-word-reading {
-  flex: 0 0 auto;
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--muted);
   font-size: 12px;
 }
@@ -835,6 +888,19 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--muted-strong);
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .kanji-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+  }
+
+  .kanji-card {
+    padding: 10px;
+  }
 }
 
 .quiz-grid {

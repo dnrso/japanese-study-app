@@ -17,21 +17,23 @@ export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => []
         const shown = words.slice(0, VISIBLE_WORDS);
         return `
         <article class="kanji-card" data-item-id="${id}">
-          <div class="kanji-card-main">
+          <div class="kanji-card-head">
             <span class="kanji-char" lang="ja">${highlight(item.title)}</span>
-            <div class="kanji-info">
-              ${item.meaning ? `<strong>${highlight(item.meaning)}</strong>` : ""}
-              ${item.reading ? `<p lang="ja">${highlight(item.reading)}</p>` : ""}
-              ${hasInfo ? "" : `<button class="link-btn" type="button" data-edit-item="${id}">뜻·읽기 추가</button>`}
-              ${memo ? `<p class="kanji-memo">${highlight(memo)}</p>` : ""}
-            </div>
-            <div class="note-card-actions">
+            <div class="kanji-side">
               <select class="review-select review-select-sm ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
                 ${reviewOptions.map(option => `<option value="${escapeHtml(option)}" ${option === review ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
               </select>
-              <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
-              <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
+              <div class="kanji-actions">
+                <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
+                <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
+              </div>
             </div>
+          </div>
+          <div class="kanji-info">
+            ${item.meaning ? `<strong>${highlight(item.meaning)}</strong>` : ""}
+            ${item.reading ? `<p lang="ja">${highlight(item.reading)}</p>` : ""}
+            ${hasInfo ? "" : `<button class="link-btn" type="button" data-edit-item="${id}">뜻·읽기 추가</button>`}
+            ${memo ? `<p class="kanji-memo">${highlight(memo)}</p>` : ""}
           </div>
           ${shown.length ? `
           <div class="kanji-words">
@@ -40,9 +42,13 @@ export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => []
               ${shown.map(word => `
               <li class="kanji-word">
                 ${speakerButton(word.title, helpers)}
-                <strong lang="ja">${highlight(word.title)}</strong>
-                ${word.reading ? `<span class="kanji-word-reading" lang="ja">${highlight(word.reading)}</span>` : ""}
-                ${word.meaning ? `<span class="kanji-word-meaning">${highlight(word.meaning)}</span>` : ""}
+                <div class="kanji-word-text">
+                  <div class="kanji-word-line">
+                    <strong lang="ja">${highlight(word.title)}</strong>
+                    ${word.reading ? `<span class="kanji-word-reading" lang="ja">${highlight(word.reading)}</span>` : ""}
+                  </div>
+                  ${word.meaning ? `<span class="kanji-word-meaning">${highlight(word.meaning)}</span>` : ""}
+                </div>
               </li>`).join("")}
             </ul>
             ${words.length > VISIBLE_WORDS ? `<button class="link-btn" type="button" data-show-kanji-words="${escapeHtml(item.title)}">단어 ${words.length}개 모두 보기</button>` : ""}
