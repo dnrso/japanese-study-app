@@ -18,17 +18,15 @@ export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => []
         return `
         <article class="kanji-card" data-item-id="${id}">
           <div class="kanji-card-head">
-            <span class="kanji-char" lang="ja">${highlight(item.title)}</span>
-            <div class="kanji-side">
-              <select class="review-select review-select-sm ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
-                ${reviewOptions.map(option => `<option value="${escapeHtml(option)}" ${option === review ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
-              </select>
-              <div class="kanji-actions">
-                <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
-                <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
-              </div>
+            <select class="review-select review-select-sm ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
+              ${reviewOptions.map(option => `<option value="${escapeHtml(option)}" ${option === review ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+            </select>
+            <div class="kanji-actions">
+              <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
+              <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
             </div>
           </div>
+          <span class="kanji-char" lang="ja">${highlight(item.title)}</span>
           <div class="kanji-info">
             ${item.meaning ? `<strong>${highlight(item.meaning)}</strong>` : ""}
             ${item.reading ? `<p lang="ja">${highlight(item.reading)}</p>` : ""}

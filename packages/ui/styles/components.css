@@ -749,34 +749,20 @@ h1 {
 
 .kanji-card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
-.kanji-char {
+.kanji-card-head .review-select-sm {
   flex: 0 0 auto;
-  font-size: 44px;
-  line-height: 1;
-  font-weight: 900;
-}
-
-.kanji-side {
-  display: grid;
-  flex: 0 0 auto;
-  gap: 4px;
-  justify-items: end;
-  align-content: space-between;
-  min-height: 44px;
-}
-
-.kanji-side .review-select-sm {
   margin-right: 0;
 }
 
 .kanji-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
 }
@@ -786,13 +772,35 @@ h1 {
   width: 26px;
   height: 26px;
   min-height: 26px;
+  color: var(--muted);
+}
+
+.kanji-actions .row-action-btn:hover,
+.kanji-actions .row-action-btn:focus-visible {
+  color: var(--text);
+}
+
+.kanji-actions .row-delete-btn:hover,
+.kanji-actions .row-delete-btn:focus-visible {
+  color: var(--danger, #c0392b);
+}
+
+.kanji-card .kanji-char {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 8px;
+  font-size: 56px;
+  line-height: 1.1;
+  font-weight: 800;
+  text-align: center;
 }
 
 .kanji-info {
   display: grid;
   gap: 3px;
   align-content: start;
-  justify-items: start;
+  justify-items: center;
+  text-align: center;
   min-width: 0;
 }
 
@@ -822,7 +830,8 @@ h1 {
   display: grid;
   gap: 6px;
   min-width: 0;
-  padding-top: 8px;
+  margin-top: 2px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
   justify-items: start;
 }
@@ -900,6 +909,10 @@ h1 {
 
   .kanji-card {
     padding: 10px;
+  }
+
+  .kanji-card .kanji-char {
+    font-size: 48px;
   }
 }
 
