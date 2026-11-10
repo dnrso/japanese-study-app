@@ -207,15 +207,91 @@ export function nextWordSort(currentSort = { key: "", direction: "" }, key) {
   return { key: "", direction: "" };
 }
 
+// Eligibility rule shared by the question builders and the quiz-selection
+// screen's availability display.
+export const QUIZ_MIN_CANDIDATES = 4;
+export const QUIZ_SESSION_SIZE = 10;
+
+export function quizCandidates(items = [], kind) {
+  return items.filter(item => item.kind === kind && item.title && item.meaning);
+}
+
+export function sentenceQuizCandidates(entries = []) {
+  return entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
+}
+
+// Pool size and startability for one selection-screen card. `quizKind` is
+// word | kanji | sentence-meaning | sentence-listen; `mode` is the word/kanji
+// radio value (random needs both directions to be answerable).
+export function quizAvailability({ items = [], entries = [], quizKind, mode = "random" } = {}) {
+  const isSentence = quizKind === "sentence-meaning" || quizKind === "sentence-listen";
+  const candidates = isSentence ? sentenceQuizCandidates(entries) : quizCandidates(items, quizKind);
+  let answerTypes;
+  if (quizKind === "sentence-meaning") {
+    answerTypes = ["meaning"];
+  } else if (quizKind === "sentence-listen") {
+    answerTypes = ["title"];
+  } else if (mode === "random") {
+    answerTypes = ["title", "meaning"];
+  } else {
+    answerTypes = [mode === "meaningToJp" || mode === "meaningToKanji" ? "title" : "meaning"];
+  }
+  const distinct = Math.min(...answerTypes.map(type => new Set(candidates.map(item => item[type])).size));
+  const poolSize = candidates.length;
+  const canStart = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
+  return {
+    poolSize,
+    distinctCount: distinct,
+    required: QUIZ_MIN_CANDIDATES,
+    canStart,
+    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : "distinct"
+  };
+}
+
+// --- Quiz session bookkeeping (pure). A session is up to QUIZ_SESSION_SIZE
+// questions; `index` is the 0-based current question.
+export function createQuizSession(poolSize, size = QUIZ_SESSION_SIZE) {
+  return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false };
+}
+
+export function quizMissedEntry(question) {
+  const { item, answerType, mode } = question;
+  if (mode === "listen") {
+    return { id: item.id, prompt: item.title, answer: item.meaning };
+  }
+  return { id: item.id, prompt: answerType === "title" ? item.meaning : item.title, answer: question.correctAnswer };
+}
+
+export function recordQuizAnswer(session, question, correct) {
+  return {
+    ...session,
+    correct: session.correct + (correct ? 1 : 0),
+    missed: correct ? session.missed : [...session.missed, quizMissedEntry(question)],
+    seenIds: session.seenIds.includes(question.item.id) ? session.seenIds : [...session.seenIds, question.item.id]
+  };
+}
+
+export function isLastQuizQuestion(session) {
+  return session.index + 1 >= session.total;
+}
+
+// Moves to the next question, or marks the session finished after the last.
+export function advanceQuizSession(session) {
+  return isLastQuizQuestion(session)
+    ? { ...session, finished: true }
+    : { ...session, index: session.index + 1 };
+}
+
 export function buildQuizQuestion({
   items = [],
   kind,
   mode = "random",
   forwardMode,
   reverseMode,
-  random = Math.random
+  random = Math.random,
+  excludeIds = []
 }) {
-  const candidates = items.filter(item => item.kind === kind && item.title && item.meaning);
+  const candidates = quizCandidates(items, kind);
   const resolvedMode = mode === "random" ? randomItem([forwardMode, reverseMode], random) : mode;
   const answerType = resolvedMode === reverseMode ? "title" : "meaning";
   const uniqueAnswers = [...new Set(candidates.map(item => item[answerType]))];
@@ -223,8 +299,11 @@ export function buildQuizQuestion({
     return null;
   }
 
-  const minCorrect = Math.min(...candidates.map(item => Number(item.quizCorrectCount || 0)));
-  const weakestItems = candidates.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
+  // Items already asked in this session are skipped while others remain.
+  const fresh = candidates.filter(item => !excludeIds.includes(item.id));
+  const askable = fresh.length ? fresh : candidates;
+  const minCorrect = Math.min(...askable.map(item => Number(item.quizCorrectCount || 0)));
+  const weakestItems = askable.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
   const item = randomItem(weakestItems, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
@@ -254,16 +333,17 @@ export function buildSentenceQuizQuestion({
   entries = [],
   mode = "meaning",
   random = Math.random,
-  excludeItemId = ""
+  excludeItemId = "",
+  excludeIds = []
 } = {}) {
-  const candidates = entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
+  const candidates = sentenceQuizCandidates(entries);
   const answerType = mode === "listen" ? "title" : "meaning";
   const uniqueAnswers = [...new Set(candidates.map(entry => entry[answerType]))];
   if (candidates.length < 4 || uniqueAnswers.length < 4) {
     return null;
   }
 
-  const pool = excludeItemId ? candidates.filter(entry => entry.id !== excludeItemId) : candidates;
+  const pool = candidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
   const item = randomItem(pool.length ? pool : candidates, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)

@@ -1,11 +1,14 @@
 import * as core from "@nihongo-study/core";
-import { kindLabels } from "@nihongo-study/ui";
 
 // Quiz session logic. These functions close over mutable quiz state that
 // lives in main.js (wordQuiz/kanjiQuiz/etc.), so callers pass a small `ctx`
 // object exposing getters/setters instead of module-level bindings. This
 // keeps the functions here free of main.js's module scope while preserving
 // identical behavior byte-for-byte.
+//
+// A quiz run is a session (see core's createQuizSession): each quiz state
+// object carries `session` ({index,total,correct,missed,seenIds,finished}),
+// null when no run is active. When session.finished the result view shows.
 //
 // Expected `ctx` shape:
 // {
@@ -17,126 +20,150 @@ import { kindLabels } from "@nihongo-study/ui";
 // }
 
 export function emptyQuiz() {
-  return { question: null, answered: false, selectedAnswer: "", result: null };
+  return { question: null, answered: false, selectedAnswer: "", result: null, session: null };
 }
 
 export function emptySentenceQuiz() {
-  return { question: null, answered: false, selectedAnswer: "", result: null, insufficientData: false, score: { correct: 0, wrong: 0 } };
+  return { question: null, answered: false, selectedAnswer: "", result: null, session: null };
 }
 
-export function startQuiz(kind, ctx) {
-  const { byId } = ctx;
-  if (kind === "grammar" || kind === "expression") {
-    byId("quizStatus").textContent = `${kindLabels[kind]} 퀴즈는 다음 단계에서 구현합니다.`;
-    return;
-  }
+function allEntries(ctx) {
+  const state = ctx.getState();
+  return state.allDailyEntries || state.dailyEntries || [];
+}
 
+function sentenceModeOf(kind) {
+  return kind === "sentence-listen" ? "listen" : "meaning";
+}
+
+// Builds one question for `kind` (word | kanji | sentence-meaning |
+// sentence-listen), skipping items already asked in the session.
+function buildQuestion(kind, ctx, excludeIds) {
+  if (kind === "sentence-meaning" || kind === "sentence-listen") {
+    return core.buildSentenceQuizQuestion({ entries: allEntries(ctx), mode: sentenceModeOf(kind), excludeIds });
+  }
   const isKanji = kind === "kanji";
-  const question = core.buildQuizQuestion({
+  return core.buildQuizQuestion({
     items: ctx.getState().items,
     kind: isKanji ? "kanji" : "word",
     mode: isKanji ? ctx.kanjiQuizMode : ctx.wordQuizMode,
     forwardMode: isKanji ? "kanjiToMeaning" : "jpToMeaning",
-    reverseMode: isKanji ? "meaningToKanji" : "meaningToJp"
+    reverseMode: isKanji ? "meaningToKanji" : "meaningToJp",
+    excludeIds
   });
+}
 
-  const nextQuiz = { question, answered: false, selectedAnswer: "", result: null };
-  if (isKanji) {
-    ctx.setKanjiQuiz(nextQuiz);
-    ctx.setWordQuiz(emptyQuiz());
-  } else {
-    ctx.setWordQuiz(nextQuiz);
-    ctx.setKanjiQuiz(emptyQuiz());
+function poolSizeFor(kind, ctx) {
+  return core.quizAvailability({
+    items: ctx.getState().items,
+    entries: allEntries(ctx),
+    quizKind: kind,
+    mode: kind === "kanji" ? ctx.kanjiQuizMode : ctx.wordQuizMode
+  }).poolSize;
+}
+
+function panelIdFor(kind) {
+  return kind === "kanji" ? "kanjiQuizPanel" : kind === "word" ? "wordQuizPanel" : "sentenceQuizPanel";
+}
+
+// Slot for the quiz state of a given panel family (word | kanji | sentence).
+function slot(family, ctx) {
+  if (family === "kanji") {
+    return { get: ctx.getKanjiQuiz, set: ctx.setKanjiQuiz };
   }
-  ctx.setSentenceQuiz(emptySentenceQuiz());
-  byId("quizStatus").textContent = question ? "정답을 선택하세요." : "퀴즈를 만들려면 같은 유형의 항목과 보기 후보가 4개 이상 필요합니다.";
+  if (family === "word") {
+    return { get: ctx.getWordQuiz, set: ctx.setWordQuiz };
+  }
+  return { get: ctx.getSentenceQuiz, set: ctx.setSentenceQuiz };
+}
+
+function familyOf(kind) {
+  return kind === "word" || kind === "kanji" ? kind : "sentence";
+}
+
+function renderAllQuizzes(ctx) {
   ctx.renderWordQuiz();
   ctx.renderKanjiQuiz();
   ctx.renderSentenceQuiz();
+}
 
-  if (question) {
-    const panelId = isKanji ? "kanjiQuizPanel" : "wordQuizPanel";
-    window.setTimeout(() => {
-      byId(panelId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
+// Starts a new session of up to QUIZ_SESSION_SIZE questions.
+export function startQuiz(kind, ctx) {
+  const { byId } = ctx;
+  const family = familyOf(kind);
+  const question = buildQuestion(kind, ctx, []);
+  ctx.setWordQuiz(emptyQuiz());
+  ctx.setKanjiQuiz(emptyQuiz());
+  ctx.setSentenceQuiz(emptySentenceQuiz());
+  if (!question) {
+    renderAllQuizzes(ctx);
+    return;
+  }
+  const session = core.createQuizSession(poolSizeFor(kind, ctx));
+  slot(family, ctx).set({
+    ...(family === "sentence" ? emptySentenceQuiz() : emptyQuiz()),
+    question,
+    session
+  });
+  renderAllQuizzes(ctx);
+  window.setTimeout(() => {
+    byId(panelIdFor(kind))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 0);
+  if (question.mode === "listen") {
+    ctx.speak(question.item.title);
   }
 }
 
 export function exitQuizSession(ctx) {
-  const { byId } = ctx;
   ctx.setWordQuiz(emptyQuiz());
   ctx.setKanjiQuiz(emptyQuiz());
   ctx.setSentenceQuiz(emptySentenceQuiz());
-  byId("quizStatus").textContent = "샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.";
-  ctx.renderWordQuiz();
-  ctx.renderKanjiQuiz();
-  ctx.renderSentenceQuiz();
-  byId("quiz-select").scrollIntoView({ behavior: "smooth", block: "start" });
+  renderAllQuizzes(ctx);
+  ctx.byId("quiz-select").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// Sentence quiz session logic. `mode` is "meaning" (Mode A: show the
-// Japanese sentence, choose its Korean meaning) or "listen" (Mode B: play
-// the sentence audio, choose the matching Japanese sentence, then reveal
-// the sentence + meaning). Sentence entries are daily-entry-shaped, not
-// review items, so this never calls store.submitWordQuizAnswer and never
-// stamps lastReviewedAt / touches SRS state — it's practice-only, tracked
-// with an in-session score instead of the persisted per-item quiz stats
-// that word/kanji quizzes use.
-export function startSentenceQuiz(mode, ctx) {
-  const { byId } = ctx;
-  const previous = ctx.getSentenceQuiz();
-  const sameMode = previous.question?.mode === mode;
-  const entries = ctx.getState().allDailyEntries || ctx.getState().dailyEntries || [];
-  const question = core.buildSentenceQuizQuestion({
-    entries,
-    mode,
-    excludeItemId: previous.question?.item?.id || ""
-  });
-
-  const nextQuiz = {
-    question,
-    answered: false,
-    selectedAnswer: "",
-    result: null,
-    insufficientData: !question,
-    score: sameMode ? previous.score : { correct: 0, wrong: 0 }
-  };
-  ctx.setSentenceQuiz(nextQuiz);
-  ctx.setWordQuiz(emptyQuiz());
-  ctx.setKanjiQuiz(emptyQuiz());
-
-  byId("quizStatus").textContent = question ? "정답을 선택하세요." : "문장 퀴즈를 만들려면 문장이 4개 이상 필요합니다.";
-  ctx.renderWordQuiz();
-  ctx.renderKanjiQuiz();
-  ctx.renderSentenceQuiz();
-
-  if (question) {
-    window.setTimeout(() => {
-      byId("sentenceQuizPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-    if (mode === "listen") {
-      ctx.speak(question.item.title);
+// "다음 문제" / "결과 보기": advance the session of `family` after an answer.
+export function nextQuizQuestion(family, ctx) {
+  const { get, set } = slot(family, ctx);
+  const quiz = get();
+  if (!quiz.session || !quiz.answered || quiz.session.finished) {
+    return;
+  }
+  const session = core.advanceQuizSession(quiz.session);
+  if (session.finished) {
+    set({ ...quiz, session });
+  } else {
+    const mode = quiz.question.mode;
+    const kind = family === "sentence" ? (mode === "listen" ? "sentence-listen" : "sentence-meaning") : family;
+    const question = buildQuestion(kind, ctx, session.seenIds);
+    if (!question) {
+      set({ ...quiz, session: { ...session, finished: true } });
+    } else {
+      set({ ...quiz, question, answered: false, selectedAnswer: "", result: null, session });
+      if (question.mode === "listen") {
+        ctx.speak(question.item.title);
+      }
     }
   }
+  renderAllQuizzes(ctx);
 }
 
+// Sentence quizzes are practice-only: sentence entries are daily-entry-shaped,
+// not review items, so this never calls store.submitWordQuizAnswer and never
+// touches lastReviewedAt / SRS state. Only the in-session tally is kept.
 export function submitSentenceQuizChoice(selectedAnswer, ctx) {
   const quiz = ctx.getSentenceQuiz();
   if (!quiz.question || quiz.answered) {
     return;
   }
   const correct = selectedAnswer === quiz.question.correctAnswer;
-  const nextQuiz = {
+  ctx.setSentenceQuiz({
     ...quiz,
     answered: true,
     selectedAnswer,
     result: { correct, correctAnswer: quiz.question.correctAnswer },
-    score: {
-      correct: quiz.score.correct + (correct ? 1 : 0),
-      wrong: quiz.score.wrong + (correct ? 0 : 1)
-    }
-  };
-  ctx.setSentenceQuiz(nextQuiz);
+    session: core.recordQuizAnswer(quiz.session, quiz.question, correct)
+  });
   ctx.renderSentenceQuiz();
 }
 
@@ -152,13 +179,19 @@ export async function submitQuizChoice(kind, selectedAnswer, ctx) {
     studyDate: ctx.selectedDate
   });
   ctx.setState(response.state);
+  const current = kind === "kanji" ? ctx.getKanjiQuiz() : ctx.getWordQuiz();
+  if (current.question !== quiz.question) {
+    // The run was exited/restarted while the answer was being saved.
+    return;
+  }
   const item = response.state.items.find(candidate => candidate.id === quiz.question.item.id);
   const nextQuiz = {
     ...quiz,
     question: { ...quiz.question, item: item || quiz.question.item },
     answered: true,
     selectedAnswer,
-    result: response.result
+    result: response.result,
+    session: core.recordQuizAnswer(quiz.session, quiz.question, Boolean(response.result?.correct))
   };
   if (kind === "kanji") {
     ctx.setKanjiQuiz(nextQuiz);

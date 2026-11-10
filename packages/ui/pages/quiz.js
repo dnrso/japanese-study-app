@@ -1,6 +1,6 @@
-import { quizPanel, speakerButton, empty } from "../components/index.js";
+import { quizPanel, speakerButton, icon } from "../components/index.js";
 
-const SENTENCE_QUIZ_BADGES = {
+const SENTENCE_QUIZ_TITLES = {
   meaning: "문장 뜻 고르기",
   listen: "듣고 문장 고르기"
 };
@@ -8,13 +8,14 @@ const SENTENCE_QUIZ_BADGES = {
 export function renderWordQuizPage({ quiz, helpers }) {
   const panel = quizPanel({
     quiz,
-    badge: "단어 퀴즈",
+    family: "word",
+    title: "단어 퀴즈",
+    restartKind: "word",
+    cumulativeLabel: "단어",
     promptText: question => question.answerType === "title" ? "뜻" : "일본어",
     promptHtml: question => question.answerType === "title"
       ? `<h3><span>${helpers.highlight(question.item.meaning)}</span></h3>`
-      : `<h3>${speakerButton(question.item.title, helpers)}<span>${helpers.highlight(question.item.title)}</span></h3>${question.item.reading ? `<p>${helpers.highlight(question.item.reading)}</p>` : ""}`,
-    choiceAttribute: "data-word-quiz-choice",
-    nextAttribute: "data-next-word-quiz"
+      : `<h3>${speakerButton(question.item.title, helpers)}<span>${helpers.highlight(question.item.title)}</span></h3>${question.item.reading ? `<p>${helpers.highlight(question.item.reading)}</p>` : ""}`
   }, helpers);
   return {
     html: { wordQuizPanel: panel.html },
@@ -25,13 +26,14 @@ export function renderWordQuizPage({ quiz, helpers }) {
 export function renderKanjiQuizPage({ quiz, helpers }) {
   const panel = quizPanel({
     quiz,
-    badge: "한자 퀴즈",
+    family: "kanji",
+    title: "한자 퀴즈",
+    restartKind: "kanji",
+    cumulativeLabel: "한자",
     promptText: question => question.answerType === "title" ? "뜻" : "한자",
     promptHtml: question => question.answerType === "title"
       ? `<h3><span>${helpers.highlight(question.item.meaning)}</span></h3>`
-      : `<h3><span>${helpers.highlight(question.item.title)}</span></h3>`,
-    choiceAttribute: "data-kanji-quiz-choice",
-    nextAttribute: "data-next-kanji-quiz"
+      : `<h3><span>${helpers.highlight(question.item.title)}</span></h3>`
   }, helpers);
   return {
     html: { kanjiQuizPanel: panel.html },
@@ -40,21 +42,15 @@ export function renderKanjiQuizPage({ quiz, helpers }) {
 }
 
 export function renderSentenceQuizPage({ quiz, helpers }) {
-  if (!quiz.question) {
-    return {
-      html: { sentenceQuizPanel: quiz.insufficientData ? empty("문장이 4개 이상 필요합니다. 오늘 공부에서 문장을 4개 이상 등록해 보세요.") : "" },
-      hidden: { sentenceQuizPanel: !quiz.insufficientData }
-    };
-  }
-
-  const mode = quiz.question.mode;
+  const mode = quiz.question?.mode;
   const panel = quizPanel({
     quiz,
-    badge: SENTENCE_QUIZ_BADGES[mode] || "문장 퀴즈",
-    promptText: question => question.answerType === "title" ? "음성" : "일본어 문장",
-    promptHtml: (question, currentQuiz) => sentencePromptHtml(question, currentQuiz, helpers),
-    choiceAttribute: "data-sentence-quiz-choice",
-    nextAttribute: "data-next-sentence-quiz"
+    family: "sentence",
+    title: SENTENCE_QUIZ_TITLES[mode] || "문장 퀴즈",
+    restartKind: mode === "listen" ? "sentence-listen" : "sentence-meaning",
+    layout: "list",
+    promptText: (question, currentQuiz) => question.mode === "listen" && !currentQuiz.answered ? "" : "일본어 문장",
+    promptHtml: (question, currentQuiz) => sentencePromptHtml(question, currentQuiz, helpers)
   }, helpers);
   return {
     html: { sentenceQuizPanel: panel.html },
@@ -65,7 +61,13 @@ export function renderSentenceQuizPage({ quiz, helpers }) {
 function sentencePromptHtml(question, quiz, helpers) {
   const { item, mode } = question;
   if (mode === "listen" && !quiz.answered) {
-    return `<h3>${speakerButton(item.title, helpers)}<span>문장을 듣고 정답을 고르세요</span></h3>`;
+    return `
+      <div class="quiz-listen">
+        <button class="quiz-listen-btn" type="button" data-speak-text="${helpers.escapeHtml(item.title)}" title="다시 듣기" aria-label="다시 듣기">${icon("volume")}</button>
+        <span class="quiz-listen-replay">다시 듣기</span>
+        <p class="quiz-listen-caption">문장을 듣고 맞는 문장을 고르세요</p>
+      </div>
+    `;
   }
   const revealedMeaning = mode === "listen" ? `<p>${helpers.highlight(item.meaning)}</p>` : "";
   return `

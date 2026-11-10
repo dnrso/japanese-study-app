@@ -833,9 +833,12 @@ mark {
   .hero,
   .content-grid,
   .today-top-grid,
-  .learned-grid,
-  .quiz-grid {
+  .learned-grid {
     grid-template-columns: 1fr;
+  }
+
+  .quiz-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -886,29 +889,16 @@ mark {
     grid-template-columns: 1fr;
   }
 
-  .word-quiz-question {
-    display: grid;
+  .quiz-grid {
     grid-template-columns: 1fr;
   }
 
-  .word-quiz-question > div:first-child,
-  .word-quiz-score {
-    grid-column: 1;
+  .quiz-card {
+    min-height: 0;
   }
 
-  .word-quiz-score {
-    justify-content: center;
-  }
-
-  .word-quiz-feedback {
-    grid-template-columns: 1fr;
-  }
-
-  .word-quiz-feedback strong,
-  .word-quiz-feedback span,
   .word-quiz-feedback .primary-btn {
-    grid-column: 1;
-    justify-self: center;
+    min-width: 110px;
   }
 
   .daily-reading-meaning section {

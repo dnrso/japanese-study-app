@@ -373,16 +373,15 @@ function quizPageTemplate() {
   return `
     <section class="page hidden-page" id="quiz">
       <section class="panel section" id="quiz-select">
-        <div class="panel-header">
+        <div class="panel-header" id="quizSelectHeader">
           <h2 class="panel-title">퀴즈</h2>
-          <div class="panel-header-actions">
-            <button class="ghost-btn compact-action-btn" id="quizExitBtn" type="button" hidden>목록으로</button>
-            <span class="badge yellow">샘플 데이터</span>
-          </div>
         </div>
         <div class="quiz-grid" id="quizSelectGrid">
-          <article class="quiz-card word-quiz-card">
-            <span class="badge red">단어</span><strong>단어 퀴즈</strong><span>4지선다</span>
+          <article class="quiz-card">
+            <span class="badge red">단어</span>
+            <strong>단어 퀴즈</strong>
+            <span class="quiz-card-desc">단어를 보고 뜻(또는 뜻을 보고 단어) 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-word"></div>
             <div class="quiz-mode-options" aria-label="단어 퀴즈 유형">
               <label><input type="radio" name="wordQuizMode" value="random" checked /> 완전 랜덤</label>
               <label><input type="radio" name="wordQuizMode" value="jpToMeaning" /> 일본어 → 뜻</label>
@@ -390,10 +389,11 @@ function quizPageTemplate() {
             </div>
             <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="word">시작</button>
           </article>
-          <button class="quiz-card" type="button" data-quiz-kind="grammar"><span class="badge blue">문법</span><strong>문법 퀴즈</strong><span>다음 단계</span></button>
-          <button class="quiz-card" type="button" data-quiz-kind="expression"><span class="badge green">표현</span><strong>표현 퀴즈</strong><span>다음 단계</span></button>
-          <article class="quiz-card kanji-quiz-card">
-            <span class="badge yellow">한자</span><strong>한자 퀴즈</strong><span>4지선다</span>
+          <article class="quiz-card">
+            <span class="badge yellow">한자</span>
+            <strong>한자 퀴즈</strong>
+            <span class="quiz-card-desc">한자를 보고 뜻(또는 뜻을 보고 한자) 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-kanji"></div>
             <div class="quiz-mode-options" aria-label="한자 퀴즈 유형">
               <label><input type="radio" name="kanjiQuizMode" value="random" checked /> 완전 랜덤</label>
               <label><input type="radio" name="kanjiQuizMode" value="kanjiToMeaning" /> 한자 → 뜻</label>
@@ -401,10 +401,31 @@ function quizPageTemplate() {
             </div>
             <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="kanji">시작</button>
           </article>
-          <button class="quiz-card" type="button" data-quiz-kind="sentence-meaning"><span class="badge purple">문장</span><strong>문장 뜻 고르기</strong><span>4지선다</span></button>
-          <button class="quiz-card" type="button" data-quiz-kind="sentence-listen"><span class="badge purple">문장</span><strong>듣고 문장 고르기</strong><span>4지선다</span></button>
+          <article class="quiz-card">
+            <span class="badge purple">문장</span>
+            <strong>문장 뜻 고르기</strong>
+            <span class="quiz-card-desc">일본어 문장을 보고 해석 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-sentence-meaning"></div>
+            <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="sentence-meaning">시작</button>
+          </article>
+          <article class="quiz-card">
+            <span class="badge purple">문장</span>
+            <strong>듣고 문장 고르기</strong>
+            <span class="quiz-card-desc">문장을 듣고 맞는 문장 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-sentence-listen"></div>
+            <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="sentence-listen">시작</button>
+          </article>
+          <div class="quiz-card quiz-card-disabled" aria-disabled="true">
+            <span class="badge blue">문법</span>
+            <strong>문법 퀴즈</strong>
+            <span class="badge quiz-soon-badge">준비 중</span>
+          </div>
+          <div class="quiz-card quiz-card-disabled" aria-disabled="true">
+            <span class="badge green">표현</span>
+            <strong>표현 퀴즈</strong>
+            <span class="badge quiz-soon-badge">준비 중</span>
+          </div>
         </div>
-        <p class="muted quiz-status" id="quizStatus">샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.</p>
         <div class="word-quiz-panel" id="wordQuizPanel" hidden></div>
         <div class="word-quiz-panel kanji-quiz-panel" id="kanjiQuizPanel" hidden></div>
         <div class="word-quiz-panel sentence-quiz-panel" id="sentenceQuizPanel" hidden></div>

@@ -46,7 +46,7 @@ import {
   emptyQuiz,
   emptySentenceQuiz,
   startQuiz as startQuizSession,
-  startSentenceQuiz as startSentenceQuizSession,
+  nextQuizQuestion as nextQuizQuestionImpl,
   exitQuizSession as exitQuizSessionImpl,
   submitQuizChoice as submitQuizChoiceImpl,
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
@@ -439,18 +439,14 @@ function bindEvents() {
       return;
     }
 
-    if (event.target.closest("[data-next-word-quiz]")) {
-      startQuiz("word");
+    const nextQuizTarget = event.target.closest("[data-quiz-next]");
+    if (nextQuizTarget) {
+      nextQuizQuestionImpl(nextQuizTarget.dataset.quizNext, quizCtx());
       return;
     }
 
-    if (event.target.closest("[data-next-kanji-quiz]")) {
-      startQuiz("kanji");
-      return;
-    }
-
-    if (event.target.closest("[data-next-sentence-quiz]")) {
-      startSentenceQuizSession(sentenceQuiz.question?.mode || "meaning", quizCtx());
+    if (event.target.closest("[data-quiz-exit]")) {
+      exitQuizSession();
     }
   });
 
@@ -550,7 +546,7 @@ function bindEvents() {
     byId("sentenceCards").classList.toggle("hide-meaning", event.target.checked);
   });
   byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
-  byId("quizExitBtn").addEventListener("click", exitQuizSession);
+  document.addEventListener("keydown", handleQuizKeydown);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
   byId("downloadBackupBtn").addEventListener("click", downloadBackup);
   byId("loadBackupBtn").addEventListener("click", () => byId("backupFileInput").click());
@@ -595,8 +591,8 @@ function bindEvents() {
     input.addEventListener("change", event => {
       wordQuizMode = event.target.value;
       wordQuiz = emptyQuiz();
-      byId("quizStatus").textContent = "단어 퀴즈 유형을 선택했습니다.";
       renderWordQuiz();
+      renderQuizAvailability();
     });
   });
 
@@ -604,8 +600,8 @@ function bindEvents() {
     input.addEventListener("change", event => {
       kanjiQuizMode = event.target.value;
       kanjiQuiz = emptyQuiz();
-      byId("quizStatus").textContent = "한자 퀴즈 유형을 선택했습니다.";
       renderKanjiQuiz();
+      renderQuizAvailability();
     });
   });
 
@@ -675,6 +671,7 @@ function renderAll() {
   renderWordQuiz();
   renderKanjiQuiz();
   renderSentenceQuiz();
+  renderQuizAvailability();
   renderReview();
   renderStats();
   renderQuickFilters();
@@ -1040,13 +1037,73 @@ function renderSentenceQuiz() {
 
 function updateQuizSessionView() {
   const grid = byId("quizSelectGrid");
-  const exitBtn = byId("quizExitBtn");
-  if (!grid || !exitBtn) {
+  const header = byId("quizSelectHeader");
+  if (!grid || !header) {
     return;
   }
-  const sessionActive = Boolean(wordQuiz.question || kanjiQuiz.question || sentenceQuiz.question);
+  // The selection grid and its title give way to the session panel (which has
+  // its own one-line header) while a run, or its result view, is showing.
+  const sessionActive = Boolean(wordQuiz.session || kanjiQuiz.session || sentenceQuiz.session);
   grid.hidden = sessionActive;
-  exitBtn.hidden = !sessionActive;
+  header.hidden = sessionActive;
+}
+
+const QUIZ_UNIT_LABELS = { word: "단어", kanji: "한자", "sentence-meaning": "문장", "sentence-listen": "문장" };
+const QUIZ_UNIT_SUBJECT = { word: "단어가", kanji: "한자가", "sentence-meaning": "문장이", "sentence-listen": "문장이" };
+
+// Pool size + startability on each available card, using the same rule the
+// question generators use (core.quizAvailability).
+function renderQuizAvailability() {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
+  Object.keys(QUIZ_UNIT_LABELS).forEach(quizKind => {
+    const pool = byId(`quizPool-${quizKind}`);
+    const startBtn = document.querySelector(`.quiz-start-btn[data-quiz-kind="${quizKind}"]`);
+    if (!pool || !startBtn) {
+      return;
+    }
+    const availability = core.quizAvailability({
+      items: state.items,
+      entries,
+      quizKind,
+      mode: quizKind === "kanji" ? kanjiQuizMode : wordQuizMode
+    });
+    const warning = availability.canStart ? "" : availability.reason === "count"
+      ? `${QUIZ_UNIT_SUBJECT[quizKind]} ${availability.required}개 이상 필요합니다 (현재 ${availability.poolSize}개)`
+      : `서로 다른 보기가 ${availability.required}개 이상 필요합니다 (현재 ${availability.distinctCount}개)`;
+    pool.innerHTML = `<span>${QUIZ_UNIT_LABELS[quizKind]} ${availability.poolSize}개</span>${warning ? `<p class="quiz-card-warn">${escapeHtml(warning)}</p>` : ""}`;
+    startBtn.disabled = !availability.canStart;
+  });
+}
+
+// Quiz shortcuts: 1-4 pick a choice, Enter goes to the next question.
+function handleQuizKeydown(event) {
+  if (currentPage !== "quiz" || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
+    return;
+  }
+  const target = event.target;
+  if (target?.closest?.("input, textarea, select, [contenteditable='true']") || document.querySelector("dialog[open]")) {
+    return;
+  }
+  const panels = [["word", "wordQuizPanel", wordQuiz], ["kanji", "kanjiQuizPanel", kanjiQuiz], ["sentence", "sentenceQuizPanel", sentenceQuiz]];
+  const active = panels.find(([, , quiz]) => quiz.session && !quiz.session.finished && quiz.question);
+  if (!active) {
+    return;
+  }
+  const [, panelId, quiz] = active;
+  const panel = byId(panelId);
+  if (/^[1-4]$/.test(event.key) && !quiz.answered) {
+    const choice = panel.querySelectorAll(".word-quiz-choice")[Number(event.key) - 1];
+    if (choice && !choice.disabled) {
+      event.preventDefault();
+      choice.click();
+    }
+  } else if (event.key === "Enter" && quiz.answered && !event.repeat && !target?.closest?.("button, a")) {
+    const next = panel.querySelector("[data-quiz-next]");
+    if (next) {
+      event.preventDefault();
+      next.click();
+    }
+  }
 }
 
 function exitQuizSession() {
@@ -1696,10 +1753,6 @@ async function deleteDailyEntry(id) {
 }
 
 function startQuiz(kind) {
-  if (kind === "sentence-meaning" || kind === "sentence-listen") {
-    startSentenceQuizSession(kind === "sentence-listen" ? "listen" : "meaning", quizCtx());
-    return;
-  }
   startQuizSession(kind, quizCtx());
 }
 
