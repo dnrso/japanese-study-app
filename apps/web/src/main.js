@@ -1117,9 +1117,15 @@ function renderKanji() {
   });
 }
 
+function currentItemById(id) {
+  return state.items.find(item => item.id === id) || null;
+}
+
 function renderWordQuiz() {
   applyPagePatch(renderWordQuizPage({
     quiz: wordQuiz,
+    itemById: currentItemById,
+    reviewOptions,
     helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
@@ -1129,16 +1135,21 @@ function renderKanjiQuiz() {
   const words = core.itemsByKind(state.items, "word");
   applyPagePatch(renderKanjiQuizPage({
     quiz: kanjiQuiz,
+    itemById: currentItemById,
+    reviewOptions,
     wordsFor: item => wordsUsingKanji(item, words),
+    wordLimit: core.resolveKanjiWordLimit(kanjiWordLimitSetting),
     helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
 }
 
 function renderSentenceQuiz() {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
   applyPagePatch(renderSentenceQuizPage({
     quiz: sentenceQuiz,
-    helpers: renderHelpers({ marks: false })
+    itemById: id => entries.find(entry => entry.id === id) || null,
+    helpers: { ...renderHelpers({ marks: false }), linkedEntriesForSentence: linkedEntriesForAnySentence }
   }));
   updateQuizSessionView();
 }

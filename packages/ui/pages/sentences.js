@@ -41,7 +41,7 @@ export function renderSentencesPage({ sentences, summary, helpers }) {
               <button type="button" data-open-study-date="${helpers.escapeHtml(group.date)}" title="오늘 공부에서 이 날짜 보기">${sentenceDateLabel(group.date)}</button>
               <span>${group.entries.length}개</span>
             </h3>
-            ${group.entries.map(entry => sentenceRow(entry, helpers)).join("")}
+            ${group.entries.map(entry => sentenceCard(entry, helpers)).join("")}
           </section>
         `).join("")
         : empty(summary.total ? "조건에 맞는 문장이 없습니다." : "오늘 공부에서 문장을 저장하면 이곳에 표시됩니다.")
@@ -59,7 +59,9 @@ export function sentenceChildren(entry, helpers) {
   return Object.fromEntries(CHILD_KINDS.map(([kind]) => [kind, helpers.linkedEntriesForSentence(kind, entry.id)]));
 }
 
-function sentenceRow(entry, helpers) {
+// One sentence row. Shared by the 문장 tab and the quiz result view; the quiz
+// passes `domId: false` so the element id stays unique on the page.
+export function sentenceCard(entry, helpers, { domId = true, open = false } = {}) {
   const children = sentenceChildren(entry, helpers);
   const allChildren = CHILD_KINDS.flatMap(([kind]) => children[kind]);
   // Same rollup as today.js's dailyEntryCard: 전체 등록 targets the sentence
@@ -74,7 +76,7 @@ function sentenceRow(entry, helpers) {
   const id = helpers.escapeHtml(entry.id);
 
   return `
-    <details class="sentence-row ${needsRegistration ? "" : "is-registered"}" id="sentence-card-${id}" data-daily-entry-id="${id}">
+    <details class="sentence-row ${needsRegistration ? "" : "is-registered"}" ${domId ? `id="sentence-card-${id}"` : ""} data-daily-entry-id="${id}" ${open ? "open" : ""}>
       <summary>
         <span class="sentence-row-title" lang="ja">${speakerButton(entry.title, helpers)}<span>${helpers.highlight(entry.title)}</span></span>
         <span class="sentence-row-counts">${counts || "연결 항목 없음"}</span>
