@@ -439,13 +439,15 @@ function reviewPageTemplate() {
     <section class="page hidden-page" id="review">
       <section class="panel section" id="review-queue">
         <div class="panel-header">
-          <h2 class="panel-title">복습 큐</h2>
-          <button class="primary-btn" id="completeReviewBtn" type="button">선택 복습 완료</button>
+          <h2 class="panel-title">복습 큐 <span class="panel-count" id="reviewTotalCount"></span></h2>
         </div>
-        <div class="table-tools">
-          <select id="reviewKindFilter" aria-label="복습 종류 필터"><option value="">전체 종류</option></select>
+        <div class="table-tools review-toolbar">
+          <div class="segmented" id="reviewKindTabs" role="group" aria-label="복습 종류"></div>
+          <label class="sentence-hide-toggle"><input id="reviewHideMeaning" type="checkbox" checked /> 뜻 가리기</label>
         </div>
-        <div class="cards" id="reviewCards"></div>
+        <div class="review-progress" id="reviewProgress"></div>
+        <div class="review-list" id="reviewCards"></div>
+        <div class="review-toast" id="reviewToast" role="status" aria-live="polite" hidden></div>
       </section>
     </section>
   `;

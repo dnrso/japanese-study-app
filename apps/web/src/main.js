@@ -141,7 +141,15 @@ let kanjiQuizMode = "random";
 let wordQuiz = emptyQuiz();
 let kanjiQuiz = emptyQuiz();
 let sentenceQuiz = emptySentenceQuiz();
-let reviewQueueDrafts = new Map();
+const REVIEW_HIDE_MEANING_STORAGE_KEY = "nihongo-study.reviewHideMeaning";
+// 복습 큐 view state: kind tab, 뜻 가리기 pref (default ON, localStorage like the
+// other small UI prefs), rows revealed one by one, and the one undoable save.
+let reviewKindFilter = "";
+let reviewHideMeaning = loadReviewHideMeaning();
+let reviewRevealedIds = new Set();
+let reviewSaving = false;
+let reviewUndo = null;
+const REVIEW_UNDO_MS = 5000;
 let quizQuestionFontSize = 32;
 let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
@@ -338,15 +346,35 @@ function bindEvents() {
       return;
     }
 
-    const reviewQueueCycleTarget = event.target.closest("[data-cycle-review-queue]");
-    if (reviewQueueCycleTarget) {
-      reviewQueueDrafts = core.cycleReviewQueueDraft({
-        items: state.items,
-        drafts: reviewQueueDrafts,
-        id: reviewQueueCycleTarget.dataset.cycleReviewQueue,
-        options: ["대기", ...scheduledReviewOptions]
-      });
+    const reviewKindTarget = event.target.closest("[data-review-kind]");
+    if (reviewKindTarget) {
+      reviewKindFilter = core.normalizeReviewKindFilter(reviewKindTarget.dataset.reviewKind);
       renderReview();
+      document.querySelector(`[data-review-kind="${reviewKindFilter}"]`)?.focus();
+      return;
+    }
+
+    const reviewRevealTarget = event.target.closest("[data-review-reveal]");
+    if (reviewRevealTarget) {
+      const id = reviewRevealTarget.dataset.reviewReveal;
+      reviewRevealedIds.add(id);
+      renderReview();
+      focusReviewRow(id);
+      return;
+    }
+
+    const reviewIntervalTarget = event.target.closest("[data-review-item][data-review-value]");
+    if (reviewIntervalTarget) {
+      await saveReviewInterval(
+        reviewIntervalTarget.dataset.reviewItem,
+        reviewIntervalTarget.dataset.reviewValue,
+        { fromKeyboard: event.detail === 0 }
+      );
+      return;
+    }
+
+    if (event.target.closest("[data-review-undo]")) {
+      await undoReviewInterval();
       return;
     }
 
@@ -504,7 +532,11 @@ function bindEvents() {
   byId("wordDialogForm").addEventListener("submit", saveWordDialog);
   // Only the 복습 큐 needs re-rendering: the sidebar 복습 필요 count and the
   // home 복습 항목 stat intentionally stay whole-queue numbers.
-  byId("reviewKindFilter").addEventListener("change", renderReview);
+  byId("reviewHideMeaning").addEventListener("change", event => {
+    reviewHideMeaning = event.target.checked;
+    saveReviewHideMeaning();
+    renderReview();
+  });
 
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
@@ -545,7 +577,6 @@ function bindEvents() {
   byId("sentenceHideMeaning").addEventListener("change", event => {
     byId("sentenceCards").classList.toggle("hide-meaning", event.target.checked);
   });
-  byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
   document.addEventListener("keydown", handleQuizKeydown);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
   byId("downloadBackupBtn").addEventListener("click", downloadBackup);
@@ -644,6 +675,11 @@ function bindEvents() {
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
       event.preventDefault();
       byId("globalSearch").focus();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && currentPage === "review" && reviewUndo
+      && !event.target?.closest?.("input, textarea, select, [contenteditable='true']")) {
+      event.preventDefault();
+      undoReviewInterval();
     }
     if (event.ctrlKey && event.key.toLowerCase() === "n") {
       event.preventDefault();
@@ -1110,28 +1146,112 @@ function exitQuizSession() {
   exitQuizSessionImpl(quizCtx());
 }
 
-// The 종류 filter is a view filter, not a setting, so it lives in the
-// <select> itself exactly like the 단어 page's wordPartFilter/wordScriptFilter/
-// wordReviewFilter - no module-level state and (unlike the 설정-tab
-// listPageSizeOverrides) nothing written to localStorage.
-function reviewKindFilterValue() {
-  return core.normalizeReviewKindFilter(byId("reviewKindFilter")?.value || "");
+function loadReviewHideMeaning() {
+  try {
+    return localStorage.getItem(REVIEW_HIDE_MEANING_STORAGE_KEY) !== "0";
+  } catch {
+    // localStorage unavailable - use the default (hidden).
+    return true;
+  }
+}
+
+function saveReviewHideMeaning() {
+  try {
+    localStorage.setItem(REVIEW_HIDE_MEANING_STORAGE_KEY, reviewHideMeaning ? "1" : "0");
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
 }
 
 function renderReview() {
-  // Not narrowed by the kind filter: hiding a card must not throw away the
-  // draft the user already set on it.
-  reviewQueueDrafts = core.pruneReviewQueueDrafts({
-    items: state.items,
-    drafts: reviewQueueDrafts
-  });
-  const kindFilter = reviewKindFilterValue();
+  const counts = core.reviewKindCounts(state.items, searchTerm);
+  // A kind whose last row was just completed has no tab left to show: fall
+  // back to 전체 instead of an empty list.
+  reviewKindFilter = core.normalizeReviewKindFilter(reviewKindFilter);
+  if (reviewKindFilter && !counts[reviewKindFilter]) {
+    reviewKindFilter = "";
+  }
+  const queueIds = new Set(state.items.map(item => item.id));
+  reviewRevealedIds = new Set([...reviewRevealedIds].filter(id => queueIds.has(id)));
+  byId("reviewHideMeaning").checked = reviewHideMeaning;
   applyPagePatch(renderReviewPage({
-    reviewItems: core.reviewItems(state.items, searchTerm, kindFilter),
-    kindFilter,
+    reviewItems: core.reviewItems(state.items, searchTerm, reviewKindFilter),
+    kindFilter: reviewKindFilter,
     kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
+    kindCounts: counts,
+    progress: core.reviewQueueProgress(state.items, searchTerm, state.selectedDate || undefined),
+    scheduledReviewOptions,
+    hideMeaning: reviewHideMeaning,
+    revealedIds: reviewRevealedIds,
     helpers: renderHelpers()
   }));
+}
+
+function focusReviewRow(id) {
+  const row = [...document.querySelectorAll("#reviewCards .review-row")].find(candidate => candidate.dataset.itemId === id);
+  row?.querySelector("[data-review-value]")?.focus();
+}
+
+// One click on an interval saves that single item through the same
+// store.completeReview call "선택 복습 완료" used (review, due date,
+// lastReviewedAt), then offers a 5s undo.
+async function saveReviewInterval(id, review, { fromKeyboard = false } = {}) {
+  const item = state.items.find(candidate => candidate.id === id);
+  if (reviewSaving || !item || !scheduledReviewOptions.includes(review)) {
+    return;
+  }
+  reviewSaving = true;
+  try {
+    const rows = [...document.querySelectorAll("#reviewCards .review-row")];
+    const rowIndex = rows.findIndex(row => row.dataset.itemId === id);
+    const snapshot = core.reviewSnapshot(item);
+    state = await store.completeReview([{ id, review }], selectedDate);
+    reviewRevealedIds.delete(id);
+    showReviewToast({ id, title: item.title, review, snapshot });
+    renderAll();
+    if (fromKeyboard) {
+      // The saved row just left the list: keep keyboard triage going on
+      // whichever row took its place.
+      const next = document.querySelectorAll("#reviewCards .review-row")[rowIndex]
+        || document.querySelector("#reviewCards .review-row:last-child");
+      next?.querySelector("[data-review-value]")?.focus();
+    }
+  } finally {
+    reviewSaving = false;
+  }
+}
+
+function showReviewToast(undo) {
+  // A new save replaces the toast: the earlier one is final.
+  clearTimeout(reviewUndo?.timer);
+  reviewUndo = { ...undo, timer: setTimeout(hideReviewToast, REVIEW_UNDO_MS) };
+  const toast = byId("reviewToast");
+  toast.innerHTML = `<span>${escapeHtml(undo.title)} → ${escapeHtml(undo.review)}</span><button class="review-toast-btn" type="button" data-review-undo>되돌리기</button>`;
+  toast.hidden = false;
+}
+
+function hideReviewToast() {
+  clearTimeout(reviewUndo?.timer);
+  reviewUndo = null;
+  const toast = byId("reviewToast");
+  toast.hidden = true;
+  toast.innerHTML = "";
+}
+
+async function undoReviewInterval() {
+  const undo = reviewUndo;
+  if (!undo || reviewSaving) {
+    return;
+  }
+  reviewSaving = true;
+  try {
+    hideReviewToast();
+    state = await store.restoreItemReview(undo.id, undo.snapshot, selectedDate);
+    renderAll();
+    focusReviewRow(undo.id);
+  } finally {
+    reviewSaving = false;
+  }
 }
 
 function renderStats() {
@@ -1739,7 +1859,6 @@ async function deleteItem(id) {
     return;
   }
   state = await store.deleteItem(id, selectedDate);
-  reviewQueueDrafts.delete(id);
   renderAll();
 }
 
@@ -1758,22 +1877,6 @@ function startQuiz(kind) {
 
 async function submitQuizChoice(kind, selectedAnswer) {
   await submitQuizChoiceImpl(kind, selectedAnswer, quizCtx());
-}
-
-async function completeSelectedReview() {
-  const targets = core.reviewCompletionTargets({
-    items: state.items,
-    drafts: reviewQueueDrafts,
-    searchTerm,
-    kindFilter: reviewKindFilterValue()
-  });
-  if (!targets.length) {
-    window.alert("복습 완료로 변경할 항목을 먼저 선택하세요.");
-    return;
-  }
-  state = await store.completeReview(targets, selectedDate);
-  reviewQueueDrafts = new Map();
-  renderAll();
 }
 
 async function resetSampleData() {
@@ -1872,7 +1975,8 @@ function resetTransientUiState() {
   wordSort = { key: "", direction: "" };
   wordQuiz = emptyQuiz();
   kanjiQuiz = emptyQuiz();
-  reviewQueueDrafts = new Map();
+  reviewRevealedIds = new Set();
+  hideReviewToast();
   byId("globalSearch").value = "";
 }
 
@@ -1980,8 +2084,6 @@ function renderHelpers() {
     escapeHtml,
     highlight,
     kindLabels,
-    reviewQueueStatusText,
-    reviewQueueReview,
     reviewStatusText: core.reviewStatusText
   };
 }
@@ -2018,18 +2120,6 @@ function linkedEntriesForSentence(kind, sentenceId) {
 
 function linkedEntriesForAnySentence(kind, sentenceId) {
   return core.linkedEntriesForSentence(state.allDailyEntries || state.dailyEntries, kind, sentenceId);
-}
-
-function reviewQueueStatusText(item) {
-  return core.reviewQueueStatusText({
-    item,
-    drafts: reviewQueueDrafts,
-    todayKey: selectedDate
-  });
-}
-
-function reviewQueueReview(item) {
-  return core.reviewQueueReview(item, reviewQueueDrafts);
 }
 
 function pageForKind(kind) {

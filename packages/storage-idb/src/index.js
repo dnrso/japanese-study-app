@@ -354,6 +354,25 @@ export function createIdbStorage(options = {}) {
     return getState(studyDate);
   }
 
+  // Undo for completeReview/updateItemReview: puts back exactly the review
+  // fields a completion writes (review, reviewDueDate, lastReviewedAt) on top of
+  // the CURRENT record, so unrelated edits made in between are kept. updatedAt
+  // is bumped rather than restored so the undo still wins a last-write-wins sync
+  // merge against the completion it reverts.
+  async function restoreItemReview(id, snapshot = {}, studyDate = todayKey()) {
+    const item = await getValue("items", id);
+    if (item && !item.deletedAt && item.kind !== "source" && snapshot && typeof snapshot === "object") {
+      await putValue("items", {
+        ...item,
+        review: normalizeReview(snapshot.review || "대기"),
+        reviewDueDate: normalizeOptionalDate(snapshot.reviewDueDate),
+        lastReviewedAt: text(snapshot.lastReviewedAt),
+        updatedAt: now()
+      });
+    }
+    return getState(studyDate);
+  }
+
   async function submitWordQuizAnswer(payload = {}) {
     const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
     const item = await getValue("items", text(payload.itemId));
@@ -616,6 +635,7 @@ export function createIdbStorage(options = {}) {
     deleteItem,
     updateItemReview,
     completeReview,
+    restoreItemReview,
     submitWordQuizAnswer,
     resetSampleData,
     clearAllData,

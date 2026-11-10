@@ -1175,3 +1175,192 @@ mark {
 #sentenceRegisterBar {
   margin-bottom: 16px;
 }
+
+/* 복습 큐: compact rows, kind groups, progress, undo toast. */
+.review-toolbar {
+  justify-content: space-between;
+}
+
+.review-tab-count {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.segmented-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.review-progress {
+  margin-bottom: 14px;
+}
+
+.review-progress-text {
+  margin: 0 0 6px;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.review-progress-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.review-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.review-list {
+  display: grid;
+  gap: 18px;
+}
+
+.review-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.review-group-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.review-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-row:hover {
+  background: var(--surface-soft);
+}
+
+.review-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.review-row-main .badge {
+  flex: 0 0 auto;
+}
+
+.review-row-text {
+  min-width: 0;
+}
+
+.review-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.review-row-title strong {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.review-row-detail {
+  display: grid;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.review-reading {
+  color: var(--muted);
+}
+
+.review-meaning {
+  color: var(--text);
+}
+
+.review-reveal {
+  justify-self: start;
+  padding: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.review-reveal:hover {
+  text-decoration: underline;
+}
+
+.review-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.review-interval-btn {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.review-interval-btn:hover {
+  border-color: rgba(63, 129, 98, 0.45);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.review-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: var(--surface);
+  font-size: 14px;
+  font-weight: 750;
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+}
+
+.review-toast-btn {
+  padding: 0;
+  background: transparent;
+  color: var(--accent-soft);
+  font-weight: 850;
+  text-decoration: underline;
+}

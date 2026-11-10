@@ -46,8 +46,6 @@ function helpers(extra = {}) {
     highlight: escapeHtml,
     kindLabels,
     reviewStatusText: core.reviewStatusText,
-    reviewQueueReview: item => core.reviewQueueReview(item),
-    reviewQueueStatusText: item => core.reviewQueueStatusText({ item }),
     ...extra
   };
 }
@@ -270,9 +268,16 @@ describe("record ids rendered into HTML attributes", () => {
   });
 
   it("renderReviewPage does not let an id break out of its attributes", () => {
-    const html = patchHtml(renderReviewPage({ reviewItems: [hostileWord()], helpers: helpers() }));
+    const html = patchHtml(renderReviewPage({
+      reviewItems: [hostileWord()],
+      kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
+      scheduledReviewOptions: ["내일", "3일 후"],
+      hideMeaning: true,
+      helpers: helpers()
+    }));
     expect(injectedAttributes(html)).toEqual([]);
-    expect(html).toContain(`data-cycle-review-queue="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-reveal="${escapeHtml(HOSTILE_ID)}"`);
   });
 
   it("renderTasksPage does not let a task id break out of its attributes", () => {

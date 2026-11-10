@@ -104,11 +104,9 @@ export function reviewStatusText(item) {
   return review;
 }
 
-export function reviewQueueReview(item, drafts = new Map()) {
-  return drafts.get(item.id) || "대기";
-}
-
-function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
+// Due date a review interval resolves to when saved today (storage schedules
+// from the real today, not the browsed study date).
+export function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
   const days = REVIEW_QUEUE_INTERVALS[review];
   if (!days) {
     return "";
@@ -116,47 +114,46 @@ function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
   return addDays(todayKey, days);
 }
 
-export function reviewQueueStatusText({ item, drafts = new Map(), todayKey = dateKey(new Date()) }) {
-  const review = reviewQueueReview(item, drafts);
-  const dueDate = reviewQueueDueDate(review, todayKey);
-  return dueDate ? `${review} (${dueDate})` : review;
+// Fixed display order of the 복습 큐 kinds (tabs and the 전체 view's groups).
+export const REVIEW_KIND_ORDER = ["word", "grammar", "expression", "kanji", "sentence"];
+
+// Queue rows (already narrowed by the global search) grouped by kind in
+// REVIEW_KIND_ORDER; kinds without rows are omitted.
+export function groupReviewItemsByKind(items = []) {
+  return REVIEW_KIND_ORDER
+    .map(kind => ({ kind, items: items.filter(item => item.kind === kind) }))
+    .filter(group => group.items.length);
 }
 
-export function pruneReviewQueueDrafts({ items = [], drafts = new Map() }) {
-  const queueIds = new Set(items.filter(isReviewQueueItem).map(item => item.id));
-  return new Map([...drafts.entries()].filter(([id]) => queueIds.has(id)));
+// Per-kind row counts of the search-narrowed queue plus the `all` total, for
+// the kind tabs. Not narrowed by the kind filter itself.
+export function reviewKindCounts(items = [], searchTerm = "") {
+  const queue = reviewItems(items, searchTerm);
+  const counts = { all: queue.length };
+  REVIEW_KIND_FILTER_OPTIONS.forEach(kind => {
+    counts[kind] = queue.filter(item => item.kind === kind).length;
+  });
+  return counts;
 }
 
-export function cycleReviewQueueDraft({ items = [], drafts = new Map(), id, options = [] }) {
-  const item = items.find(candidate => candidate.id === id);
-  if (!item) {
-    return new Map(drafts);
-  }
-
-  const nextDrafts = new Map(drafts);
-  const currentReview = reviewQueueReview(item, drafts);
-  const currentIndex = options.indexOf(currentReview);
-  const nextReview = options[((currentIndex >= 0 ? currentIndex : 0) + 1) % options.length] || "대기";
-
-  if (nextReview === "대기") {
-    nextDrafts.delete(id);
-  } else {
-    nextDrafts.set(id, nextReview);
-  }
-  return nextDrafts;
+// done = items whose lastReviewedAt is today (the home tab's "오늘 복습 완료"
+// source, reviewedTodayCount); remaining = the whole search-narrowed queue.
+// Every queue kind counts as done - including 문장, which the home stat leaves
+// out - so completing a row always moves both numbers.
+export function reviewQueueProgress(items = [], searchTerm = "", todayDate = dateKey(new Date())) {
+  const done = REVIEW_KIND_FILTER_OPTIONS.reduce((total, kind) => total + reviewedTodayCount(items, kind, todayDate), 0);
+  const remaining = reviewItems(items, searchTerm).length;
+  return { done, remaining, percent: done + remaining ? Math.round((done / (done + remaining)) * 100) : 0 };
 }
 
-// "선택 복습 완료" only ever completes what the user can actually SEE: it
-// already routed through reviewItems(items, searchTerm), so the global
-// search narrows it, and `kindFilter` narrows it the same way. A draft set
-// on a card that the current filter hides therefore stays a draft instead
-// of being silently committed - and it is NOT discarded either, since
-// pruneReviewQueueDrafts deliberately keeps drafts for every queue item
-// regardless of the view filter.
-export function reviewCompletionTargets({ items = [], drafts = new Map(), searchTerm = "", kindFilter = "" }) {
-  return reviewItems(items, searchTerm, kindFilter)
-    .map(item => ({ id: item.id, review: reviewQueueReview(item, drafts) }))
-    .filter(item => item.review !== "대기");
+// What a review completion overwrites on an item - the data
+// store.restoreItemReview puts back to undo it.
+export function reviewSnapshot(item = {}) {
+  return {
+    review: item.review || "대기",
+    reviewDueDate: item.reviewDueDate || "",
+    lastReviewedAt: item.lastReviewedAt || ""
+  };
 }
 
 export function matchesSearch(item, searchTerm = "") {
@@ -371,7 +368,7 @@ export function buildSentenceQuizQuestion({
 // Every kind that can reach the queue gets an option: isReviewQueueItem only
 // excludes kind === "source", so 문장 and 한자 items are queue members like
 // the rest and are filterable individually.
-export const REVIEW_KIND_FILTER_OPTIONS = ["word", "expression", "grammar", "sentence", "kanji"];
+export const REVIEW_KIND_FILTER_OPTIONS = REVIEW_KIND_ORDER;
 
 // Anything unrecognised (stale value, hand-edited DOM) degrades to 전체
 // rather than filtering the queue down to nothing.

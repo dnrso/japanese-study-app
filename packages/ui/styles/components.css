@@ -230,11 +230,6 @@ h1 {
   padding: 13px;
 }
 
-.review-card--active {
-  background: var(--accent-soft);
-  border-color: rgba(63, 129, 98, 0.45);
-}
-
 .study-card h3,
 .source-title {
   margin: 8px 0 4px;

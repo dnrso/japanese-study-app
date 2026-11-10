@@ -52,6 +52,12 @@ const storageContract = [
     returns: "state",
     note: "targets accept both bare ids and { id, review } objects (normalizeReviewCompletionTargets)."
   },
+  {
+    name: "restoreItemReview",
+    params: ["id", "snapshot", "studyDate"],
+    returns: "state",
+    note: "undo for completeReview: snapshot is { review, reviewDueDate, lastReviewedAt }."
+  },
   { name: "submitWordQuizAnswer", params: ["payload"], returns: "stateResult" },
   { name: "resetSampleData", params: [], returns: "state" },
   { name: "clearAllData", params: [], returns: "state" },
