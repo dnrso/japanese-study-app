@@ -115,6 +115,7 @@ export function sentenceCard(entry, helpers, { domId = true, open = false } = {}
           </div>
         ` : ""}
         <div class="sentence-row-actions">
+          ${entry.studyDate ? `<button class="link-btn sentence-row-date" type="button" data-open-study-date="${helpers.escapeHtml(entry.studyDate)}" title="오늘 공부에서 이 날짜 보기">${helpers.escapeHtml(entry.studyDate.slice(0, 4))}년 ${sentenceDateLabel(entry.studyDate)} 추가</button>` : ""}
           ${needsRegistration ? `<button class="ghost-btn tiny-action-btn" type="button" data-register-sentence="${id}">등록</button>` : ""}
           <button class="icon-btn row-delete-btn" type="button" data-delete-daily-entry="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
         </div>

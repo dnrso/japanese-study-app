@@ -2084,12 +2084,38 @@ function moveCalendarMonth(offset) {
   renderCalendar();
 }
 
+// 원본 문장 링크: 문장 탭에서 해당 문장 카드를 펼쳐 보여 준다. 검색·필터에
+// 가려지지 않도록 풀고, 카드가 있는 쪽으로 넘긴다. 문장 탭에 없는 문장이면
+// 예전처럼 그 날짜의 오늘 공부 탭으로 간다.
 function jumpToSentence(id, sourceDate) {
-  selectedDate = sourceDate || selectedDate;
-  calendarMonth = selectedDate.slice(0, 7);
-  openPage("today");
+  setSearch("");
+  if (sentenceStatusFilter !== "all") {
+    setSentenceFilter("status", "all");
+  }
+  if (sentencePeriodFilter !== "all") {
+    setSentenceFilter("period", "all");
+  }
+  const index = sentenceNoteEntries().filtered.findIndex(entry => entry.id === id);
+  if (index < 0) {
+    selectedDate = sourceDate || selectedDate;
+    calendarMonth = selectedDate.slice(0, 7);
+    openPage("today");
+    window.setTimeout(() => {
+      byId(`daily-entry-${id}`)?.scrollIntoView({ block: "center" });
+    }, 0);
+    return;
+  }
+  pageIndex.sentences = Math.floor(index / pageSizeFor("sentences")) + 1;
+  openPage("sentences");
   window.setTimeout(() => {
-    byId(`daily-entry-${id}`)?.scrollIntoView({ block: "center" });
+    const card = byId(`sentence-card-${id}`);
+    if (!card) {
+      return;
+    }
+    card.open = true;
+    card.scrollIntoView({ block: "center" });
+    card.classList.add("is-jump-target");
+    window.setTimeout(() => card.classList.remove("is-jump-target"), 1600);
   }, 0);
 }
 
