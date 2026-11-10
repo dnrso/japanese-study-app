@@ -2,8 +2,7 @@
 .stat-card,
 .study-card,
 .source-card,
-.kanji-card,
-.taxonomy-section {
+.kanji-card {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -231,11 +230,6 @@ h1 {
   padding: 13px;
 }
 
-.review-card--active {
-  background: var(--accent-soft);
-  border-color: rgba(63, 129, 98, 0.45);
-}
-
 .study-card h3,
 .source-title {
   margin: 8px 0 4px;
@@ -254,6 +248,115 @@ h1 {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+/* 문법/표현 tabs: responsive card grid (a scoped variant of .cards). */
+.cards.study-card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.study-card-grid > .empty-state {
+  grid-column: 1 / -1;
+}
+
+.note-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+}
+
+.note-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.study-card .note-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.note-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  margin: -3px -5px -3px 0;
+}
+
+.note-card-kind {
+  flex: 0 0 auto;
+}
+
+.review-select-sm {
+  width: 52px;
+  min-height: 0;
+  height: 22px;
+  margin-right: 4px;
+  padding: 0 0 0 5px;
+  font-size: 12px;
+}
+
+.study-card .note-card-reading {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.study-card .note-card-meaning {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.note-card-level {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.study-card .note-card-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.note-card-source {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.note-card-source-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.note-card-source .word-source-links {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.note-card-source .source-link {
+  color: var(--muted-strong);
+  font-weight: 500;
+}
+
+.note-card-source .source-link:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
 }
 
 /* Shared pagination control bar (문장/단어/문법/표현/한자 list pages) - see
@@ -319,13 +422,15 @@ h1 {
 }
 
 .sort-btn:hover,
-.sort-btn.active {
+.sort-btn.active,
+.sort-btn:hover span,
+.sort-btn.active span {
   color: var(--accent-deep);
 }
 
 .sort-btn span {
   width: 10px;
-  color: var(--accent-deep);
+  color: var(--line-strong);
   font-size: 10px;
   line-height: 1;
 }
@@ -367,12 +472,6 @@ h1 {
   white-space: nowrap;
 }
 
-.word-row-actions .ghost-btn,
-.word-row-actions .danger-btn {
-  min-height: 30px;
-  padding: 5px 8px;
-}
-
 .japanese,
 .study-card h3,
 .kanji-char,
@@ -406,127 +505,430 @@ h1 {
 
 .table-tools {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  max-width: 680px;
   margin-bottom: 10px;
 }
 
-.taxonomy-section {
-  padding: 15px;
+.table-tools select {
+  width: auto;
+  min-width: 120px;
 }
 
-.taxonomy-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.taxonomy-card {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-soft);
-}
-
-.taxonomy-card h4 {
-  margin-bottom: 8px;
-}
-
-.taxonomy-chip-wrap {
+.table-tools-summary {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.taxonomy-chip {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 0 auto;
   color: var(--muted-strong);
   font-size: 13px;
   font-weight: 750;
 }
 
-.taxonomy-chip:hover,
-.taxonomy-chip.active {
-  border-color: rgba(63, 129, 98, 0.45);
+.link-btn {
+  padding: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.panel-count {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 단어장 table */
+.word-table th {
+  white-space: nowrap;
+}
+
+.word-table td {
+  height: 50px;
+}
+
+.word-table tbody tr:hover {
+  background: var(--surface-soft);
+}
+
+
+.word-reading {
+  white-space: nowrap;
+}
+
+.word-meaning {
+  min-width: 120px;
+  font-size: 15px;
+}
+
+.word-kanji {
+  white-space: nowrap;
+}
+
+.word-meta-cell {
+  color: var(--muted-strong);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.review-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.review-select {
+  width: 66px;
+  min-height: 28px;
+  padding: 3px 2px 3px 6px;
+  border-color: transparent;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.word-table tbody tr:hover .review-select {
+  background: var(--surface);
+}
+
+.review-select:hover {
+  border-color: var(--line-strong);
+}
+
+.review-select.is-today {
+  background: var(--red-soft);
+  color: #cb574f;
+}
+
+.word-row-actions {
+  justify-content: flex-end;
+}
+
+.word-table .word-meaning-col,
+.word-table .word-meta-col {
+  padding-left: 28px;
+}
+
+.word-table .word-source-cell {
+  width: 1%;
+}
+
+.word-table .word-review-col {
+  width: 1%;
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+.word-table .word-edit-col {
+  width: 1%;
+  padding-left: 4px;
+  white-space: nowrap;
+}
+
+.word-table .word-edit-col .word-row-actions {
+  justify-content: flex-start;
+  gap: 2px;
+}
+
+/* 원본 문장: always shown, one line each, long sentences end in "…". */
+.word-source-cell .word-source-links {
+  width: clamp(120px, 11vw, 170px);
+  min-width: 0;
+}
+
+.row-action-btn {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.row-action-btn:hover {
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
 
-.kanji-grid {
+/* 단어 추가/수정 dialog */
+.item-dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 20px 50px rgba(38, 36, 31, 0.18);
+}
+
+.item-dialog::backdrop {
+  background: rgba(32, 33, 31, 0.32);
+}
+
+.item-dialog .panel-title {
+  margin-bottom: 14px;
+}
+
+.form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.kanji-card {
-  min-height: 188px;
-  padding: 12px;
+.form-field {
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
-  gap: 8px;
-  text-align: center;
+  gap: 5px;
 }
 
-.kanji-char {
-  justify-self: center;
-  font-size: 64px;
-  line-height: 1;
-  font-weight: 900;
+.form-field-wide {
+  grid-column: 1 / -1;
 }
 
-.kanji-card-top {
-  min-height: 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.kanji-info {
-  display: grid;
-  gap: 4px;
-  align-content: start;
-  min-height: 44px;
-}
-
-.kanji-info strong {
-  font-size: 15px;
-  font-weight: 900;
-  color: var(--text);
-}
-
-.kanji-info p {
-  margin: 0;
+.form-field span {
   color: var(--muted-strong);
   font-size: 13px;
   font-weight: 800;
 }
 
-.kanji-card .card-actions {
-  margin-top: 0;
+.form-field em {
+  color: var(--red);
+  font-style: normal;
+}
+
+.item-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.kanji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.kanji-grid > .empty-state {
+  grid-column: 1 / -1;
+}
+
+.kanji-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.kanji-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kanji-card-head .review-select-sm {
+  flex: 0 0 auto;
+  margin-right: 0;
+}
+
+.kanji-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.kanji-actions .row-action-btn,
+.kanji-actions .row-delete-btn {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  color: var(--muted);
+}
+
+.kanji-actions .row-action-btn:hover,
+.kanji-actions .row-action-btn:focus-visible {
+  color: var(--text);
+}
+
+.kanji-actions .row-delete-btn:hover,
+.kanji-actions .row-delete-btn:focus-visible {
+  color: var(--danger, #c0392b);
+}
+
+.kanji-card .kanji-char {
+  display: flex;
   justify-content: center;
+  margin: 6px 0 8px;
+  font-size: 56px;
+  line-height: 1.1;
+  font-weight: 800;
+  text-align: center;
 }
 
-.kanji-card .card-actions .ghost-btn {
+.kanji-info {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  justify-items: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.kanji-info strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.kanji-info p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.kanji-info .link-btn {
+  white-space: nowrap;
+}
+
+.kanji-info .kanji-memo {
+  line-height: 1.5;
+}
+
+.kanji-words {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  justify-items: start;
+}
+
+.kanji-word-list {
+  display: grid;
+  gap: 6px;
   width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.kanji-card .card-actions .danger-btn {
-  display: none;
+.kanji-word {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.kanji-word .speaker-btn {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border-radius: 6px;
+}
+
+.kanji-word .speaker-btn .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.kanji-word-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.kanji-word-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.kanji-word-line strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 800;
+}
+
+.kanji-word-reading {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.kanji-word-meaning {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .kanji-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+  }
+
+  .kanji-card {
+    padding: 10px;
+  }
+
+  .kanji-card .kanji-char {
+    font-size: 48px;
+  }
 }
 
 .quiz-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .quiz-card {
-  min-height: 132px;
-  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 250px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
@@ -534,40 +936,57 @@ h1 {
   text-align: left;
 }
 
-button.quiz-card:hover,
-button.quiz-card:focus-visible,
-.word-quiz-card:focus-within,
-.kanji-quiz-card:focus-within {
+.quiz-card:focus-within {
   border-color: rgba(63, 129, 98, 0.45);
-  background: var(--accent-soft);
-}
-
-.quiz-card strong,
-.quiz-card > span:last-child {
-  display: block;
 }
 
 .quiz-card strong {
-  margin-top: 14px;
+  margin-top: 12px;
   font-size: 18px;
   line-height: 1.25;
 }
 
-.quiz-card > span:last-child {
+.quiz-card-desc {
   margin-top: 6px;
   color: var(--muted-strong);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
-.quiz-status {
-  margin-top: 12px;
+.quiz-card-pool {
+  margin: 10px 0 12px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.quiz-card-pool .quiz-card-warn {
+  margin: 4px 0 0;
+  color: #c65149;
+  font-weight: 750;
+}
+
+.quiz-card-disabled {
+  min-height: 0;
+  gap: 0;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.quiz-card-disabled .badge + strong {
+  margin-top: 10px;
+}
+
+.quiz-soon-badge {
+  margin-top: 10px;
+  background: var(--line);
+  color: var(--muted-strong);
 }
 
 .quiz-mode-options {
   display: grid;
   gap: 6px;
-  margin-top: 12px;
+  margin-bottom: 12px;
 }
 
 .quiz-mode-options label {
@@ -582,26 +1001,60 @@ button.quiz-card:focus-visible,
 
 .quiz-start-btn {
   width: 100%;
-  margin-top: 12px;
+  margin-top: auto;
+}
+
+.quiz-start-btn:disabled {
+  background: var(--line);
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .word-quiz-panel {
   display: grid;
-  gap: 12px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  gap: 14px;
+}
+
+.quiz-session-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quiz-session-title {
+  font-size: 17px;
+}
+
+.quiz-session-progress {
+  color: var(--muted-strong);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.quiz-session-header .ghost-btn {
+  margin-left: auto;
+}
+
+.quiz-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.quiz-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
 }
 
 .word-quiz-question {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) minmax(120px, 1fr);
-  align-items: start;
-  gap: 12px;
-}
-
-.word-quiz-question > div:first-child {
-  grid-column: 2;
+  justify-items: center;
+  gap: 2px;
   text-align: center;
 }
 
@@ -610,7 +1063,7 @@ button.quiz-card:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 7px;
-  margin: 10px 0 4px;
+  margin: 6px 0 4px;
   font-size: var(--quiz-question-font-size, 32px);
 }
 
@@ -620,29 +1073,59 @@ button.quiz-card:focus-visible,
   font-weight: 800;
 }
 
-.word-quiz-prompt-label {
-  margin-top: 10px !important;
-  color: var(--muted) !important;
+.word-quiz-question .word-quiz-prompt-label {
+  margin-top: 8px;
+  color: var(--muted);
   font-size: 12px;
-  font-weight: 900 !important;
+  font-weight: 900;
 }
 
-.word-quiz-score {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.word-quiz-question .quiz-item-record {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quiz-listen {
+  display: grid;
+  justify-items: center;
   gap: 6px;
-  grid-column: 3;
-  grid-row: 1;
+  padding: 8px 0;
 }
 
-.word-quiz-score span {
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted-strong);
+.quiz-listen-btn {
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+}
+
+.quiz-listen-btn:hover {
+  background: var(--accent-deep);
+}
+
+.quiz-listen-btn .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.quiz-listen-replay {
+  color: var(--accent-deep);
   font-size: 13px;
   font-weight: 850;
+}
+
+.word-quiz-question .quiz-listen-caption {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .word-quiz-choices {
@@ -653,7 +1136,14 @@ button.quiz-card:focus-visible,
   margin: 0 auto;
 }
 
+.word-quiz-choices.list {
+  grid-template-columns: 1fr;
+}
+
 .word-quiz-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-height: 64px;
   padding: 10px 14px;
   border: 1px solid var(--line);
@@ -661,19 +1151,36 @@ button.quiz-card:focus-visible,
   background: var(--surface);
   color: var(--text);
   text-align: left;
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.35;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.word-quiz-choice-index {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.word-quiz-choice-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .word-quiz-choice:hover:not(:disabled),
 .word-quiz-choice:focus-visible {
-  border-color: rgba(63, 129, 98, 0.45);
-  background: var(--accent-soft);
+  border-color: rgba(63, 129, 98, 0.55);
 }
 
 .word-quiz-choice.correct {
-  border-color: rgba(63, 129, 98, 0.5);
+  border-color: rgba(63, 129, 98, 0.6);
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
@@ -685,42 +1192,99 @@ button.quiz-card:focus-visible,
 }
 
 .word-quiz-feedback {
-  display: grid;
-  grid-template-columns: minmax(100px, 1fr) minmax(0, auto) minmax(100px, 1fr);
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   width: min(100%, 920px);
   margin: 0 auto;
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
 }
 
 .word-quiz-feedback strong {
-  grid-column: 2;
-  justify-self: center;
+  font-size: 16px;
 }
 
 .word-quiz-feedback.correct {
   border-color: rgba(63, 129, 98, 0.35);
 }
 
+.word-quiz-feedback.correct strong {
+  color: var(--accent-deep);
+}
+
 .word-quiz-feedback.wrong {
   border-color: rgba(198, 81, 73, 0.32);
 }
 
-.word-quiz-feedback span {
-  grid-column: 2;
-  justify-self: center;
-  color: var(--muted-strong);
-  font-size: 14px;
-  font-weight: 750;
+.word-quiz-feedback.wrong strong {
+  color: #c65149;
 }
 
 .word-quiz-feedback .primary-btn {
-  grid-column: 3;
-  justify-self: end;
+  min-width: 140px;
+}
+
+.quiz-result {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding: 12px 0;
+}
+
+.quiz-result-score {
+  margin: 0;
+  font-size: 22px;
+}
+
+.quiz-result-score strong {
+  color: var(--accent-deep);
+}
+
+.quiz-missed-title {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.quiz-missed-list {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-missed-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.quiz-missed-arrow {
+  color: var(--muted);
+}
+
+.quiz-missed-empty {
+  margin: 0;
+  color: var(--muted-strong);
+  font-weight: 800;
+}
+
+.quiz-result-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 label {
@@ -762,6 +1326,236 @@ label {
 
 .settings-grid span {
   color: var(--text);
+}
+
+/* 설정 탭: panel header with a one-line description, and the shared
+   label-left / control-right row used by every setting. */
+.settings-panel-header {
+  align-items: flex-start;
+}
+
+.settings-panel-desc {
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+}
+
+.setting-row:first-of-type {
+  border-top: 0;
+}
+
+.setting-row-text {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.setting-row-label {
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 800;
+}
+
+.setting-row-desc {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.setting-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.setting-row-control select {
+  width: 200px;
+}
+
+.setting-row-control .setting-switch {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.setting-saved {
+  order: -1;
+  width: 44px;
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.setting-saved.is-visible {
+  opacity: 1;
+}
+
+.setting-row-dependent {
+  margin-top: -1px;
+  padding-top: 0;
+  border-top: 0;
+  transition: opacity 0.16s ease;
+}
+
+.setting-row-dependent .setting-row-label {
+  padding-left: 14px;
+  color: var(--muted-strong);
+  font-weight: 750;
+}
+
+.setting-row-dependent.is-disabled {
+  opacity: 0.5;
+}
+
+.setting-row-control-group {
+  flex: 0 1 620px;
+}
+
+#settings .ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-size-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.page-size-field {
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.page-size-grid select {
+  width: 100%;
+  padding-left: 7px;
+  padding-right: 4px;
+}
+
+.setting-row-control-size {
+  flex: 0 1 330px;
+}
+
+.quiz-size-control {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.quiz-size-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 150px;
+  height: 84px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 850;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.quiz-size-slider {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quiz-size-value {
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.account-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.account-status .badge:not(.red):not(.blue):not(.green):not(.yellow) {
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+}
+
+.account-last-sync {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.settings-storage-status {
+  margin: 8px 0 0;
+  min-height: 1.4em;
+  font-size: 13px;
+}
+
+.settings-danger-zone {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.settings-danger-zone .setting-row {
+  padding-bottom: 0;
+}
+
+.settings-subtitle {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.caution-btn {
+  border-color: rgba(223, 111, 104, 0.45);
+  color: #c65149;
+}
+
+.caution-btn:hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: #b3463f;
+}
+
+.danger-outline-btn {
+  background: transparent;
+  border: 1px solid var(--red);
+  color: #c65149;
+}
+
+.danger-outline-btn:hover {
+  background: var(--red-soft);
+  color: #b3463f;
 }
 
 .tts-status {

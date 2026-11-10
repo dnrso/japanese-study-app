@@ -19,8 +19,8 @@ import {
   renderReviewPage,
   renderTasksPage,
   renderTodayPage,
-  renderWordsPage,
-  studyCard
+  noteCard,
+  renderWordsPage
 } from "@nihongo-study/ui";
 import * as core from "@nihongo-study/core";
 
@@ -46,8 +46,6 @@ function helpers(extra = {}) {
     highlight: escapeHtml,
     kindLabels,
     reviewStatusText: core.reviewStatusText,
-    reviewQueueReview: item => core.reviewQueueReview(item),
-    reviewQueueStatusText: item => core.reviewQueueStatusText({ item }),
     ...extra
   };
 }
@@ -138,26 +136,65 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(vulnerable)).toEqual(["autofocus", "onfocus"]);
   });
 
-  it("studyCard does not let an id break out of its attributes", () => {
-    const html = studyCard(hostileWord(), helpers());
+  it("noteCard with showKind does not let an id break out of its attributes", () => {
+    const html = noteCard(hostileWord(), ["대기", "오늘"], helpers(), { showKind: true });
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
-    // Still round-trips for the click handlers, just escaped.
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
   });
 
-  it("studyCard also escapes an unknown `kind` (which falls through kindLabels)", () => {
-    const html = studyCard(hostileWord({ kind: `<img src=x onerror="alert(1)">` }), helpers());
+  it("noteCard also escapes an unknown `kind` (which falls through kindLabels)", () => {
+    const html = noteCard(hostileWord({ kind: `<img src=x onerror="alert(1)">` }), ["대기"], helpers(), { showKind: true });
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain("<img");
   });
 
-  it("studyCard escapes the sourceSentences ids it renders as jump links", () => {
-    const html = studyCard(hostileWord({ kind: "grammar" }), helpers());
+  it("noteCard shows the kind badge and review select only as configured", () => {
+    const withKind = noteCard(hostileWord({ id: "w1" }), ["대기", "오늘"], helpers(), { showKind: true });
+    expect(withKind).toContain("badge");
+    expect(withKind).toContain("review-select-sm");
+    const noReview = noteCard(hostileWord({ id: "w1", review: undefined }), ["대기"], helpers(), { showKind: true });
+    expect(noReview).not.toContain("data-review-select");
+    const tab = noteCard(hostileWord({ id: "g1", kind: "grammar", review: undefined }), ["대기"], helpers());
+    expect(tab).not.toContain('class="badge');
+    expect(tab).toContain("data-review-select");
+    expect(tab).not.toContain("note-card-footer");
+  });
+
+  it("noteCard hides a note that merely repeats the title/reading/meaning", () => {
+    const sentence = { id: "s1", kind: "sentence", title: "水を飲む", reading: "みずをのむ", meaning: "물을 마신다", sourceSentences: [] };
+    const html = noteCard({ ...sentence, note: "水を飲む みずをのむ 물을 마신다" }, [], helpers(), { showKind: true });
+    expect(html).not.toContain("note-card-note");
+  });
+
+  it("noteCard escapes the sourceSentences ids it renders as jump links", () => {
+    const html = noteCard(hostileWord({ kind: "grammar" }), ["대기"], helpers(), { showKind: true });
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-source-date="${escapeHtml(HOSTILE_ID)}"`);
+  });
+
+  it("noteCard does not let an id break out of its attributes and links sources on any kind", () => {
+    const html = noteCard(hostileWord({ kind: "expression" }), ["대기", "오늘"], helpers());
+    expect(injectedAttributes(html)).toEqual([]);
+    expect(html).not.toContain(HOSTILE_ID);
+    expect(html).toContain(`data-edit-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
+  });
+
+  it("noteCard hides a note that only repeats the meaning or the raw input line", () => {
+    const base = { id: "g1", kind: "grammar", title: "〜てしまう", meaning: "동작의 완료를 나타낸다", sourceSentences: [] };
+    const raw = noteCard({ ...base, note: "`〜てしまう` 동작의 완료를 나타낸다" }, ["대기"], helpers());
+    expect(raw).not.toContain("note-card-note");
+    expect(raw).not.toContain("note-card-source");
+    const same = noteCard({ ...base, note: "동작의 완료를 나타낸다" }, ["대기"], helpers());
+    expect(same).not.toContain("note-card-note");
+    const real = noteCard({ ...base, note: "회화체에서는 ちゃう" }, ["대기"], helpers());
+    expect(real).toContain("note-card-note");
   });
 
   it("renderWordsPage does not let an id break out of its attributes", () => {
@@ -165,23 +202,82 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
-    expect(html).toContain(`data-cycle-review="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
   });
 
   it("renderKanjiPage does not let an id break out of its attributes", () => {
+    const words = [1, 2, 3, 4].map(n => hostileWord({ id: `w${n}`, title: `雨${n}` }));
     const html = patchHtml(renderKanjiPage({
-      kanji: [hostileWord({ kind: "kanji", title: "水" })],
+      kanji: [hostileWord({ kind: "kanji", title: `雨" onclick="x` })],
+      reviewOptions: ["대기", "오늘"],
+      wordsFor: () => words,
       helpers: helpers()
     }));
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-edit-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-show-kanji-words="${escapeHtml('雨" onclick="x')}"`);
+  });
+
+  it("renderKanjiPage shows linked words, caps them at 3 and hides the auto source note", () => {
+    const item = { id: "k1", kind: "kanji", title: "雨", meaning: "", reading: "", note: "雨 (あめ)", review: "대기" };
+    const words = [
+      { id: "w1", title: "雨", reading: "あめ", meaning: "비" },
+      { id: "w2", title: "大雨", reading: "おおあめ", meaning: "큰비" },
+      { id: "w3", title: "雨天", reading: "うてん", meaning: "우천" },
+      { id: "w4", title: "梅雨", reading: "つゆ", meaning: "장마" }
+    ];
+    const html = patchHtml(renderKanjiPage({ kanji: [item], reviewOptions: ["대기"], wordsFor: () => words, helpers: helpers() }));
+    expect(html).toContain("kanji-words");
+    expect(html.match(/class="kanji-word"/g)).toHaveLength(3);
+    expect(html).toContain("단어 4개 모두 보기");
+    expect(html).toContain("뜻·읽기 추가");
+    expect(html).not.toContain("kanji-memo");
+    const bare = patchHtml(renderKanjiPage({
+      kanji: [{ ...item, meaning: "비 우", note: "내 메모" }],
+      wordsFor: () => [],
+      helpers: helpers()
+    }));
+    expect(bare).not.toContain("kanji-words");
+    expect(bare).not.toContain("뜻·읽기 추가");
+    expect(bare).toContain("내 메모");
+  });
+
+  it("renderKanjiPage honours wordLimit: 0 hides, 1 caps, Infinity shows all", () => {
+    const item = { id: "k1", kind: "kanji", title: "雨", meaning: "비", reading: "う", review: "대기" };
+    const words = [1, 2, 3, 4, 5].map(n => ({ id: `w${n}`, title: `雨${n}`, reading: "あ", meaning: "비" }));
+    const render = wordLimit => patchHtml(renderKanjiPage({ kanji: [item], wordsFor: () => words, wordLimit, helpers: helpers() }));
+    const none = render(0);
+    expect(none).not.toContain("kanji-words");
+    expect(none).not.toContain("모두 보기");
+    const one = render(1);
+    expect(one.match(/class="kanji-word"/g)).toHaveLength(1);
+    expect(one).toContain("단어 5개 모두 보기");
+    const all = render(Infinity);
+    expect(all.match(/class="kanji-word"/g)).toHaveLength(5);
+    expect(all).not.toContain("모두 보기");
+    expect(render(undefined).match(/class="kanji-word"/g)).toHaveLength(3);
+  });
+
+  it("renderKanjiPage shows the given empty message", () => {
+    const html = patchHtml(renderKanjiPage({ kanji: [], emptyMessage: "조건에 맞는 한자가 없습니다.", helpers: helpers() }));
+    expect(html).toContain("조건에 맞는 한자가 없습니다.");
   });
 
   it("renderReviewPage does not let an id break out of its attributes", () => {
-    const html = patchHtml(renderReviewPage({ reviewItems: [hostileWord()], helpers: helpers() }));
+    const html = patchHtml(renderReviewPage({
+      reviewItems: [hostileWord()],
+      kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
+      scheduledReviewOptions: ["내일", "3일 후"],
+      hideMeaning: true,
+      helpers: helpers()
+    }));
     expect(injectedAttributes(html)).toEqual([]);
-    expect(html).toContain(`data-cycle-review-queue="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-reveal="${escapeHtml(HOSTILE_ID)}"`);
   });
 
   it("renderTasksPage does not let a task id break out of its attributes", () => {

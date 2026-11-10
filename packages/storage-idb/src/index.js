@@ -354,6 +354,25 @@ export function createIdbStorage(options = {}) {
     return getState(studyDate);
   }
 
+  // Undo for completeReview/updateItemReview: puts back exactly the review
+  // fields a completion writes (review, reviewDueDate, lastReviewedAt) on top of
+  // the CURRENT record, so unrelated edits made in between are kept. updatedAt
+  // is bumped rather than restored so the undo still wins a last-write-wins sync
+  // merge against the completion it reverts.
+  async function restoreItemReview(id, snapshot = {}, studyDate = todayKey()) {
+    const item = await getValue("items", id);
+    if (item && !item.deletedAt && item.kind !== "source" && snapshot && typeof snapshot === "object") {
+      await putValue("items", {
+        ...item,
+        review: normalizeReview(snapshot.review || "대기"),
+        reviewDueDate: normalizeOptionalDate(snapshot.reviewDueDate),
+        lastReviewedAt: text(snapshot.lastReviewedAt),
+        updatedAt: now()
+      });
+    }
+    return getState(studyDate);
+  }
+
   async function submitWordQuizAnswer(payload = {}) {
     const quizKind = ["word", "kanji"].includes(text(payload.quizKind)) ? text(payload.quizKind) : "word";
     const item = await getValue("items", text(payload.itemId));
@@ -616,6 +635,7 @@ export function createIdbStorage(options = {}) {
     deleteItem,
     updateItemReview,
     completeReview,
+    restoreItemReview,
     submitWordQuizAnswer,
     resetSampleData,
     clearAllData,
@@ -940,6 +960,11 @@ function mergeDailyCandidate(existing, candidate) {
 // value for it any more.
 function itemsFromDailyEntry(entry, parentTitle) {
   const isSentence = entry.kind === "sentence";
+  // A manually typed 단어/문법/표현 entry is parsed with `note` = the whole raw
+  // input line; a sentence keeps that on purpose, but for the others it would
+  // just repeat the title and meaning, so it is not a note.
+  const parsedNote = entry.parsed?.note || "";
+  const note = !isSentence && parsedNote.trim() === text(entry.rawText).trim() ? "" : parsedNote;
   const item = {
     kind: entry.kind,
     title: entry.title,
@@ -950,7 +975,7 @@ function itemsFromDailyEntry(entry, parentTitle) {
     kanji: isSentence ? "" : entry.parsed?.kanji,
     review: "대기",
     source: isSentence ? "" : parentTitle || "오늘 공부",
-    note: entry.parsed?.note || "",
+    note,
     sourceSentences: entry.sourceSentences || []
   };
   // Derived from the un-normalized shape on purpose: withKanjiItems reads

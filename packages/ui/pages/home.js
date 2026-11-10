@@ -1,4 +1,4 @@
-import { empty, icon, speakerButton, studyCard } from "../components/index.js";
+import { empty, icon, noteCard, speakerButton } from "../components/index.js";
 
 export function homeSummaryPanel() {
   return `<div class="panel home-summary" id="homeSummary"></div>`;
@@ -77,7 +77,7 @@ function statCard({ label, value, note, accent = false }) {
   return `<div class="${classes}"><div class="stat-label">${label}</div><div class="stat-value">${value}개</div><div class="stat-note">${note}</div></div>`;
 }
 
-export function renderHomePage({ overview, helpers }) {
+export function renderHomePage({ overview, reviewOptions = [], helpers }) {
   const groups = overview.reviewSummary.map(({ kind, count }) =>
     `<tr><td>${helpers.kindLabels[kind]}</td><td>${count}</td><td><span class="badge ${count ? "red" : "green"}">${count ? "복습 필요" : "정리됨"}</span></td></tr>`
   );
@@ -95,7 +95,7 @@ export function renderHomePage({ overview, helpers }) {
         statCard({ label: "전체 학습 항목", value: overview.newItemCount, note: "단어 · 문법 · 표현 · 한자" })
       ].join(""),
       recentItems: overview.recentItems.length
-        ? overview.recentItems.map(item => studyCard(item, helpers)).join("")
+        ? overview.recentItems.map(item => noteCard(item, reviewOptions, helpers, { showKind: true })).join("")
         : empty("최근 추가 항목이 없습니다."),
       reviewSummary: groups.join("")
     },

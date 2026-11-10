@@ -109,7 +109,7 @@ const adapter = {
 describe("storage contract", () => {
   it("storageMethodNames stays derived from storageContract", () => {
     expect(storageMethodNames).toEqual(storageContract.map(entry => entry.name));
-    expect(storageMethodNames).toHaveLength(20);
+    expect(storageMethodNames).toHaveLength(21);
     expect(new Set(storageMethodNames).size).toBe(storageMethodNames.length);
   });
 
@@ -376,6 +376,35 @@ describe("storage conformance: storage-idb", () => {
     expect(reviewed.review).toBe("일주일");
     expect(reviewed.reviewDueDate > todayKey()).toBe(true);
     expect(reviewed.lastReviewedAt).toBeTruthy();
+  });
+
+  it("restoreItemReview() undoes a completion: review, due date and lastReviewedAt", async () => {
+    const store = await freshStore();
+    const created = await store.upsertItem({ kind: "word", title: "되돌리기", meaning: "undo" });
+    const before = byTitle(created.items, "되돌리기");
+    const snapshot = { review: before.review, reviewDueDate: before.reviewDueDate, lastReviewedAt: before.lastReviewedAt };
+
+    const completed = await store.completeReview([{ id: before.id, review: "일주일" }], studyDate);
+    expect(byTitle(completed.items, "되돌리기").lastReviewedAt).toBeTruthy();
+
+    // An unrelated edit made between the save and the undo survives it.
+    await store.upsertItem({ id: before.id, note: "그 사이 메모" });
+    const restored = await store.restoreItemReview(before.id, snapshot, studyDate);
+    const after = byTitle(restored.items, "되돌리기");
+    expect(after.review).toBe(before.review);
+    expect(after.reviewDueDate).toBe(before.reviewDueDate);
+    expect(after.lastReviewedAt).toBe(before.lastReviewedAt);
+    expect(after.note).toBe("그 사이 메모");
+  });
+
+  it("restoreItemReview() ignores unknown ids and source items", async () => {
+    const store = await freshStore();
+    const sourceState = await store.upsertItem({ kind: "source", title: "출처2", meaning: "" });
+    const sourceItem = byTitle(sourceState.items, "출처2");
+    const snapshot = { review: "한달", reviewDueDate: "2099-01-01", lastReviewedAt: "x" };
+    await store.restoreItemReview("missing", snapshot, studyDate);
+    const state = await store.restoreItemReview(sourceItem.id, snapshot, studyDate);
+    expect(byTitle(state.items, "출처2").review).toBe("");
   });
 
   it("completeReview() accepts bare ids (defaulting to 3일 후), ignores empty targets and source items", async () => {

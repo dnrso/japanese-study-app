@@ -6,7 +6,7 @@ import {
   SENTENCE_STATUS_FILTERS,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
-import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
+import { DEFAULT_KANJI_WORD_LIMIT, DEFAULT_LIST_PAGE_SIZES, KANJI_WORD_LIMIT_OPTIONS, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -66,7 +66,7 @@ export function renderAppShell(byId) {
             <p class="sidebar-title">빠른 필터</p>
             <div class="toc-list">
               <button class="toc-item filter-btn" type="button" data-filter="review"><span>복습 필요</span><span class="count" id="reviewFilterCount">0</span></button>
-              <button class="toc-item filter-btn" type="button" data-filter="source"><span>자료 연결됨</span><span class="count" id="sourceFilterCount">0</span></button>
+              <button class="toc-item filter-btn" type="button" data-filter="source"><span>문장 연결 단어</span><span class="count" id="sourceFilterCount">0</span></button>
               <button class="toc-item filter-btn" type="button" data-filter="pending"><span>미완료</span><span class="count" id="pendingFilterCount">0</span></button>
             </div>
           </div>
@@ -94,6 +94,7 @@ export function renderAppShell(byId) {
           ${wordsPageTemplate()}
           ${cardPageTemplate("grammar", "grammar-detail", "문법 노트", "grammarCards", "+ 문법 추가")}
           ${cardPageTemplate("expression", "expressions-list", "표현 · 관용구", "expressionCards", "+ 표현 추가", "expressions")}
+          ${noteDialogTemplate()}
           ${kanjiPageTemplate()}
           ${quizPageTemplate()}
           ${reviewPageTemplate()}
@@ -251,31 +252,37 @@ function sentencesPageTemplate() {
 }
 
 function wordsPageTemplate() {
+  const sortHeader = (key, label, className = "") => `<th${className ? ` class="${className}"` : ""}><button class="sort-btn" data-word-sort="${key}" type="button">${label} <span data-word-sort-indicator="${key}">↕</span></button></th>`;
   return `
     <section class="page hidden-page" id="words">
       <section class="panel section" id="words-list">
         <div class="panel-header">
-          <h2 class="panel-title">단어장</h2>
+          <h2 class="panel-title">단어장 <span class="panel-count" id="wordTotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="word" data-add-item>+ 단어 추가</button>
         </div>
         <div class="table-tools">
-          <select id="wordPartFilter"><option value="">전체 품사</option></select>
-          <select id="wordScriptFilter"><option value="">전체 문자</option></select>
-          <select id="wordReviewFilter"><option value="">전체 복습</option></select>
+          <select id="wordPartFilter" aria-label="품사"><option value="">전체 품사</option></select>
+          <select id="wordScriptFilter" aria-label="문자"><option value="">전체 문자</option></select>
+          <select id="wordReviewFilter" aria-label="복습"><option value="">전체 복습</option></select>
+          <select id="wordSourceFilter" aria-label="출처">
+            <option value="">전체 출처</option>
+            <option value="sentence">문장에서 등록</option>
+            <option value="manual">직접 추가</option>
+          </select>
+          <p class="table-tools-summary"><span id="wordFilterSummary"></span><button class="link-btn" id="wordFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="table-scroll">
-          <table class="table">
+          <table class="table word-table">
             <thead>
               <tr>
-                <th><button class="sort-btn" data-word-sort="title" type="button">단어 <span data-word-sort-indicator="title"></span></button></th>
+                ${sortHeader("title", "단어")}
                 <th>읽기</th>
-                <th><button class="sort-btn" data-word-sort="meaning" type="button">뜻 <span data-word-sort-indicator="meaning"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="kanji" type="button">한자 <span data-word-sort-indicator="kanji"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="part" type="button">품사 <span data-word-sort-indicator="part"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="script" type="button">문자 <span data-word-sort-indicator="script"></span></button></th>
-                <th><button class="sort-btn" data-word-sort="sourceSentence" type="button">원본 문장 <span data-word-sort-indicator="sourceSentence"></span></button></th>
-                <th>복습</th>
-                <th></th>
+                ${sortHeader("meaning", "뜻", "word-meaning-col")}
+                ${sortHeader("kanji", "한자")}
+                ${sortHeader("part", "품사 · 문자", "word-meta-col")}
+                ${sortHeader("sourceSentence", "원본 문장")}
+                <th class="word-review-col">복습</th>
+                <th class="word-edit-col">수정</th>
               </tr>
             </thead>
             <tbody id="wordRows"></tbody>
@@ -283,15 +290,18 @@ function wordsPageTemplate() {
         </div>
         <div id="wordsPagination"></div>
       </section>
-
-      <section class="taxonomy-section" id="words-taxonomy">
-        <div class="panel-header"><h3 class="panel-title">단어장 분류 체계</h3><span class="badge green">검색 · 필터 기준</span></div>
-        <div class="taxonomy-grid">
-          <article class="taxonomy-card"><h4>품사</h4><div class="taxonomy-chip-wrap" id="partChips"></div></article>
-          <article class="taxonomy-card"><h4>문자</h4><div class="taxonomy-chip-wrap" id="scriptChips"></div></article>
-        </div>
-      </section>
     </section>
+
+    <dialog class="item-dialog" id="wordDialog" aria-labelledby="wordDialogTitle">
+      <form method="dialog" id="wordDialogForm">
+        <h2 class="panel-title" id="wordDialogTitle">단어 추가</h2>
+        <div id="wordDialogFields"></div>
+        <div class="item-dialog-actions">
+          <button class="ghost-btn" type="button" value="cancel" id="wordDialogCancel">취소</button>
+          <button class="primary-btn" type="submit" value="save">저장</button>
+        </div>
+      </form>
+    </dialog>
   `;
 }
 
@@ -300,13 +310,38 @@ function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, pageId 
     <section class="page hidden-page" id="${pageId}">
       <section class="panel section" id="${sectionId}">
         <div class="panel-header">
-          <h2 class="panel-title">${title}</h2>
+          <h2 class="panel-title">${title} <span class="panel-count" id="${kind}TotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="${kind}" data-add-item>${buttonLabel}</button>
         </div>
-        <div class="cards" id="${targetId}"></div>
+        <div class="table-tools">
+          <select id="${kind}ReviewFilter" aria-label="복습"><option value="">전체 복습 상태</option></select>
+          <select id="${kind}SourceFilter" aria-label="출처">
+            <option value="">전체 출처</option>
+            <option value="sentence">문장 연결</option>
+            <option value="manual">직접 추가</option>
+          </select>
+          <p class="table-tools-summary"><span id="${kind}FilterSummary"></span><button class="link-btn" id="${kind}FilterResetBtn" type="button" hidden>필터 초기화</button></p>
+        </div>
+        <div class="cards study-card-grid" id="${targetId}"></div>
         <div id="${kind}Pagination"></div>
       </section>
     </section>
+  `;
+}
+
+// One add/edit dialog shared by 문법 and 표현 (fields are filled per kind).
+function noteDialogTemplate() {
+  return `
+    <dialog class="item-dialog" id="noteDialog" aria-labelledby="noteDialogTitle">
+      <form method="dialog" id="noteDialogForm">
+        <h2 class="panel-title" id="noteDialogTitle">문법 추가</h2>
+        <div id="noteDialogFields"></div>
+        <div class="item-dialog-actions">
+          <button class="ghost-btn" type="button" value="cancel" id="noteDialogCancel">취소</button>
+          <button class="primary-btn" type="submit" value="save">저장</button>
+        </div>
+      </form>
+    </dialog>
   `;
 }
 
@@ -315,8 +350,17 @@ function kanjiPageTemplate() {
     <section class="page hidden-page" id="kanji">
       <section class="panel section" id="kanji-grid">
         <div class="panel-header">
-          <h2 class="panel-title">한자 노트</h2>
+          <h2 class="panel-title">한자 노트 <span class="panel-count" id="kanjiTotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="kanji" data-add-item>+ 한자 추가</button>
+        </div>
+        <div class="table-tools">
+          <select id="kanjiReviewFilter" aria-label="복습"><option value="">전체 복습 상태</option></select>
+          <select id="kanjiMeaningFilter" aria-label="뜻">
+            <option value="">전체</option>
+            <option value="empty">뜻 미입력</option>
+            <option value="filled">뜻 입력됨</option>
+          </select>
+          <p class="table-tools-summary"><span id="kanjiFilterSummary"></span><button class="link-btn" id="kanjiFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="kanji-grid" id="kanjiCards"></div>
         <div id="kanjiPagination"></div>
@@ -329,16 +373,15 @@ function quizPageTemplate() {
   return `
     <section class="page hidden-page" id="quiz">
       <section class="panel section" id="quiz-select">
-        <div class="panel-header">
+        <div class="panel-header" id="quizSelectHeader">
           <h2 class="panel-title">퀴즈</h2>
-          <div class="panel-header-actions">
-            <button class="ghost-btn compact-action-btn" id="quizExitBtn" type="button" hidden>목록으로</button>
-            <span class="badge yellow">샘플 데이터</span>
-          </div>
         </div>
         <div class="quiz-grid" id="quizSelectGrid">
-          <article class="quiz-card word-quiz-card">
-            <span class="badge red">단어</span><strong>단어 퀴즈</strong><span>4지선다</span>
+          <article class="quiz-card">
+            <span class="badge red">단어</span>
+            <strong>단어 퀴즈</strong>
+            <span class="quiz-card-desc">단어를 보고 뜻(또는 뜻을 보고 단어) 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-word"></div>
             <div class="quiz-mode-options" aria-label="단어 퀴즈 유형">
               <label><input type="radio" name="wordQuizMode" value="random" checked /> 완전 랜덤</label>
               <label><input type="radio" name="wordQuizMode" value="jpToMeaning" /> 일본어 → 뜻</label>
@@ -346,10 +389,11 @@ function quizPageTemplate() {
             </div>
             <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="word">시작</button>
           </article>
-          <button class="quiz-card" type="button" data-quiz-kind="grammar"><span class="badge blue">문법</span><strong>문법 퀴즈</strong><span>다음 단계</span></button>
-          <button class="quiz-card" type="button" data-quiz-kind="expression"><span class="badge green">표현</span><strong>표현 퀴즈</strong><span>다음 단계</span></button>
-          <article class="quiz-card kanji-quiz-card">
-            <span class="badge yellow">한자</span><strong>한자 퀴즈</strong><span>4지선다</span>
+          <article class="quiz-card">
+            <span class="badge yellow">한자</span>
+            <strong>한자 퀴즈</strong>
+            <span class="quiz-card-desc">한자를 보고 뜻(또는 뜻을 보고 한자) 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-kanji"></div>
             <div class="quiz-mode-options" aria-label="한자 퀴즈 유형">
               <label><input type="radio" name="kanjiQuizMode" value="random" checked /> 완전 랜덤</label>
               <label><input type="radio" name="kanjiQuizMode" value="kanjiToMeaning" /> 한자 → 뜻</label>
@@ -357,10 +401,31 @@ function quizPageTemplate() {
             </div>
             <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="kanji">시작</button>
           </article>
-          <button class="quiz-card" type="button" data-quiz-kind="sentence-meaning"><span class="badge purple">문장</span><strong>문장 뜻 고르기</strong><span>4지선다</span></button>
-          <button class="quiz-card" type="button" data-quiz-kind="sentence-listen"><span class="badge purple">문장</span><strong>듣고 문장 고르기</strong><span>4지선다</span></button>
+          <article class="quiz-card">
+            <span class="badge purple">문장</span>
+            <strong>문장 뜻 고르기</strong>
+            <span class="quiz-card-desc">일본어 문장을 보고 해석 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-sentence-meaning"></div>
+            <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="sentence-meaning">시작</button>
+          </article>
+          <article class="quiz-card">
+            <span class="badge purple">문장</span>
+            <strong>듣고 문장 고르기</strong>
+            <span class="quiz-card-desc">문장을 듣고 맞는 문장 고르기</span>
+            <div class="quiz-card-pool" id="quizPool-sentence-listen"></div>
+            <button class="primary-btn quiz-start-btn" type="button" data-quiz-kind="sentence-listen">시작</button>
+          </article>
+          <div class="quiz-card quiz-card-disabled" aria-disabled="true">
+            <span class="badge blue">문법</span>
+            <strong>문법 퀴즈</strong>
+            <span class="badge quiz-soon-badge">준비 중</span>
+          </div>
+          <div class="quiz-card quiz-card-disabled" aria-disabled="true">
+            <span class="badge green">표현</span>
+            <strong>표현 퀴즈</strong>
+            <span class="badge quiz-soon-badge">준비 중</span>
+          </div>
         </div>
-        <p class="muted quiz-status" id="quizStatus">샘플 데이터로 단어/한자 퀴즈를 실행할 수 있습니다.</p>
         <div class="word-quiz-panel" id="wordQuizPanel" hidden></div>
         <div class="word-quiz-panel kanji-quiz-panel" id="kanjiQuizPanel" hidden></div>
         <div class="word-quiz-panel sentence-quiz-panel" id="sentenceQuizPanel" hidden></div>
@@ -374,13 +439,15 @@ function reviewPageTemplate() {
     <section class="page hidden-page" id="review">
       <section class="panel section" id="review-queue">
         <div class="panel-header">
-          <h2 class="panel-title">복습 큐</h2>
-          <button class="primary-btn" id="completeReviewBtn" type="button">선택 복습 완료</button>
+          <h2 class="panel-title">복습 큐 <span class="panel-count" id="reviewTotalCount"></span></h2>
         </div>
-        <div class="table-tools">
-          <select id="reviewKindFilter" aria-label="복습 종류 필터"><option value="">전체 종류</option></select>
+        <div class="table-tools review-toolbar">
+          <div class="segmented" id="reviewKindTabs" role="group" aria-label="복습 종류"></div>
+          <label class="sentence-hide-toggle"><input id="reviewHideMeaning" type="checkbox" checked /> 뜻 가리기</label>
         </div>
-        <div class="cards" id="reviewCards"></div>
+        <div class="review-progress" id="reviewProgress"></div>
+        <div class="review-list" id="reviewCards"></div>
+        <div class="review-toast" id="reviewToast" role="status" aria-live="polite" hidden></div>
       </section>
     </section>
   `;
@@ -407,12 +474,12 @@ function statsPageTemplate() {
 // to that view's constant from packages/core's DEFAULT_LIST_PAGE_SIZES).
 // Wired up in apps/web/src/main.js via the shared data-list-page-size-view
 // attribute (see bindEvents()).
-function listPageSizeSelect(view, label) {
+function listPageSizeSelect(view, label, shortLabel) {
   const defaultValue = DEFAULT_LIST_PAGE_SIZES[view];
   const options = LIST_PAGE_SIZE_OPTIONS.map(size => `<option value="${size}">${size}</option>`).join("");
   return `
-    <label>${escapeHtml(label)}
-      <select id="listPageSize-${view}" data-list-page-size-view="${view}">
+    <label class="page-size-field"><span>${escapeHtml(shortLabel)}</span>
+      <select id="listPageSize-${view}" data-list-page-size-view="${view}" aria-label="${escapeHtml(label)}">
         <option value="">기본값 (${defaultValue})</option>
         ${options}
       </select>
@@ -420,71 +487,106 @@ function listPageSizeSelect(view, label) {
   `;
 }
 
+const KANJI_WORD_LIMIT_LABELS = { "0": "0개 (숨김)", all: "전체" };
+
+function kanjiWordLimitSelect() {
+  const options = KANJI_WORD_LIMIT_OPTIONS
+    .map(value => `<option value="${value}"${Number(value) === DEFAULT_KANJI_WORD_LIMIT ? " selected" : ""}>${KANJI_WORD_LIMIT_LABELS[value] || `${value}개`}</option>`)
+    .join("");
+  return `<select id="kanjiWordLimit" aria-labelledby="kanjiWordLimitLabel">${options}</select>`;
+}
+
+// One row of the 설정 tab: label (+ optional description) on the left, the
+// control on the right, plus a "저장됨" status slot that main.js fills in.
+function settingRow({ label, labelId, description = "", control, extraClass = "", controlClass = "", rowId = "" }) {
+  return `
+    <div class="setting-row ${extraClass}"${rowId ? ` id="${rowId}"` : ""}>
+      <div class="setting-row-text">
+        <div class="setting-row-label"${labelId ? ` id="${labelId}"` : ""}>${label}</div>
+        ${description ? `<p class="setting-row-desc">${description}</p>` : ""}
+      </div>
+      <div class="setting-row-control ${controlClass}">
+        ${control}
+        <span class="setting-saved" role="status"></span>
+      </div>
+    </div>
+  `;
+}
+
 function settingsPageTemplate() {
   return `
     <section class="page hidden-page" id="settings">
-      <section class="panel section" id="settings-general">
-        <div class="panel-header">
-          <h2 class="panel-title">설정</h2>
-          <button class="primary-btn" id="resetDataBtn" type="button">샘플 데이터 초기화</button>
+      <section class="panel section" id="settings-display">
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">화면 표시</h2>
+            <p class="muted settings-panel-desc">목록에 한 번에 보여 줄 항목 수를 정합니다.</p>
+          </div>
         </div>
-        <div class="table-scroll">
-          <table class="table">
-            <tbody>
-              <tr><th>저장소</th><td id="storageLocation">IndexedDB (nihongo-study)</td></tr>
-              <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
-              <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button>
-          <button class="ghost-btn" id="loadBackupBtn" type="button">백업 불러오기</button>
-          <button class="ghost-btn" id="mergeBackupBtn" type="button">백업 추가하기</button>
-          <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
-          <input id="mergeBackupFileInput" type="file" accept="application/json,.json" hidden />
-        </div>
-        <p class="muted" id="storageStatus"></p>
-      </section>
-
-      <section class="panel section" id="settings-account">
-        <div class="panel-header"><h2 class="panel-title">계정 및 동기화</h2></div>
-        <p class="muted">로그인하면 데이터가 Supabase에 동기화됩니다.</p>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
-          <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
-          <button class="ghost-btn" id="syncRetryBtn" type="button" disabled>동기화 재시도</button>
-        </div>
-        <p class="muted" id="accountStatus"></p>
-        <p class="muted" id="syncStatus" aria-live="polite">동기화 대기</p>
-        <p class="muted" id="syncLastSuccess">마지막 성공: 없음</p>
-      </section>
-
-      <section class="panel section" id="settings-list-page-size">
-        <div class="panel-header"><h2 class="panel-title">목록 표시</h2></div>
-        <div class="settings-grid">
-          ${listPageSizeSelect("sentences", "문장 페이지당 항목 수")}
-          ${listPageSizeSelect("words", "단어 페이지당 항목 수")}
-          ${listPageSizeSelect("grammar", "문법 페이지당 항목 수")}
-          ${listPageSizeSelect("expression", "표현 페이지당 항목 수")}
-          ${listPageSizeSelect("kanji", "한자 페이지당 항목 수")}
-        </div>
-        <p class="muted">문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 따로 적용됩니다.</p>
+        ${settingRow({
+          label: "페이지당 항목 수",
+          labelId: "listPageSizeLabel",
+          description: "문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 적용됩니다.",
+          controlClass: "setting-row-control-group",
+          control: `<div class="page-size-grid" role="group" aria-labelledby="listPageSizeLabel">
+          ${listPageSizeSelect("sentences", "문장 페이지당 항목 수", "문장")}
+          ${listPageSizeSelect("words", "단어 페이지당 항목 수", "단어")}
+          ${listPageSizeSelect("grammar", "문법 페이지당 항목 수", "문법")}
+          ${listPageSizeSelect("expression", "표현 페이지당 항목 수", "표현")}
+          ${listPageSizeSelect("kanji", "한자 페이지당 항목 수", "한자")}
+        </div>`
+        })}
+        ${settingRow({
+          label: "한자 카드 단어 표시 수",
+          labelId: "kanjiWordLimitLabel",
+          description: "한자 탭의 카드마다 보여 줄 '쓰인 단어' 개수입니다.",
+          control: kanjiWordLimitSelect()
+        })}
       </section>
 
       <section class="panel section" id="settings-quiz">
-        <div class="panel-header"><h2 class="panel-title">퀴즈 표시 및 복습</h2></div>
-        <div class="settings-grid">
-          <label>문제 텍스트 크기 <span id="quizQuestionFontSizeValue">32px</span><input id="quizQuestionFontSizeRange" type="range" min="24" max="64" step="1" value="32" /></label>
-          <label class="settings-check"><input id="quizReviewOnCorrectCheckbox" type="checkbox" checked /><span>정답 시 복습 상태 변경</span></label>
-          <label>정답 후 복습 상태<select id="quizCorrectReviewSelect"></select></label>
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">퀴즈</h2>
+            <p class="muted settings-panel-desc">문제 글자 크기와 정답을 맞혔을 때의 복습 일정을 정합니다.</p>
+          </div>
         </div>
-        <p class="muted">퀴즈 설정은 현재 브라우저 세션에 반영됩니다.</p>
+        ${settingRow({
+          label: "문제 텍스트 크기",
+          labelId: "quizQuestionFontSizeLabel",
+          description: "퀴즈 문제에 쓰이는 글자 크기입니다.",
+          controlClass: "setting-row-control-size",
+          control: `<div class="quiz-size-control">
+          <div class="quiz-size-preview" aria-hidden="true"><span id="quizQuestionFontSizePreview" lang="ja">日本語</span></div>
+          <div class="quiz-size-slider">
+            <input id="quizQuestionFontSizeRange" type="range" min="24" max="64" step="1" value="32" aria-labelledby="quizQuestionFontSizeLabel" />
+            <span class="quiz-size-value" id="quizQuestionFontSizeValue">32px</span>
+          </div>
+        </div>`
+        })}
+        ${settingRow({
+          label: "정답을 맞히면 복습 일정 미루기",
+          labelId: "quizReviewOnCorrectLabel",
+          description: "퀴즈에서 맞힌 항목의 복습 상태를 아래 값으로 바꿉니다.",
+          control: `<input id="quizReviewOnCorrectCheckbox" type="checkbox" class="setting-switch" checked aria-labelledby="quizReviewOnCorrectLabel" />`
+        })}
+        ${settingRow({
+          label: "미룰 기간",
+          labelId: "quizCorrectReviewLabel",
+          extraClass: "setting-row-dependent",
+          rowId: "quizCorrectReviewRow",
+          control: `<select id="quizCorrectReviewSelect" aria-labelledby="quizCorrectReviewLabel"></select>`
+        })}
       </section>
 
       <section class="panel section" id="settings-tts">
-        <div class="panel-header"><h2 class="panel-title">음성 재생</h2></div>
-        <p class="muted" id="ttsDescription">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">음성</h2>
+            <p class="muted settings-panel-desc">일본어 읽어 주기 방식입니다.</p>
+          </div>
+        </div>
+        <p class="muted" id="ttsDescription">스피커 버튼을 누르면 일본어를 소리 내어 읽어 줍니다. 음성은 기기와 브라우저에 따라 다를 수 있습니다.</p>
       </section>
 
       <section class="panel section" id="settings-voicevox" hidden>
@@ -507,6 +609,65 @@ function settingsPageTemplate() {
           <button class="ghost-btn" id="voicevoxTestBtn" type="button">테스트 재생</button>
         </div>
         <p class="muted tts-status" id="voicevoxTestStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="panel section" id="settings-account">
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">계정 및 동기화</h2>
+            <p class="muted settings-panel-desc">로그인하면 다른 기기와 공부 데이터를 동기화합니다.</p>
+          </div>
+        </div>
+        <div class="account-status" id="accountStatus" aria-live="polite"></div>
+        <p class="muted account-last-sync" id="syncLastSuccess" hidden></p>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
+          <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
+          <button class="ghost-btn" id="syncRetryBtn" type="button" disabled>동기화 재시도</button>
+        </div>
+      </section>
+
+      <section class="panel section" id="settings-data">
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">데이터</h2>
+            <p class="muted settings-panel-desc" id="storageNote">공부 데이터는 이 브라우저에만 저장됩니다. 브라우저의 사이트 데이터를 지우면 함께 사라지니 백업해 두세요.</p>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-row-text">
+            <div class="setting-row-label">백업 다운로드</div>
+            <p class="setting-row-desc">지금 데이터를 파일로 저장합니다.</p>
+          </div>
+          <div class="setting-row-control"><button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-row-text">
+            <div class="setting-row-label">백업으로 교체</div>
+            <p class="setting-row-desc">지금 데이터를 지우고 백업 파일의 내용으로 바꿉니다.</p>
+          </div>
+          <div class="setting-row-control"><button class="ghost-btn caution-btn" id="loadBackupBtn" type="button">백업으로 교체</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-row-text">
+            <div class="setting-row-label">백업 합치기</div>
+            <p class="setting-row-desc">지금 데이터에 백업 파일의 내용을 더합니다. 겹치는 항목은 더 최근에 수정된 쪽을 남깁니다.</p>
+          </div>
+          <div class="setting-row-control"><button class="ghost-btn" id="mergeBackupBtn" type="button">백업 합치기</button></div>
+        </div>
+        <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
+        <input id="mergeBackupFileInput" type="file" accept="application/json,.json" hidden />
+        <p class="muted settings-storage-status" id="storageStatus" role="status"></p>
+        <div class="settings-danger-zone">
+          <h3 class="settings-subtitle">데이터 초기화</h3>
+          <div class="setting-row">
+            <div class="setting-row-text">
+              <div class="setting-row-label">모든 데이터 초기화</div>
+              <p class="setting-row-desc">저장된 공부 데이터를 모두 지우고 샘플 데이터 상태로 되돌립니다. 되돌릴 수 없으니 먼저 백업해 두세요.</p>
+            </div>
+            <div class="setting-row-control"><button class="danger-btn danger-outline-btn" id="resetDataBtn" type="button">모든 데이터 초기화</button></div>
+          </div>
+        </div>
       </section>
 
     </section>

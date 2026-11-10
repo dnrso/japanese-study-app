@@ -29,10 +29,12 @@ import {
   renderStatsPage,
   renderStudyCardsPage,
   renderTasksPage,
-  renderTaxonomyPage,
   renderTodayPage,
   renderWordQuizPage,
   renderWordsPage,
+  kanjiMemo,
+  noteFormFields,
+  wordFormFields,
   reviewOptions,
   scheduledReviewOptions,
   scriptOptions,
@@ -44,13 +46,13 @@ import {
   emptyQuiz,
   emptySentenceQuiz,
   startQuiz as startQuizSession,
-  startSentenceQuiz as startSentenceQuizSession,
+  nextQuizQuestion as nextQuizQuestionImpl,
   exitQuizSession as exitQuizSessionImpl,
   submitQuizChoice as submitQuizChoiceImpl,
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
 } from "./quiz.js";
 import { isDesktopApp } from "./platform.js";
-import { applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
+import { applyAppStorageWording, applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
 import {
   createBrowserProvider,
   createCapacitorProvider,
@@ -87,7 +89,6 @@ const store = desktopApp
   : createSyncingStorage(baseStore, {
     scheduleSync: () => syncCoordinator?.schedule()
   });
-const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
 
@@ -106,7 +107,7 @@ const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 �
 // packages/ui/components/pagination.js for the shared
 // paginate()/paginationControls() helpers.
 //
-// Persistence: neither this setting nor the existing quiz display settings
+// Persistence: neither this setting nor the quiz display settings
 // (quizQuestionFontSize/quizReviewOnCorrect/quizCorrectReview below) have
 // any existing persisted-settings mechanism to reuse - there's no
 // state.settings field, and storage-idb's "meta" object store is only
@@ -116,6 +117,12 @@ const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 �
 // (though unlike state.dailyEntries/items it won't ride along in
 // JSON backups/sync - those only cover study data).
 const LIST_PAGE_SIZE_STORAGE_KEY = "nihongo-study.listPageSizes";
+
+// 한자 카드 단어 표시 수: page-size와 같은 방식(전용 localStorage 키, 백업 제외).
+const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
+
+// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값): 같은 방식의 전용 키.
+const QUIZ_SETTINGS_STORAGE_KEY = "nihongo-study.quizSettings";
 
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
@@ -136,11 +143,20 @@ let kanjiQuizMode = "random";
 let wordQuiz = emptyQuiz();
 let kanjiQuiz = emptyQuiz();
 let sentenceQuiz = emptySentenceQuiz();
-let reviewQueueDrafts = new Map();
-let quizQuestionFontSize = 32;
-let quizReviewOnCorrect = true;
-let quizCorrectReview = "내일";
-let storageStatus = storageNotice;
+const REVIEW_HIDE_MEANING_STORAGE_KEY = "nihongo-study.reviewHideMeaning";
+// 복습 큐 view state: kind tab, 뜻 가리기 pref (default ON, localStorage like the
+// other small UI prefs), rows revealed one by one, and the one undoable save.
+let reviewKindFilter = "";
+let reviewHideMeaning = loadReviewHideMeaning();
+let reviewRevealedIds = new Set();
+let reviewSaving = false;
+let reviewUndo = null;
+const REVIEW_UNDO_MS = 5000;
+const initialQuizSettings = loadQuizSettings();
+let quizQuestionFontSize = initialQuizSettings.questionFontSize;
+let quizReviewOnCorrect = initialQuizSettings.reviewOnCorrect;
+let quizCorrectReview = initialQuizSettings.correctReview;
+let storageStatus = "";
 let homeSentenceEntryId = null;
 // Current page (1-based) per paginated list tab. Reset to 1 wherever that
 // tab's filter/search/sort changes (see resetPageIndex callers below);
@@ -157,6 +173,9 @@ let pageIndex = {
 // entry in core.DEFAULT_LIST_PAGE_SIZES). Loaded once at startup from
 // localStorage; see LIST_PAGE_SIZE_STORAGE_KEY above.
 let listPageSizeOverrides = loadListPageSizeOverrides();
+// Stored as the select's string value ("0".."5" or "all"); see
+// core.resolveKanjiWordLimit() for validation/default handling.
+let kanjiWordLimitSetting = loadKanjiWordLimitSetting();
 
 syncCoordinator = createSyncCoordinator({
   sync,
@@ -211,6 +230,64 @@ function saveListPageSizeOverrides() {
     // Ignore write failures (quota, privacy mode, etc.) - the setting just
     // won't survive a reload in that case.
   }
+}
+
+function loadKanjiWordLimitSetting() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(KANJI_WORD_LIMIT_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable - use the default.
+  }
+  const limit = core.resolveKanjiWordLimit(raw);
+  return limit === Infinity ? "all" : String(limit);
+}
+
+function saveKanjiWordLimitSetting() {
+  try {
+    localStorage.setItem(KANJI_WORD_LIMIT_STORAGE_KEY, kanjiWordLimitSetting);
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
+}
+
+function loadQuizSettings() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(QUIZ_SETTINGS_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable - use the defaults.
+  }
+  return core.resolveQuizSettings(raw, scheduledReviewOptions);
+}
+
+function saveQuizSettings() {
+  try {
+    localStorage.setItem(QUIZ_SETTINGS_STORAGE_KEY, JSON.stringify({
+      questionFontSize: quizQuestionFontSize,
+      reviewOnCorrect: quizReviewOnCorrect,
+      correctReview: quizCorrectReview
+    }));
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
+}
+
+// Shows the "저장됨" status next to the changed control for ~1.5s. The slot
+// always occupies its space (opacity only), so nothing shifts.
+const savedIndicatorTimers = new WeakMap();
+function flashSaved(control) {
+  const slot = control?.closest?.(".setting-row")?.querySelector(".setting-saved");
+  if (!slot) {
+    return;
+  }
+  slot.textContent = "저장됨";
+  slot.classList.add("is-visible");
+  window.clearTimeout(savedIndicatorTimers.get(slot));
+  savedIndicatorTimers.set(slot, window.setTimeout(() => {
+    slot.classList.remove("is-visible");
+    slot.textContent = "";
+  }, 1500));
 }
 
 function pageSizeFor(view) {
@@ -293,17 +370,6 @@ function bindEvents() {
       return;
     }
 
-    const taxonomyTarget = event.target.closest("[data-word-taxonomy]");
-    if (taxonomyTarget) {
-      const select = byId(taxonomyTarget.dataset.wordTaxonomy === "part" ? "wordPartFilter" : "wordScriptFilter");
-      const value = taxonomyTarget.dataset.wordTaxonomyValue;
-      select.value = select.value === value ? "" : value;
-      resetPageIndex("words");
-      renderWords();
-      renderTaxonomy();
-      return;
-    }
-
     const addTarget = event.target.closest("[data-add-item]");
     if (addTarget) {
       await promptAddItem(addTarget.dataset.kind);
@@ -322,26 +388,43 @@ function bindEvents() {
       return;
     }
 
-    const cycleTarget = event.target.closest("[data-cycle-review]");
-    if (cycleTarget) {
-      await cycleReview(cycleTarget.dataset.cycleReview);
+    const reviewKindTarget = event.target.closest("[data-review-kind]");
+    if (reviewKindTarget) {
+      reviewKindFilter = core.normalizeReviewKindFilter(reviewKindTarget.dataset.reviewKind);
+      renderReview();
+      document.querySelector(`[data-review-kind="${reviewKindFilter}"]`)?.focus();
       return;
     }
 
-    const reviewQueueCycleTarget = event.target.closest("[data-cycle-review-queue]");
-    if (reviewQueueCycleTarget) {
-      reviewQueueDrafts = core.cycleReviewQueueDraft({
-        items: state.items,
-        drafts: reviewQueueDrafts,
-        id: reviewQueueCycleTarget.dataset.cycleReviewQueue,
-        options: ["대기", ...scheduledReviewOptions]
-      });
+    const reviewRevealTarget = event.target.closest("[data-review-reveal]");
+    if (reviewRevealTarget) {
+      const id = reviewRevealTarget.dataset.reviewReveal;
+      reviewRevealedIds.add(id);
       renderReview();
+      focusReviewRow(id);
+      return;
+    }
+
+    const reviewIntervalTarget = event.target.closest("[data-review-item][data-review-value]");
+    if (reviewIntervalTarget) {
+      await saveReviewInterval(
+        reviewIntervalTarget.dataset.reviewItem,
+        reviewIntervalTarget.dataset.reviewValue,
+        { fromKeyboard: event.detail === 0 }
+      );
+      return;
+    }
+
+    if (event.target.closest("[data-review-undo]")) {
+      await undoReviewInterval();
       return;
     }
 
     const kanjiWordsTarget = event.target.closest("[data-show-kanji-words]");
     if (kanjiWordsTarget) {
+      // Show only the words using this kanji: drop stale word filters first so
+      // they cannot hide matches, then search the 단어 tab for the character.
+      WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
       setSearch(kanjiWordsTarget.dataset.showKanjiWords);
       openPage("words");
       return;
@@ -426,18 +509,14 @@ function bindEvents() {
       return;
     }
 
-    if (event.target.closest("[data-next-word-quiz]")) {
-      startQuiz("word");
+    const nextQuizTarget = event.target.closest("[data-quiz-next]");
+    if (nextQuizTarget) {
+      nextQuizQuestionImpl(nextQuizTarget.dataset.quizNext, quizCtx());
       return;
     }
 
-    if (event.target.closest("[data-next-kanji-quiz]")) {
-      startQuiz("kanji");
-      return;
-    }
-
-    if (event.target.closest("[data-next-sentence-quiz]")) {
-      startSentenceQuizSession(sentenceQuiz.question?.mode || "meaning", quizCtx());
+    if (event.target.closest("[data-quiz-exit]")) {
+      exitQuizSession();
     }
   });
 
@@ -447,23 +526,59 @@ function bindEvents() {
     renderAll();
   });
 
-  byId("wordPartFilter").addEventListener("change", () => {
-    resetPageIndex("words");
-    renderWords();
-    renderTaxonomy();
+  WORD_FILTER_IDS.forEach(id => {
+    byId(id).addEventListener("change", () => {
+      resetPageIndex("words");
+      renderWords();
+    });
   });
-  byId("wordScriptFilter").addEventListener("change", () => {
-    resetPageIndex("words");
-    renderWords();
-    renderTaxonomy();
-  });
-  byId("wordReviewFilter").addEventListener("change", () => {
+  byId("wordFilterResetBtn").addEventListener("click", () => {
+    WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
     resetPageIndex("words");
     renderWords();
   });
+  document.body.addEventListener("change", async event => {
+    const reviewSelect = event.target.closest("[data-review-select]");
+    if (reviewSelect) {
+      state = await store.updateItemReview(reviewSelect.dataset.reviewSelect, reviewSelect.value, selectedDate);
+      renderAll();
+    }
+  });
+  CARD_KINDS.forEach(kind => {
+    [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => {
+      byId(id).addEventListener("change", () => {
+        resetPageIndex(kind);
+        renderCards(kind, CARD_TARGETS[kind]);
+      });
+    });
+    byId(`${kind}FilterResetBtn`).addEventListener("click", () => {
+      [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => { byId(id).value = ""; });
+      resetPageIndex(kind);
+      renderCards(kind, CARD_TARGETS[kind]);
+    });
+  });
+  KANJI_FILTER_IDS.forEach(id => {
+    byId(id).addEventListener("change", () => {
+      resetPageIndex("kanji");
+      renderKanji();
+    });
+  });
+  byId("kanjiFilterResetBtn").addEventListener("click", () => {
+    KANJI_FILTER_IDS.forEach(id => { byId(id).value = ""; });
+    resetPageIndex("kanji");
+    renderKanji();
+  });
+  byId("noteDialogCancel").addEventListener("click", () => byId("noteDialog").close());
+  byId("noteDialogForm").addEventListener("submit", saveNoteDialog);
+  byId("wordDialogCancel").addEventListener("click", () => byId("wordDialog").close());
+  byId("wordDialogForm").addEventListener("submit", saveWordDialog);
   // Only the 복습 큐 needs re-rendering: the sidebar 복습 필요 count and the
   // home 복습 항목 stat intentionally stay whole-queue numbers.
-  byId("reviewKindFilter").addEventListener("change", renderReview);
+  byId("reviewHideMeaning").addEventListener("change", event => {
+    reviewHideMeaning = event.target.checked;
+    saveReviewHideMeaning();
+    renderReview();
+  });
 
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
@@ -504,8 +619,7 @@ function bindEvents() {
   byId("sentenceHideMeaning").addEventListener("change", event => {
     byId("sentenceCards").classList.toggle("hide-meaning", event.target.checked);
   });
-  byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
-  byId("quizExitBtn").addEventListener("click", exitQuizSession);
+  document.addEventListener("keydown", handleQuizKeydown);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
   byId("downloadBackupBtn").addEventListener("click", downloadBackup);
   byId("loadBackupBtn").addEventListener("click", () => byId("backupFileInput").click());
@@ -550,8 +664,8 @@ function bindEvents() {
     input.addEventListener("change", event => {
       wordQuizMode = event.target.value;
       wordQuiz = emptyQuiz();
-      byId("quizStatus").textContent = "단어 퀴즈 유형을 선택했습니다.";
       renderWordQuiz();
+      renderQuizAvailability();
     });
   });
 
@@ -559,25 +673,30 @@ function bindEvents() {
     input.addEventListener("change", event => {
       kanjiQuizMode = event.target.value;
       kanjiQuiz = emptyQuiz();
-      byId("quizStatus").textContent = "한자 퀴즈 유형을 선택했습니다.";
       renderKanjiQuiz();
+      renderQuizAvailability();
     });
   });
 
   byId("quizQuestionFontSizeRange").addEventListener("input", event => {
     quizQuestionFontSize = core.clampQuizQuestionFontSize(event.target.value);
-    applyQuizQuestionFontSize();
-    byId("quizQuestionFontSizeValue").textContent = `${quizQuestionFontSize}px`;
+    saveQuizSettings();
+    renderQuizSettings();
+    flashSaved(event.target);
   });
 
   byId("quizReviewOnCorrectCheckbox").addEventListener("change", event => {
     quizReviewOnCorrect = event.target.checked;
+    saveQuizSettings();
     renderQuizSettings();
+    flashSaved(event.target);
   });
 
   byId("quizCorrectReviewSelect").addEventListener("change", event => {
     quizCorrectReview = core.resolveQuizCorrectReview(event.target.value, scheduledReviewOptions);
+    saveQuizSettings();
     renderQuizSettings();
+    flashSaved(event.target);
   });
 
   document.querySelectorAll("[data-list-page-size-view]").forEach(select => {
@@ -585,6 +704,7 @@ function bindEvents() {
       const view = event.target.dataset.listPageSizeView;
       listPageSizeOverrides[view] = event.target.value ? Number(event.target.value) : null;
       saveListPageSizeOverrides();
+      flashSaved(event.target);
       // Only that tab's page index/list re-renders - a per-view setting
       // shouldn't disturb the other four lists.
       resetPageIndex(view);
@@ -592,10 +712,23 @@ function bindEvents() {
     });
   });
 
+  byId("kanjiWordLimit").addEventListener("change", event => {
+    kanjiWordLimitSetting = event.target.value;
+    saveKanjiWordLimitSetting();
+    flashSaved(event.target);
+    renderListPageSizeSettings();
+    renderKanji();
+  });
+
   document.addEventListener("keydown", event => {
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
       event.preventDefault();
       byId("globalSearch").focus();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && currentPage === "review" && reviewUndo
+      && !event.target?.closest?.("input, textarea, select, [contenteditable='true']")) {
+      event.preventDefault();
+      undoReviewInterval();
     }
     if (event.ctrlKey && event.key.toLowerCase() === "n") {
       event.preventDefault();
@@ -623,9 +756,9 @@ function renderAll() {
   renderWordQuiz();
   renderKanjiQuiz();
   renderSentenceQuiz();
+  renderQuizAvailability();
   renderReview();
   renderStats();
-  renderTaxonomy();
   renderQuickFilters();
   renderQuizSettings();
   renderListPageSizeSettings();
@@ -643,6 +776,7 @@ async function refreshState(studyDate = selectedDate) {
 function renderHome() {
   applyPagePatch(renderHomePage({
     overview: core.homeOverview(state, searchTerm),
+    reviewOptions,
     helpers: renderHelpers()
   }));
   renderHomeSentence();
@@ -816,52 +950,146 @@ function renderWordFilters() {
   renderSelectOptions("wordPartFilter", "전체 품사", partOptions);
   renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
   renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
+  CARD_KINDS.forEach(kind => renderSelectOptions(`${kind}ReviewFilter`, "전체 복습 상태", reviewOptions));
+  renderSelectOptions("kanjiReviewFilter", "전체 복습 상태", reviewOptions);
 }
+
+const WORD_FILTER_IDS = ["wordPartFilter", "wordScriptFilter", "wordReviewFilter", "wordSourceFilter"];
 
 function renderWords() {
   const part = byId("wordPartFilter").value;
   const script = byId("wordScriptFilter").value;
   const review = byId("wordReviewFilter").value;
-  const rows = core.sortWords(items("word").filter(item =>
-    (!part || item.part === part) &&
-    (!script || item.script === script) &&
-    (!review || item.review === review)
-  ), wordSort);
+  const source = byId("wordSourceFilter").value;
+  const words = items("word");
+  const rows = core.sortWords(words.filter(item => {
+    const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
+    return (!part || item.part === part) &&
+      (!script || item.script === script) &&
+      (!review || (item.review || "대기") === review) &&
+      (!source || (source === "sentence") === fromSentence);
+  }), wordSort);
   const paged = paginate(rows, pageIndex.words, pageSizeFor("words"));
   pageIndex.words = paged.page;
+  const filtering = WORD_FILTER_IDS.some(id => byId(id).value);
   renderWordSortHeaders();
-  applyPagePatch(renderWordsPage({ rows: paged.pageItems, helpers: renderHelpers() }));
+  applyPagePatch(renderWordsPage({
+    rows: paged.pageItems,
+    reviewOptions,
+    emptyMessage: words.length
+      ? "조건에 맞는 단어가 없습니다."
+      : "아직 등록된 단어가 없습니다. 오늘 공부에서 문장을 등록하거나 + 단어 추가로 직접 넣어 보세요.",
+    helpers: renderHelpers()
+  }));
   applyPagePatch({
+    text: {
+      wordTotalCount: `${words.length}개`,
+      wordFilterSummary: [
+        filtering || searchTerm ? `${rows.length}개 표시` : "",
+        wordSort.key || !rows.length ? "" : "최근 등록순"
+      ].filter(Boolean).join(" · ")
+    },
+    hidden: {
+      wordFilterResetBtn: !filtering
+    },
     html: {
       wordsPagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "words" })
     }
   });
 }
 
+const CARD_KINDS = ["grammar", "expression"];
+const CARD_TARGETS = { grammar: "grammarCards", expression: "expressionCards" };
+const CARD_LABELS = { grammar: "문법", expression: "표현", kanji: "한자" };
+// Kinds that add/edit through the shared note dialog.
+const NOTE_DIALOG_KINDS = [...CARD_KINDS, "kanji"];
+
 function renderCards(kind, targetId) {
-  const paged = paginate(items(kind), pageIndex[kind], pageSizeFor(kind));
+  const review = byId(`${kind}ReviewFilter`).value;
+  const source = byId(`${kind}SourceFilter`).value;
+  const filtering = Boolean(review || source);
+  const visible = items(kind);
+  const rows = visible.filter(item => {
+    const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
+    return (!review || (item.review || "대기") === review) &&
+      (!source || (source === "sentence") === fromSentence);
+  });
+  const paged = paginate(rows, pageIndex[kind], pageSizeFor(kind));
   pageIndex[kind] = paged.page;
+  const total = core.itemsByKind(state.items, kind).length;
   applyPagePatch(renderStudyCardsPage({
-    kind,
     targetId,
     list: paged.pageItems,
+    reviewOptions,
+    emptyMessage: total
+      ? `조건에 맞는 ${CARD_LABELS[kind]}이 없습니다.`
+      : kind === "grammar"
+        ? "아직 등록된 문법이 없습니다. 오늘 공부에서 문장과 함께 등록하거나 + 문법 추가로 직접 넣어 보세요."
+        : "아직 등록된 표현이 없습니다. 오늘 공부에서 문장과 함께 등록하거나 + 표현 추가로 직접 넣어 보세요.",
     helpers: renderHelpers()
   }));
   applyPagePatch({
+    text: {
+      [`${kind}TotalCount`]: `${total}개`,
+      [`${kind}FilterSummary`]: [
+        filtering || searchTerm ? `${rows.length}개 표시` : "",
+        rows.length ? "최근 등록순" : ""
+      ].filter(Boolean).join(" · ")
+    },
+    hidden: {
+      [`${kind}FilterResetBtn`]: !filtering
+    },
     html: {
       [`${kind}Pagination`]: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: kind })
     }
   });
 }
 
+const KANJI_FILTER_IDS = ["kanjiReviewFilter", "kanjiMeaningFilter"];
+
+// Word items that use `kanjiItem`, newest first (state.items is kept newest
+// first): the word's `kanji` field names the character, falling back to the
+// word title itself.
+function wordsUsingKanji(kanjiItem, words) {
+  const char = kanjiItem.title;
+  if (!char) {
+    return [];
+  }
+  return words.filter(word => String(word.kanji || "").includes(char) || String(word.title || "").includes(char));
+}
+
 function renderKanji() {
-  const paged = paginate(items("kanji"), pageIndex.kanji, pageSizeFor("kanji"));
+  const review = byId("kanjiReviewFilter").value;
+  const meaningFilter = byId("kanjiMeaningFilter").value;
+  const filtering = Boolean(review || meaningFilter);
+  const words = core.itemsByKind(state.items, "word");
+  const total = core.itemsByKind(state.items, "kanji").length;
+  const rows = items("kanji").filter(item =>
+    (!review || (item.review || "대기") === review) &&
+    (!meaningFilter || (meaningFilter === "empty") === !String(item.meaning || "").trim()));
+  const paged = paginate(rows, pageIndex.kanji, pageSizeFor("kanji"));
   pageIndex.kanji = paged.page;
   applyPagePatch(renderKanjiPage({
     kanji: paged.pageItems,
+    reviewOptions,
+    wordsFor: item => wordsUsingKanji(item, words),
+    wordLimit: core.resolveKanjiWordLimit(kanjiWordLimitSetting),
+    emptyMessage: total
+      ? "조건에 맞는 한자가 없습니다."
+      : "아직 등록된 한자가 없습니다. 오늘 공부에서 단어에 한자=雨(비 우)를 적어 등록하면 자동으로 모이고, + 한자 추가로 직접 넣을 수도 있습니다.",
     helpers: renderHelpers()
   }));
   applyPagePatch({
+    text: {
+      kanjiTotalCount: `${total}개`,
+      kanjiFilterSummary: [
+        filtering || searchTerm ? `${rows.length}개 표시` : "",
+        rows.length ? "최근 등록순" : ""
+      ].filter(Boolean).join(" · ")
+    },
+    hidden: {
+      kanjiFilterResetBtn: !filtering
+    },
     html: {
       kanjiPagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "kanji" })
     }
@@ -894,56 +1122,190 @@ function renderSentenceQuiz() {
 
 function updateQuizSessionView() {
   const grid = byId("quizSelectGrid");
-  const exitBtn = byId("quizExitBtn");
-  if (!grid || !exitBtn) {
+  const header = byId("quizSelectHeader");
+  if (!grid || !header) {
     return;
   }
-  const sessionActive = Boolean(wordQuiz.question || kanjiQuiz.question || sentenceQuiz.question);
+  // The selection grid and its title give way to the session panel (which has
+  // its own one-line header) while a run, or its result view, is showing.
+  const sessionActive = Boolean(wordQuiz.session || kanjiQuiz.session || sentenceQuiz.session);
   grid.hidden = sessionActive;
-  exitBtn.hidden = !sessionActive;
+  header.hidden = sessionActive;
+}
+
+const QUIZ_UNIT_LABELS = { word: "단어", kanji: "한자", "sentence-meaning": "문장", "sentence-listen": "문장" };
+const QUIZ_UNIT_SUBJECT = { word: "단어가", kanji: "한자가", "sentence-meaning": "문장이", "sentence-listen": "문장이" };
+
+// Pool size + startability on each available card, using the same rule the
+// question generators use (core.quizAvailability).
+function renderQuizAvailability() {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
+  Object.keys(QUIZ_UNIT_LABELS).forEach(quizKind => {
+    const pool = byId(`quizPool-${quizKind}`);
+    const startBtn = document.querySelector(`.quiz-start-btn[data-quiz-kind="${quizKind}"]`);
+    if (!pool || !startBtn) {
+      return;
+    }
+    const availability = core.quizAvailability({
+      items: state.items,
+      entries,
+      quizKind,
+      mode: quizKind === "kanji" ? kanjiQuizMode : wordQuizMode
+    });
+    const warning = availability.canStart ? "" : availability.reason === "count"
+      ? `${QUIZ_UNIT_SUBJECT[quizKind]} ${availability.required}개 이상 필요합니다 (현재 ${availability.poolSize}개)`
+      : `서로 다른 보기가 ${availability.required}개 이상 필요합니다 (현재 ${availability.distinctCount}개)`;
+    pool.innerHTML = `<span>${QUIZ_UNIT_LABELS[quizKind]} ${availability.poolSize}개</span>${warning ? `<p class="quiz-card-warn">${escapeHtml(warning)}</p>` : ""}`;
+    startBtn.disabled = !availability.canStart;
+  });
+}
+
+// Quiz shortcuts: 1-4 pick a choice, Enter goes to the next question.
+function handleQuizKeydown(event) {
+  if (currentPage !== "quiz" || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
+    return;
+  }
+  const target = event.target;
+  if (target?.closest?.("input, textarea, select, [contenteditable='true']") || document.querySelector("dialog[open]")) {
+    return;
+  }
+  const panels = [["word", "wordQuizPanel", wordQuiz], ["kanji", "kanjiQuizPanel", kanjiQuiz], ["sentence", "sentenceQuizPanel", sentenceQuiz]];
+  const active = panels.find(([, , quiz]) => quiz.session && !quiz.session.finished && quiz.question);
+  if (!active) {
+    return;
+  }
+  const [, panelId, quiz] = active;
+  const panel = byId(panelId);
+  if (/^[1-4]$/.test(event.key) && !quiz.answered) {
+    const choice = panel.querySelectorAll(".word-quiz-choice")[Number(event.key) - 1];
+    if (choice && !choice.disabled) {
+      event.preventDefault();
+      choice.click();
+    }
+  } else if (event.key === "Enter" && quiz.answered && !event.repeat && !target?.closest?.("button, a")) {
+    const next = panel.querySelector("[data-quiz-next]");
+    if (next) {
+      event.preventDefault();
+      next.click();
+    }
+  }
 }
 
 function exitQuizSession() {
   exitQuizSessionImpl(quizCtx());
 }
 
-// The 종류 filter is a view filter, not a setting, so it lives in the
-// <select> itself exactly like the 단어 page's wordPartFilter/wordScriptFilter/
-// wordReviewFilter - no module-level state and (unlike the 설정-tab
-// listPageSizeOverrides) nothing written to localStorage.
-function reviewKindFilterValue() {
-  return core.normalizeReviewKindFilter(byId("reviewKindFilter")?.value || "");
+function loadReviewHideMeaning() {
+  try {
+    return localStorage.getItem(REVIEW_HIDE_MEANING_STORAGE_KEY) !== "0";
+  } catch {
+    // localStorage unavailable - use the default (hidden).
+    return true;
+  }
+}
+
+function saveReviewHideMeaning() {
+  try {
+    localStorage.setItem(REVIEW_HIDE_MEANING_STORAGE_KEY, reviewHideMeaning ? "1" : "0");
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
 }
 
 function renderReview() {
-  // Not narrowed by the kind filter: hiding a card must not throw away the
-  // draft the user already set on it.
-  reviewQueueDrafts = core.pruneReviewQueueDrafts({
-    items: state.items,
-    drafts: reviewQueueDrafts
-  });
-  const kindFilter = reviewKindFilterValue();
+  const counts = core.reviewKindCounts(state.items, searchTerm);
+  // A kind whose last row was just completed has no tab left to show: fall
+  // back to 전체 instead of an empty list.
+  reviewKindFilter = core.normalizeReviewKindFilter(reviewKindFilter);
+  if (reviewKindFilter && !counts[reviewKindFilter]) {
+    reviewKindFilter = "";
+  }
+  const queueIds = new Set(state.items.map(item => item.id));
+  reviewRevealedIds = new Set([...reviewRevealedIds].filter(id => queueIds.has(id)));
+  byId("reviewHideMeaning").checked = reviewHideMeaning;
   applyPagePatch(renderReviewPage({
-    reviewItems: core.reviewItems(state.items, searchTerm, kindFilter),
-    kindFilter,
+    reviewItems: core.reviewItems(state.items, searchTerm, reviewKindFilter),
+    kindFilter: reviewKindFilter,
     kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
+    kindCounts: counts,
+    progress: core.reviewQueueProgress(state.items, searchTerm, state.selectedDate || undefined),
+    scheduledReviewOptions,
+    hideMeaning: reviewHideMeaning,
+    revealedIds: reviewRevealedIds,
     helpers: renderHelpers()
   }));
+}
+
+function focusReviewRow(id) {
+  const row = [...document.querySelectorAll("#reviewCards .review-row")].find(candidate => candidate.dataset.itemId === id);
+  row?.querySelector("[data-review-value]")?.focus();
+}
+
+// One click on an interval saves that single item through the same
+// store.completeReview call "선택 복습 완료" used (review, due date,
+// lastReviewedAt), then offers a 5s undo.
+async function saveReviewInterval(id, review, { fromKeyboard = false } = {}) {
+  const item = state.items.find(candidate => candidate.id === id);
+  if (reviewSaving || !item || !scheduledReviewOptions.includes(review)) {
+    return;
+  }
+  reviewSaving = true;
+  try {
+    const rows = [...document.querySelectorAll("#reviewCards .review-row")];
+    const rowIndex = rows.findIndex(row => row.dataset.itemId === id);
+    const snapshot = core.reviewSnapshot(item);
+    state = await store.completeReview([{ id, review }], selectedDate);
+    reviewRevealedIds.delete(id);
+    showReviewToast({ id, title: item.title, review, snapshot });
+    renderAll();
+    if (fromKeyboard) {
+      // The saved row just left the list: keep keyboard triage going on
+      // whichever row took its place.
+      const next = document.querySelectorAll("#reviewCards .review-row")[rowIndex]
+        || document.querySelector("#reviewCards .review-row:last-child");
+      next?.querySelector("[data-review-value]")?.focus();
+    }
+  } finally {
+    reviewSaving = false;
+  }
+}
+
+function showReviewToast(undo) {
+  // A new save replaces the toast: the earlier one is final.
+  clearTimeout(reviewUndo?.timer);
+  reviewUndo = { ...undo, timer: setTimeout(hideReviewToast, REVIEW_UNDO_MS) };
+  const toast = byId("reviewToast");
+  toast.innerHTML = `<span>${escapeHtml(undo.title)} → ${escapeHtml(undo.review)}</span><button class="review-toast-btn" type="button" data-review-undo>되돌리기</button>`;
+  toast.hidden = false;
+}
+
+function hideReviewToast() {
+  clearTimeout(reviewUndo?.timer);
+  reviewUndo = null;
+  const toast = byId("reviewToast");
+  toast.hidden = true;
+  toast.innerHTML = "";
+}
+
+async function undoReviewInterval() {
+  const undo = reviewUndo;
+  if (!undo || reviewSaving) {
+    return;
+  }
+  reviewSaving = true;
+  try {
+    hideReviewToast();
+    state = await store.restoreItemReview(undo.id, undo.snapshot, selectedDate);
+    renderAll();
+    focusReviewRow(undo.id);
+  } finally {
+    reviewSaving = false;
+  }
 }
 
 function renderStats() {
   applyPagePatch(renderStatsPage({
     stats: core.studyStats(state)
-  }));
-}
-
-function renderTaxonomy() {
-  applyPagePatch(renderTaxonomyPage({
-    partOptions,
-    scriptOptions,
-    selectedPart: byId("wordPartFilter").value,
-    selectedScript: byId("wordScriptFilter").value,
-    helpers: renderHelpers()
   }));
 }
 
@@ -966,6 +1328,10 @@ function renderQuizSettings() {
 }
 
 function renderListPageSizeSettings() {
+  const limitSelect = byId("kanjiWordLimit");
+  if (limitSelect) {
+    limitSelect.value = kanjiWordLimitSetting;
+  }
   Object.keys(listPageSizeOverrides).forEach(view => {
     const select = byId(`listPageSize-${view}`);
     if (select) {
@@ -1035,7 +1401,7 @@ function renderWordSortHeaders() {
   });
   document.querySelectorAll("[data-word-sort-indicator]").forEach(indicator => {
     const isActive = indicator.dataset.wordSortIndicator === wordSort.key;
-    indicator.textContent = isActive && wordSort.direction === "asc" ? "▲" : isActive && wordSort.direction === "desc" ? "▼" : "";
+    indicator.textContent = isActive && wordSort.direction === "asc" ? "▲" : isActive && wordSort.direction === "desc" ? "▼" : "↕";
   });
 }
 
@@ -1119,7 +1485,9 @@ function applyQuickFilter(filter) {
     return;
   }
   if (filter === "source") {
-    setSearch("뉴스");
+    setSearch("");
+    WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
+    byId("wordSourceFilter").value = "sentence";
     openPage("words");
     return;
   }
@@ -1327,6 +1695,14 @@ async function registerEntries(ids, { quiet = false } = {}) {
 }
 
 async function promptAddItem(kind) {
+  if (kind === "word") {
+    openWordDialog();
+    return;
+  }
+  if (NOTE_DIALOG_KINDS.includes(kind)) {
+    openNoteDialog(kind);
+    return;
+  }
   const title = window.prompt(`${kindLabels[kind] || "항목"} 제목을 입력하세요.`);
   if (!title) {
     return;
@@ -1377,6 +1753,14 @@ async function promptEditItem(id) {
   if (!item) {
     return;
   }
+  if (item.kind === "word") {
+    openWordDialog(item);
+    return;
+  }
+  if (NOTE_DIALOG_KINDS.includes(item.kind)) {
+    openNoteDialog(item.kind, item);
+    return;
+  }
   const title = window.prompt("제목을 수정하세요.", item.title);
   if (!title) {
     return;
@@ -1406,6 +1790,101 @@ async function promptEditItem(id) {
   renderAll();
 }
 
+let wordDialogItemId = "";
+
+function openWordDialog(word = null) {
+  wordDialogItemId = word?.id || "";
+  byId("wordDialogTitle").textContent = word ? "단어 수정" : "단어 추가";
+  byId("wordDialogFields").innerHTML = wordFormFields({ word: word || {}, partOptions, scriptOptions, escapeHtml });
+  byId("wordDialog").showModal();
+  byId("wordDialogForm").elements.title.focus();
+}
+
+async function saveWordDialog(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const fields = Object.fromEntries(["title", "reading", "meaning", "kanji", "part", "script"]
+    .map(name => [name, String(form.elements[name].value || "").trim()]));
+  if (!fields.title || !fields.meaning) {
+    form.reportValidity();
+    return;
+  }
+  const existing = state.items.find(item => item.id === wordDialogItemId);
+  state = await store.upsertItem(existing
+    ? { ...existing, ...fields, studyDate: selectedDate }
+    : {
+        id: nextId("word"),
+        kind: "word",
+        ...fields,
+        review: "대기",
+        source: "웹 미리보기",
+        note: "",
+        studyDate: selectedDate
+      });
+  byId("wordDialog").close();
+  renderAll();
+  if (!existing) {
+    openPage("words");
+  }
+}
+
+let noteDialogItemId = "";
+let noteDialogKind = "grammar";
+
+function openNoteDialog(kind, item = null) {
+  noteDialogKind = kind;
+  noteDialogItemId = item?.id || "";
+  byId("noteDialogTitle").textContent = `${CARD_LABELS[kind]} ${item ? "수정" : "추가"}`;
+  byId("noteDialogFields").innerHTML = noteFormFields({
+    kind,
+    item: item || {},
+    escapeHtml,
+    linkedWords: kind === "kanji" && item ? wordsUsingKanji(item, core.itemsByKind(state.items, "word")) : []
+  });
+  byId("noteDialog").showModal();
+  byId("noteDialogForm").elements.title.focus();
+}
+
+async function saveNoteDialog(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const names = noteDialogKind === "grammar" ? ["title", "meaning", "note"] : ["title", "reading", "meaning", "note"];
+  const fields = Object.fromEntries(names.map(name => [name, String(form.elements[name].value || "").trim()]));
+  // 한자 only needs the character; 뜻/읽기 can be filled in later.
+  if (!fields.title || (noteDialogKind !== "kanji" && !fields.meaning)) {
+    form.reportValidity();
+    return;
+  }
+  const existing = state.items.find(item => item.id === noteDialogItemId);
+  if (existing && noteDialogKind === "kanji" && !fields.note && existing.note) {
+    // The auto-generated source-word note is hidden in the form; an empty memo
+    // field must not wipe it.
+    const linked = wordsUsingKanji(existing, core.itemsByKind(state.items, "word"));
+    if (!kanjiMemo(existing, linked)) {
+      fields.note = existing.note;
+    }
+  }
+  state = await store.upsertItem(existing
+    ? { ...existing, ...fields, studyDate: selectedDate }
+    : {
+        id: nextId(noteDialogKind),
+        kind: noteDialogKind,
+        reading: "",
+        ...fields,
+        part: "",
+        script: "",
+        review: "대기",
+        source: "웹 미리보기",
+        kanji: "",
+        studyDate: selectedDate
+      });
+  byId("noteDialog").close();
+  renderAll();
+  if (!existing) {
+    openPage(pageForKind(noteDialogKind));
+  }
+}
+
 function sourceProgressInputValue(item) {
   const progress = core.sourceProgress(item);
   return progress > 0 ? String(progress) : "";
@@ -1429,7 +1908,6 @@ async function deleteItem(id) {
     return;
   }
   state = await store.deleteItem(id, selectedDate);
-  reviewQueueDrafts.delete(id);
   renderAll();
 }
 
@@ -1442,22 +1920,7 @@ async function deleteDailyEntry(id) {
   renderAll();
 }
 
-async function cycleReview(id) {
-  const item = state.items.find(candidate => candidate.id === id);
-  if (!item) {
-    return;
-  }
-  const currentIndex = reviewOptions.indexOf(item.review || "대기");
-  const nextReview = reviewOptions[((currentIndex >= 0 ? currentIndex : reviewOptions.length - 1) + 1) % reviewOptions.length];
-  state = await store.updateItemReview(id, nextReview, selectedDate);
-  renderAll();
-}
-
 function startQuiz(kind) {
-  if (kind === "sentence-meaning" || kind === "sentence-listen") {
-    startSentenceQuizSession(kind === "sentence-listen" ? "listen" : "meaning", quizCtx());
-    return;
-  }
   startQuizSession(kind, quizCtx());
 }
 
@@ -1465,29 +1928,13 @@ async function submitQuizChoice(kind, selectedAnswer) {
   await submitQuizChoiceImpl(kind, selectedAnswer, quizCtx());
 }
 
-async function completeSelectedReview() {
-  const targets = core.reviewCompletionTargets({
-    items: state.items,
-    drafts: reviewQueueDrafts,
-    searchTerm,
-    kindFilter: reviewKindFilterValue()
-  });
-  if (!targets.length) {
-    window.alert("복습 완료로 변경할 항목을 먼저 선택하세요.");
-    return;
-  }
-  state = await store.completeReview(targets, selectedDate);
-  reviewQueueDrafts = new Map();
-  renderAll();
-}
-
 async function resetSampleData() {
-  if (!window.confirm("샘플 데이터를 초기 상태로 되돌릴까요?")) {
+  if (!window.confirm("저장된 공부 데이터를 모두 지우고 샘플 데이터로 되돌릴까요? 되돌릴 수 없습니다.")) {
     return;
   }
   state = await store.resetSampleData();
   resetTransientUiState();
-  storageStatus = "샘플 데이터로 초기화했습니다.";
+  storageStatus = "모든 데이터를 초기화했습니다. (샘플 데이터)";
   renderAll();
 }
 
@@ -1526,18 +1973,18 @@ async function loadBackupFromFile(event) {
   }
 
   try {
-    if (!window.confirm("현재 브라우저에 저장된 일본어 공부 데이터를 선택한 백업으로 교체할까요?")) {
+    if (!window.confirm("지금 저장된 일본어 공부 데이터를 지우고 선택한 백업으로 교체할까요?")) {
       return;
     }
     const backup = core.parseBackupFile(await file.text());
     state = await store.importFullBackup(backup);
     resetTransientUiState();
-    storageStatus = `백업 로드 완료: ${file.name}`;
+    storageStatus = `백업 교체 완료: ${file.name}`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
-    setStorageStatus(`백업 로드 실패: ${message}`);
-    window.alert(`백업 로드 실패\n${message}`);
+    setStorageStatus(`백업 교체 실패: ${message}`);
+    window.alert(`백업 교체 실패\n${message}`);
   } finally {
     input.value = "";
   }
@@ -1551,7 +1998,7 @@ async function mergeBackupFromFile(event) {
   }
 
   try {
-    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 추가할까요? 중복 데이터는 제외됩니다.")) {
+    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 합칠까요? 겹치는 항목은 더 최근에 수정된 쪽이 남습니다.")) {
       return;
     }
     const backup = core.parseBackupFile(await file.text());
@@ -1559,12 +2006,12 @@ async function mergeBackupFromFile(event) {
     const result = core.mergeBackupData(core.backupData(current), core.backupData(backup), selectedDate || todayKey());
     state = await store.importFullBackup({ data: result.data });
     resetTransientUiState();
-    storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
+    storageStatus = `백업 합치기 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
-    setStorageStatus(`백업 추가 실패: ${message}`);
-    window.alert(`백업 추가 실패\n${message}`);
+    setStorageStatus(`백업 합치기 실패: ${message}`);
+    window.alert(`백업 합치기 실패\n${message}`);
   } finally {
     input.value = "";
   }
@@ -1577,7 +2024,8 @@ function resetTransientUiState() {
   wordSort = { key: "", direction: "" };
   wordQuiz = emptyQuiz();
   kanjiQuiz = emptyQuiz();
-  reviewQueueDrafts = new Map();
+  reviewRevealedIds = new Set();
+  hideReviewToast();
   byId("globalSearch").value = "";
 }
 
@@ -1685,8 +2133,6 @@ function renderHelpers() {
     escapeHtml,
     highlight,
     kindLabels,
-    reviewQueueStatusText,
-    reviewQueueReview,
     reviewStatusText: core.reviewStatusText
   };
 }
@@ -1723,18 +2169,6 @@ function linkedEntriesForSentence(kind, sentenceId) {
 
 function linkedEntriesForAnySentence(kind, sentenceId) {
   return core.linkedEntriesForSentence(state.allDailyEntries || state.dailyEntries, kind, sentenceId);
-}
-
-function reviewQueueStatusText(item) {
-  return core.reviewQueueStatusText({
-    item,
-    drafts: reviewQueueDrafts,
-    todayKey: selectedDate
-  });
-}
-
-function reviewQueueReview(item) {
-  return core.reviewQueueReview(item, reviewQueueDrafts);
 }
 
 function pageForKind(kind) {
@@ -1831,6 +2265,9 @@ function applyMobileAdSlotVisibility() {
 
 async function start() {
   renderAppShell(byId);
+  if (!desktopApp && isNativePlatform()) {
+    applyAppStorageWording();
+  }
   if (desktopApp) {
     applyDesktopGating();
     initVoicevoxSettings({

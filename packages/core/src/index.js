@@ -96,6 +96,41 @@ export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
   return scheduledReviewOptions.includes(value) ? value : "내일";
 }
 
+// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값)을 localStorage에서
+// 읽은 원시 값(JSON 문자열 또는 이미 파싱된 객체)으로부터 검증해 복원한다.
+// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬, "내일")으로 돌아간다.
+export const DEFAULT_QUIZ_SETTINGS = Object.freeze({
+  questionFontSize: 32,
+  reviewOnCorrect: true,
+  correctReview: "내일"
+});
+
+export function resolveQuizSettings(raw, scheduledReviewOptions = []) {
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { ...DEFAULT_QUIZ_SETTINGS };
+  }
+  const fontSize = Number(parsed.questionFontSize);
+  return {
+    questionFontSize: Number.isFinite(fontSize) && fontSize > 0
+      ? clampQuizQuestionFontSize(fontSize)
+      : DEFAULT_QUIZ_SETTINGS.questionFontSize,
+    reviewOnCorrect: typeof parsed.reviewOnCorrect === "boolean"
+      ? parsed.reviewOnCorrect
+      : DEFAULT_QUIZ_SETTINGS.reviewOnCorrect,
+    correctReview: typeof parsed.correctReview === "string"
+      ? resolveQuizCorrectReview(parsed.correctReview, scheduledReviewOptions)
+      : DEFAULT_QUIZ_SETTINGS.correctReview
+  };
+}
+
 export function reviewStatusText(item) {
   const review = item.review || "대기";
   if (item.reviewDueDate && !["오늘", "대기"].includes(review)) {
@@ -104,11 +139,9 @@ export function reviewStatusText(item) {
   return review;
 }
 
-export function reviewQueueReview(item, drafts = new Map()) {
-  return drafts.get(item.id) || "대기";
-}
-
-function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
+// Due date a review interval resolves to when saved today (storage schedules
+// from the real today, not the browsed study date).
+export function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
   const days = REVIEW_QUEUE_INTERVALS[review];
   if (!days) {
     return "";
@@ -116,47 +149,46 @@ function reviewQueueDueDate(review, todayKey = dateKey(new Date())) {
   return addDays(todayKey, days);
 }
 
-export function reviewQueueStatusText({ item, drafts = new Map(), todayKey = dateKey(new Date()) }) {
-  const review = reviewQueueReview(item, drafts);
-  const dueDate = reviewQueueDueDate(review, todayKey);
-  return dueDate ? `${review} (${dueDate})` : review;
+// Fixed display order of the 복습 큐 kinds (tabs and the 전체 view's groups).
+export const REVIEW_KIND_ORDER = ["word", "grammar", "expression", "kanji", "sentence"];
+
+// Queue rows (already narrowed by the global search) grouped by kind in
+// REVIEW_KIND_ORDER; kinds without rows are omitted.
+export function groupReviewItemsByKind(items = []) {
+  return REVIEW_KIND_ORDER
+    .map(kind => ({ kind, items: items.filter(item => item.kind === kind) }))
+    .filter(group => group.items.length);
 }
 
-export function pruneReviewQueueDrafts({ items = [], drafts = new Map() }) {
-  const queueIds = new Set(items.filter(isReviewQueueItem).map(item => item.id));
-  return new Map([...drafts.entries()].filter(([id]) => queueIds.has(id)));
+// Per-kind row counts of the search-narrowed queue plus the `all` total, for
+// the kind tabs. Not narrowed by the kind filter itself.
+export function reviewKindCounts(items = [], searchTerm = "") {
+  const queue = reviewItems(items, searchTerm);
+  const counts = { all: queue.length };
+  REVIEW_KIND_FILTER_OPTIONS.forEach(kind => {
+    counts[kind] = queue.filter(item => item.kind === kind).length;
+  });
+  return counts;
 }
 
-export function cycleReviewQueueDraft({ items = [], drafts = new Map(), id, options = [] }) {
-  const item = items.find(candidate => candidate.id === id);
-  if (!item) {
-    return new Map(drafts);
-  }
-
-  const nextDrafts = new Map(drafts);
-  const currentReview = reviewQueueReview(item, drafts);
-  const currentIndex = options.indexOf(currentReview);
-  const nextReview = options[((currentIndex >= 0 ? currentIndex : 0) + 1) % options.length] || "대기";
-
-  if (nextReview === "대기") {
-    nextDrafts.delete(id);
-  } else {
-    nextDrafts.set(id, nextReview);
-  }
-  return nextDrafts;
+// done = items whose lastReviewedAt is today (the home tab's "오늘 복습 완료"
+// source, reviewedTodayCount); remaining = the whole search-narrowed queue.
+// Every queue kind counts as done - including 문장, which the home stat leaves
+// out - so completing a row always moves both numbers.
+export function reviewQueueProgress(items = [], searchTerm = "", todayDate = dateKey(new Date())) {
+  const done = REVIEW_KIND_FILTER_OPTIONS.reduce((total, kind) => total + reviewedTodayCount(items, kind, todayDate), 0);
+  const remaining = reviewItems(items, searchTerm).length;
+  return { done, remaining, percent: done + remaining ? Math.round((done / (done + remaining)) * 100) : 0 };
 }
 
-// "선택 복습 완료" only ever completes what the user can actually SEE: it
-// already routed through reviewItems(items, searchTerm), so the global
-// search narrows it, and `kindFilter` narrows it the same way. A draft set
-// on a card that the current filter hides therefore stays a draft instead
-// of being silently committed - and it is NOT discarded either, since
-// pruneReviewQueueDrafts deliberately keeps drafts for every queue item
-// regardless of the view filter.
-export function reviewCompletionTargets({ items = [], drafts = new Map(), searchTerm = "", kindFilter = "" }) {
-  return reviewItems(items, searchTerm, kindFilter)
-    .map(item => ({ id: item.id, review: reviewQueueReview(item, drafts) }))
-    .filter(item => item.review !== "대기");
+// What a review completion overwrites on an item - the data
+// store.restoreItemReview puts back to undo it.
+export function reviewSnapshot(item = {}) {
+  return {
+    review: item.review || "대기",
+    reviewDueDate: item.reviewDueDate || "",
+    lastReviewedAt: item.lastReviewedAt || ""
+  };
 }
 
 export function matchesSearch(item, searchTerm = "") {
@@ -207,15 +239,91 @@ export function nextWordSort(currentSort = { key: "", direction: "" }, key) {
   return { key: "", direction: "" };
 }
 
+// Eligibility rule shared by the question builders and the quiz-selection
+// screen's availability display.
+export const QUIZ_MIN_CANDIDATES = 4;
+export const QUIZ_SESSION_SIZE = 10;
+
+export function quizCandidates(items = [], kind) {
+  return items.filter(item => item.kind === kind && item.title && item.meaning);
+}
+
+export function sentenceQuizCandidates(entries = []) {
+  return entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
+}
+
+// Pool size and startability for one selection-screen card. `quizKind` is
+// word | kanji | sentence-meaning | sentence-listen; `mode` is the word/kanji
+// radio value (random needs both directions to be answerable).
+export function quizAvailability({ items = [], entries = [], quizKind, mode = "random" } = {}) {
+  const isSentence = quizKind === "sentence-meaning" || quizKind === "sentence-listen";
+  const candidates = isSentence ? sentenceQuizCandidates(entries) : quizCandidates(items, quizKind);
+  let answerTypes;
+  if (quizKind === "sentence-meaning") {
+    answerTypes = ["meaning"];
+  } else if (quizKind === "sentence-listen") {
+    answerTypes = ["title"];
+  } else if (mode === "random") {
+    answerTypes = ["title", "meaning"];
+  } else {
+    answerTypes = [mode === "meaningToJp" || mode === "meaningToKanji" ? "title" : "meaning"];
+  }
+  const distinct = Math.min(...answerTypes.map(type => new Set(candidates.map(item => item[type])).size));
+  const poolSize = candidates.length;
+  const canStart = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
+  return {
+    poolSize,
+    distinctCount: distinct,
+    required: QUIZ_MIN_CANDIDATES,
+    canStart,
+    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : "distinct"
+  };
+}
+
+// --- Quiz session bookkeeping (pure). A session is up to QUIZ_SESSION_SIZE
+// questions; `index` is the 0-based current question.
+export function createQuizSession(poolSize, size = QUIZ_SESSION_SIZE) {
+  return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false };
+}
+
+export function quizMissedEntry(question) {
+  const { item, answerType, mode } = question;
+  if (mode === "listen") {
+    return { id: item.id, prompt: item.title, answer: item.meaning };
+  }
+  return { id: item.id, prompt: answerType === "title" ? item.meaning : item.title, answer: question.correctAnswer };
+}
+
+export function recordQuizAnswer(session, question, correct) {
+  return {
+    ...session,
+    correct: session.correct + (correct ? 1 : 0),
+    missed: correct ? session.missed : [...session.missed, quizMissedEntry(question)],
+    seenIds: session.seenIds.includes(question.item.id) ? session.seenIds : [...session.seenIds, question.item.id]
+  };
+}
+
+export function isLastQuizQuestion(session) {
+  return session.index + 1 >= session.total;
+}
+
+// Moves to the next question, or marks the session finished after the last.
+export function advanceQuizSession(session) {
+  return isLastQuizQuestion(session)
+    ? { ...session, finished: true }
+    : { ...session, index: session.index + 1 };
+}
+
 export function buildQuizQuestion({
   items = [],
   kind,
   mode = "random",
   forwardMode,
   reverseMode,
-  random = Math.random
+  random = Math.random,
+  excludeIds = []
 }) {
-  const candidates = items.filter(item => item.kind === kind && item.title && item.meaning);
+  const candidates = quizCandidates(items, kind);
   const resolvedMode = mode === "random" ? randomItem([forwardMode, reverseMode], random) : mode;
   const answerType = resolvedMode === reverseMode ? "title" : "meaning";
   const uniqueAnswers = [...new Set(candidates.map(item => item[answerType]))];
@@ -223,8 +331,11 @@ export function buildQuizQuestion({
     return null;
   }
 
-  const minCorrect = Math.min(...candidates.map(item => Number(item.quizCorrectCount || 0)));
-  const weakestItems = candidates.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
+  // Items already asked in this session are skipped while others remain.
+  const fresh = candidates.filter(item => !excludeIds.includes(item.id));
+  const askable = fresh.length ? fresh : candidates;
+  const minCorrect = Math.min(...askable.map(item => Number(item.quizCorrectCount || 0)));
+  const weakestItems = askable.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
   const item = randomItem(weakestItems, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
@@ -254,16 +365,17 @@ export function buildSentenceQuizQuestion({
   entries = [],
   mode = "meaning",
   random = Math.random,
-  excludeItemId = ""
+  excludeItemId = "",
+  excludeIds = []
 } = {}) {
-  const candidates = entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
+  const candidates = sentenceQuizCandidates(entries);
   const answerType = mode === "listen" ? "title" : "meaning";
   const uniqueAnswers = [...new Set(candidates.map(entry => entry[answerType]))];
   if (candidates.length < 4 || uniqueAnswers.length < 4) {
     return null;
   }
 
-  const pool = excludeItemId ? candidates.filter(entry => entry.id !== excludeItemId) : candidates;
+  const pool = candidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
   const item = randomItem(pool.length ? pool : candidates, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
@@ -291,7 +403,7 @@ export function buildSentenceQuizQuestion({
 // Every kind that can reach the queue gets an option: isReviewQueueItem only
 // excludes kind === "source", so 문장 and 한자 items are queue members like
 // the rest and are filterable individually.
-export const REVIEW_KIND_FILTER_OPTIONS = ["word", "expression", "grammar", "sentence", "kanji"];
+export const REVIEW_KIND_FILTER_OPTIONS = REVIEW_KIND_ORDER;
 
 // Anything unrecognised (stale value, hand-edited DOM) degrades to 전체
 // rather than filtering the queue down to nothing.
@@ -431,6 +543,20 @@ export function resolveListPageSize(view, override, defaults = DEFAULT_LIST_PAGE
   return defaults[view] || defaults.words;
 }
 
+// 한자 탭 카드에 보여 줄 "쓰인 단어" 개수 설정. 값은 select/저장용 문자열
+// ("all" = 전체)이고, resolveKanjiWordLimit()가 렌더링용 숫자(전체 = Infinity)로
+// 바꿔 준다. 알 수 없는 값은 기본값(3)으로 돌아간다.
+export const KANJI_WORD_LIMIT_OPTIONS = ["0", "1", "2", "3", "5", "all"];
+export const DEFAULT_KANJI_WORD_LIMIT = 3;
+
+export function resolveKanjiWordLimit(value) {
+  const key = String(value ?? "");
+  if (!KANJI_WORD_LIMIT_OPTIONS.includes(key)) {
+    return DEFAULT_KANJI_WORD_LIMIT;
+  }
+  return key === "all" ? Infinity : Number(key);
+}
+
 export function studyStats(state = {}) {
   const items = state.items || [];
   return {
@@ -459,7 +585,8 @@ export function quickFilterCounts(state = {}, searchTerm = "") {
   const tasks = state.tasks || [];
   return {
     review: reviewItems(items, searchTerm).length,
-    source: items.filter(item => item.source && item.kind !== "source").length,
+    // Words that came from a saved sentence (the 단어 tab's "문장에서 등록" filter).
+    source: items.filter(item => item.kind === "word" && uniqueSourceSentences(item.sourceSentences).length).length,
     pending: tasks.filter(task => !task.done).length
   };
 }
