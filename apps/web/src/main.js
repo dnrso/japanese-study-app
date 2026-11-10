@@ -32,6 +32,7 @@ import {
   renderTodayPage,
   renderWordQuizPage,
   renderWordsPage,
+  noteFormFields,
   wordFormFields,
   reviewOptions,
   scheduledReviewOptions,
@@ -454,6 +455,21 @@ function bindEvents() {
       renderAll();
     }
   });
+  CARD_KINDS.forEach(kind => {
+    [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => {
+      byId(id).addEventListener("change", () => {
+        resetPageIndex(kind);
+        renderCards(kind, CARD_TARGETS[kind]);
+      });
+    });
+    byId(`${kind}FilterResetBtn`).addEventListener("click", () => {
+      [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => { byId(id).value = ""; });
+      resetPageIndex(kind);
+      renderCards(kind, CARD_TARGETS[kind]);
+    });
+  });
+  byId("noteDialogCancel").addEventListener("click", () => byId("noteDialog").close());
+  byId("noteDialogForm").addEventListener("submit", saveNoteDialog);
   byId("wordDialogCancel").addEventListener("click", () => byId("wordDialog").close());
   byId("wordDialogForm").addEventListener("submit", saveWordDialog);
   // Only the 복습 큐 needs re-rendering: the sidebar 복습 필요 count and the
@@ -810,6 +826,7 @@ function renderWordFilters() {
   renderSelectOptions("wordPartFilter", "전체 품사", partOptions);
   renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
   renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
+  CARD_KINDS.forEach(kind => renderSelectOptions(`${kind}ReviewFilter`, "전체 복습 상태", reviewOptions));
 }
 
 const WORD_FILTER_IDS = ["wordPartFilter", "wordScriptFilter", "wordReviewFilter", "wordSourceFilter"];
@@ -856,16 +873,45 @@ function renderWords() {
   });
 }
 
+const CARD_KINDS = ["grammar", "expression"];
+const CARD_TARGETS = { grammar: "grammarCards", expression: "expressionCards" };
+const CARD_LABELS = { grammar: "문법", expression: "표현" };
+
 function renderCards(kind, targetId) {
-  const paged = paginate(items(kind), pageIndex[kind], pageSizeFor(kind));
+  const review = byId(`${kind}ReviewFilter`).value;
+  const source = byId(`${kind}SourceFilter`).value;
+  const filtering = Boolean(review || source);
+  const visible = items(kind);
+  const rows = visible.filter(item => {
+    const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
+    return (!review || (item.review || "대기") === review) &&
+      (!source || (source === "sentence") === fromSentence);
+  });
+  const paged = paginate(rows, pageIndex[kind], pageSizeFor(kind));
   pageIndex[kind] = paged.page;
+  const total = core.itemsByKind(state.items, kind).length;
   applyPagePatch(renderStudyCardsPage({
-    kind,
     targetId,
     list: paged.pageItems,
+    reviewOptions,
+    emptyMessage: total
+      ? `조건에 맞는 ${CARD_LABELS[kind]}이 없습니다.`
+      : kind === "grammar"
+        ? "아직 등록된 문법이 없습니다. 오늘 공부에서 문장과 함께 등록하거나 + 문법 추가로 직접 넣어 보세요."
+        : "아직 등록된 표현이 없습니다. 오늘 공부에서 문장과 함께 등록하거나 + 표현 추가로 직접 넣어 보세요.",
     helpers: renderHelpers()
   }));
   applyPagePatch({
+    text: {
+      [`${kind}TotalCount`]: `${total}개`,
+      [`${kind}FilterSummary`]: [
+        filtering || searchTerm ? `${rows.length}개 표시` : "",
+        rows.length ? "최근 등록순" : ""
+      ].filter(Boolean).join(" · ")
+    },
+    hidden: {
+      [`${kind}FilterResetBtn`]: !filtering
+    },
     html: {
       [`${kind}Pagination`]: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: kind })
     }
@@ -1341,6 +1387,10 @@ async function promptAddItem(kind) {
     openWordDialog();
     return;
   }
+  if (CARD_KINDS.includes(kind)) {
+    openNoteDialog(kind);
+    return;
+  }
   const title = window.prompt(`${kindLabels[kind] || "항목"} 제목을 입력하세요.`);
   if (!title) {
     return;
@@ -1393,6 +1443,10 @@ async function promptEditItem(id) {
   }
   if (item.kind === "word") {
     openWordDialog(item);
+    return;
+  }
+  if (CARD_KINDS.includes(item.kind)) {
+    openNoteDialog(item.kind, item);
     return;
   }
   const title = window.prompt("제목을 수정하세요.", item.title);
@@ -1459,6 +1513,49 @@ async function saveWordDialog(event) {
   renderAll();
   if (!existing) {
     openPage("words");
+  }
+}
+
+let noteDialogItemId = "";
+let noteDialogKind = "grammar";
+
+function openNoteDialog(kind, item = null) {
+  noteDialogKind = kind;
+  noteDialogItemId = item?.id || "";
+  byId("noteDialogTitle").textContent = `${CARD_LABELS[kind]} ${item ? "수정" : "추가"}`;
+  byId("noteDialogFields").innerHTML = noteFormFields({ kind, item: item || {}, escapeHtml });
+  byId("noteDialog").showModal();
+  byId("noteDialogForm").elements.title.focus();
+}
+
+async function saveNoteDialog(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const names = noteDialogKind === "grammar" ? ["title", "meaning", "note"] : ["title", "reading", "meaning", "note"];
+  const fields = Object.fromEntries(names.map(name => [name, String(form.elements[name].value || "").trim()]));
+  if (!fields.title || !fields.meaning) {
+    form.reportValidity();
+    return;
+  }
+  const existing = state.items.find(item => item.id === noteDialogItemId);
+  state = await store.upsertItem(existing
+    ? { ...existing, ...fields, studyDate: selectedDate }
+    : {
+        id: nextId(noteDialogKind),
+        kind: noteDialogKind,
+        reading: "",
+        ...fields,
+        part: "",
+        script: "",
+        review: "대기",
+        source: "웹 미리보기",
+        kanji: "",
+        studyDate: selectedDate
+      });
+  byId("noteDialog").close();
+  renderAll();
+  if (!existing) {
+    openPage(pageForKind(noteDialogKind));
   }
 }
 

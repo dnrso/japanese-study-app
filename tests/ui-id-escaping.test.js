@@ -19,6 +19,7 @@ import {
   renderReviewPage,
   renderTasksPage,
   renderTodayPage,
+  noteCard,
   renderWordsPage,
   studyCard
 } from "@nihongo-study/ui";
@@ -158,6 +159,27 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-source-date="${escapeHtml(HOSTILE_ID)}"`);
+  });
+
+  it("noteCard does not let an id break out of its attributes and links sources on any kind", () => {
+    const html = noteCard(hostileWord({ kind: "expression" }), ["대기", "오늘"], helpers());
+    expect(injectedAttributes(html)).toEqual([]);
+    expect(html).not.toContain(HOSTILE_ID);
+    expect(html).toContain(`data-edit-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
+  });
+
+  it("noteCard hides a note that only repeats the meaning or the raw input line", () => {
+    const base = { id: "g1", kind: "grammar", title: "〜てしまう", meaning: "동작의 완료를 나타낸다", sourceSentences: [] };
+    const raw = noteCard({ ...base, note: "`〜てしまう` 동작의 완료를 나타낸다" }, ["대기"], helpers());
+    expect(raw).not.toContain("note-card-note");
+    expect(raw).not.toContain("note-card-source");
+    const same = noteCard({ ...base, note: "동작의 완료를 나타낸다" }, ["대기"], helpers());
+    expect(same).not.toContain("note-card-note");
+    const real = noteCard({ ...base, note: "회화체에서는 ちゃう" }, ["대기"], helpers());
+    expect(real).toContain("note-card-note");
   });
 
   it("renderWordsPage does not let an id break out of its attributes", () => {

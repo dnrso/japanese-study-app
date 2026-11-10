@@ -94,6 +94,7 @@ export function renderAppShell(byId) {
           ${wordsPageTemplate()}
           ${cardPageTemplate("grammar", "grammar-detail", "문법 노트", "grammarCards", "+ 문법 추가")}
           ${cardPageTemplate("expression", "expressions-list", "표현 · 관용구", "expressionCards", "+ 표현 추가", "expressions")}
+          ${noteDialogTemplate()}
           ${kanjiPageTemplate()}
           ${quizPageTemplate()}
           ${reviewPageTemplate()}
@@ -309,13 +310,38 @@ function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, pageId 
     <section class="page hidden-page" id="${pageId}">
       <section class="panel section" id="${sectionId}">
         <div class="panel-header">
-          <h2 class="panel-title">${title}</h2>
+          <h2 class="panel-title">${title} <span class="panel-count" id="${kind}TotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="${kind}" data-add-item>${buttonLabel}</button>
         </div>
-        <div class="cards" id="${targetId}"></div>
+        <div class="table-tools">
+          <select id="${kind}ReviewFilter" aria-label="복습"><option value="">전체 복습 상태</option></select>
+          <select id="${kind}SourceFilter" aria-label="출처">
+            <option value="">전체 출처</option>
+            <option value="sentence">문장 연결</option>
+            <option value="manual">직접 추가</option>
+          </select>
+          <p class="table-tools-summary"><span id="${kind}FilterSummary"></span><button class="link-btn" id="${kind}FilterResetBtn" type="button" hidden>필터 초기화</button></p>
+        </div>
+        <div class="cards study-card-grid" id="${targetId}"></div>
         <div id="${kind}Pagination"></div>
       </section>
     </section>
+  `;
+}
+
+// One add/edit dialog shared by 문법 and 표현 (fields are filled per kind).
+function noteDialogTemplate() {
+  return `
+    <dialog class="item-dialog" id="noteDialog" aria-labelledby="noteDialogTitle">
+      <form method="dialog" id="noteDialogForm">
+        <h2 class="panel-title" id="noteDialogTitle">문법 추가</h2>
+        <div id="noteDialogFields"></div>
+        <div class="item-dialog-actions">
+          <button class="ghost-btn" type="button" value="cancel" id="noteDialogCancel">취소</button>
+          <button class="primary-btn" type="submit" value="save">저장</button>
+        </div>
+      </form>
+    </dialog>
   `;
 }
 

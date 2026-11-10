@@ -1,9 +1,9 @@
-import { empty, studyCard } from "../components/index.js";
+import { empty, noteCard } from "../components/index.js";
 
-export function renderStudyCardsPage({ kind, targetId, list, helpers }) {
+export function renderStudyCardsPage({ targetId, list, reviewOptions = [], emptyMessage, helpers }) {
   return {
     html: {
-      [targetId]: list.length ? list.map(item => studyCard(item, helpers)).join("") : empty(`${helpers.kindLabels[kind]} 항목을 추가해 보세요.`)
+      [targetId]: list.length ? list.map(item => noteCard(item, reviewOptions, helpers)).join("") : empty(emptyMessage)
     }
   };
 }

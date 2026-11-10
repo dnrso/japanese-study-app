@@ -940,6 +940,11 @@ function mergeDailyCandidate(existing, candidate) {
 // value for it any more.
 function itemsFromDailyEntry(entry, parentTitle) {
   const isSentence = entry.kind === "sentence";
+  // A manually typed 단어/문법/표현 entry is parsed with `note` = the whole raw
+  // input line; a sentence keeps that on purpose, but for the others it would
+  // just repeat the title and meaning, so it is not a note.
+  const parsedNote = entry.parsed?.note || "";
+  const note = !isSentence && parsedNote.trim() === text(entry.rawText).trim() ? "" : parsedNote;
   const item = {
     kind: entry.kind,
     title: entry.title,
@@ -950,7 +955,7 @@ function itemsFromDailyEntry(entry, parentTitle) {
     kanji: isSentence ? "" : entry.parsed?.kanji,
     review: "대기",
     source: isSentence ? "" : parentTitle || "오늘 공부",
-    note: entry.parsed?.note || "",
+    note,
     sourceSentences: entry.sourceSentences || []
   };
   // Derived from the un-normalized shape on purpose: withKanjiItems reads

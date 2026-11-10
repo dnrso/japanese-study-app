@@ -255,6 +255,105 @@ h1 {
   margin-top: 10px;
 }
 
+/* 문법/표현 tabs: responsive card grid (a scoped variant of .cards). */
+.cards.study-card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.study-card-grid > .empty-state {
+  grid-column: 1 / -1;
+}
+
+.note-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+}
+
+.note-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.study-card .note-card-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.note-card-actions {
+  display: flex;
+  gap: 2px;
+  margin: -3px -5px 0 0;
+}
+
+.study-card .note-card-reading {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.study-card .note-card-meaning {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.note-card-level {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.study-card .note-card-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.note-card-source {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.note-card-source-label,
+.note-card-footer-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.note-card-source .word-source-links {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.note-card-source .source-link {
+  color: var(--muted-strong);
+  font-weight: 500;
+}
+
+.note-card-source .source-link:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
+}
+
+.note-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
 /* Shared pagination control bar (문장/단어/문법/표현/한자 list pages) - see
    packages/ui/components/pagination.js. Only rendered when there's more
    than one page, so it never appears as an empty strip. */
