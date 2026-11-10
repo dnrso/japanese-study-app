@@ -1,6 +1,50 @@
 /* Mobile responsive overrides. Loaded last so it wins the cascade. */
 
 @media (max-width: 768px) {
+  /* 설정 rows stack: label above, control below at full width */
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setting-row-text {
+    flex: 0 0 auto;
+  }
+
+  .setting-row-control,
+  .setting-row-control-group,
+  .setting-row-control-size {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+  }
+
+  .setting-row-control select {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .setting-row-control .setting-switch {
+    flex: 0 0 auto;
+  }
+
+  .setting-saved {
+    order: 1;
+    text-align: left;
+  }
+
+  .setting-row-dependent {
+    margin-top: 0;
+  }
+
+  .quiz-size-preview {
+    flex: 0 0 170px;
+  }
+
+  .page-size-grid {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  }
+
   /* Topbar: single compact row, safe-area aware */
   .topbar {
     padding-top: calc(8px + env(safe-area-inset-top));

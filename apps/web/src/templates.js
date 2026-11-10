@@ -474,12 +474,12 @@ function statsPageTemplate() {
 // to that view's constant from packages/core's DEFAULT_LIST_PAGE_SIZES).
 // Wired up in apps/web/src/main.js via the shared data-list-page-size-view
 // attribute (see bindEvents()).
-function listPageSizeSelect(view, label) {
+function listPageSizeSelect(view, label, shortLabel) {
   const defaultValue = DEFAULT_LIST_PAGE_SIZES[view];
   const options = LIST_PAGE_SIZE_OPTIONS.map(size => `<option value="${size}">${size}</option>`).join("");
   return `
-    <label>${escapeHtml(label)}
-      <select id="listPageSize-${view}" data-list-page-size-view="${view}">
+    <label class="page-size-field"><span>${escapeHtml(shortLabel)}</span>
+      <select id="listPageSize-${view}" data-list-page-size-view="${view}" aria-label="${escapeHtml(label)}">
         <option value="">기본값 (${defaultValue})</option>
         ${options}
       </select>
@@ -493,79 +493,100 @@ function kanjiWordLimitSelect() {
   const options = KANJI_WORD_LIMIT_OPTIONS
     .map(value => `<option value="${value}"${Number(value) === DEFAULT_KANJI_WORD_LIMIT ? " selected" : ""}>${KANJI_WORD_LIMIT_LABELS[value] || `${value}개`}</option>`)
     .join("");
+  return `<select id="kanjiWordLimit" aria-labelledby="kanjiWordLimitLabel">${options}</select>`;
+}
+
+// One row of the 설정 tab: label (+ optional description) on the left, the
+// control on the right, plus a "저장됨" status slot that main.js fills in.
+function settingRow({ label, labelId, description = "", control, extraClass = "", controlClass = "", rowId = "" }) {
   return `
-    <label>한자 카드 단어 표시 수
-      <select id="kanjiWordLimit">${options}</select>
-    </label>
+    <div class="setting-row ${extraClass}"${rowId ? ` id="${rowId}"` : ""}>
+      <div class="setting-row-text">
+        <div class="setting-row-label"${labelId ? ` id="${labelId}"` : ""}>${label}</div>
+        ${description ? `<p class="setting-row-desc">${description}</p>` : ""}
+      </div>
+      <div class="setting-row-control ${controlClass}">
+        ${control}
+        <span class="setting-saved" role="status"></span>
+      </div>
+    </div>
   `;
 }
 
 function settingsPageTemplate() {
   return `
     <section class="page hidden-page" id="settings">
-      <section class="panel section" id="settings-general">
-        <div class="panel-header">
-          <h2 class="panel-title">설정</h2>
-          <button class="primary-btn" id="resetDataBtn" type="button">샘플 데이터 초기화</button>
+      <section class="panel section" id="settings-display">
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">화면 표시</h2>
+            <p class="muted settings-panel-desc">목록에 한 번에 보여 줄 항목 수를 정합니다.</p>
+          </div>
         </div>
-        <div class="table-scroll">
-          <table class="table">
-            <tbody>
-              <tr><th>저장소</th><td id="storageLocation">IndexedDB (nihongo-study)</td></tr>
-              <tr><th>JSON 백업</th><td>현재 브라우저의 일본어 공부 데이터를 파일로 저장하거나 백업 파일에서 복원합니다.</td></tr>
-              <tr><th>다음 단계</th><td>storage-cloud 또는 동기화 계층</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button>
-          <button class="ghost-btn" id="loadBackupBtn" type="button">백업 불러오기</button>
-          <button class="ghost-btn" id="mergeBackupBtn" type="button">백업 추가하기</button>
-          <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
-          <input id="mergeBackupFileInput" type="file" accept="application/json,.json" hidden />
-        </div>
-        <p class="muted" id="storageStatus"></p>
-      </section>
-
-      <section class="panel section" id="settings-account">
-        <div class="panel-header"><h2 class="panel-title">계정 및 동기화</h2></div>
-        <p class="muted">로그인하면 데이터가 Supabase에 동기화됩니다.</p>
-        <div class="settings-actions">
-          <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
-          <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
-          <button class="ghost-btn" id="syncRetryBtn" type="button" disabled>동기화 재시도</button>
-        </div>
-        <p class="muted" id="accountStatus"></p>
-        <p class="muted" id="syncStatus" aria-live="polite">동기화 대기</p>
-        <p class="muted" id="syncLastSuccess">마지막 성공: 없음</p>
-      </section>
-
-      <section class="panel section" id="settings-list-page-size">
-        <div class="panel-header"><h2 class="panel-title">목록 표시</h2></div>
-        <div class="settings-grid">
-          ${listPageSizeSelect("sentences", "문장 페이지당 항목 수")}
-          ${listPageSizeSelect("words", "단어 페이지당 항목 수")}
-          ${listPageSizeSelect("grammar", "문법 페이지당 항목 수")}
-          ${listPageSizeSelect("expression", "표현 페이지당 항목 수")}
-          ${listPageSizeSelect("kanji", "한자 페이지당 항목 수")}
-          ${kanjiWordLimitSelect()}
-        </div>
-        <p class="muted">문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 따로 적용됩니다.</p>
+        ${settingRow({
+          label: "페이지당 항목 수",
+          labelId: "listPageSizeLabel",
+          description: "문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 적용됩니다.",
+          controlClass: "setting-row-control-group",
+          control: `<div class="page-size-grid" role="group" aria-labelledby="listPageSizeLabel">
+          ${listPageSizeSelect("sentences", "문장 페이지당 항목 수", "문장")}
+          ${listPageSizeSelect("words", "단어 페이지당 항목 수", "단어")}
+          ${listPageSizeSelect("grammar", "문법 페이지당 항목 수", "문법")}
+          ${listPageSizeSelect("expression", "표현 페이지당 항목 수", "표현")}
+          ${listPageSizeSelect("kanji", "한자 페이지당 항목 수", "한자")}
+        </div>`
+        })}
+        ${settingRow({
+          label: "한자 카드 단어 표시 수",
+          labelId: "kanjiWordLimitLabel",
+          description: "한자 탭의 카드마다 보여 줄 '쓰인 단어' 개수입니다.",
+          control: kanjiWordLimitSelect()
+        })}
       </section>
 
       <section class="panel section" id="settings-quiz">
-        <div class="panel-header"><h2 class="panel-title">퀴즈 표시 및 복습</h2></div>
-        <div class="settings-grid">
-          <label>문제 텍스트 크기 <span id="quizQuestionFontSizeValue">32px</span><input id="quizQuestionFontSizeRange" type="range" min="24" max="64" step="1" value="32" /></label>
-          <label class="settings-check"><input id="quizReviewOnCorrectCheckbox" type="checkbox" checked /><span>정답 시 복습 상태 변경</span></label>
-          <label>정답 후 복습 상태<select id="quizCorrectReviewSelect"></select></label>
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">퀴즈</h2>
+            <p class="muted settings-panel-desc">문제 글자 크기와 정답을 맞혔을 때의 복습 일정을 정합니다.</p>
+          </div>
         </div>
-        <p class="muted">퀴즈 설정은 현재 브라우저 세션에 반영됩니다.</p>
+        ${settingRow({
+          label: "문제 텍스트 크기",
+          labelId: "quizQuestionFontSizeLabel",
+          description: "퀴즈 문제에 쓰이는 글자 크기입니다.",
+          controlClass: "setting-row-control-size",
+          control: `<div class="quiz-size-control">
+          <div class="quiz-size-preview" aria-hidden="true"><span id="quizQuestionFontSizePreview" lang="ja">日本語</span></div>
+          <div class="quiz-size-slider">
+            <input id="quizQuestionFontSizeRange" type="range" min="24" max="64" step="1" value="32" aria-labelledby="quizQuestionFontSizeLabel" />
+            <span class="quiz-size-value" id="quizQuestionFontSizeValue">32px</span>
+          </div>
+        </div>`
+        })}
+        ${settingRow({
+          label: "정답을 맞히면 복습 일정 미루기",
+          labelId: "quizReviewOnCorrectLabel",
+          description: "퀴즈에서 맞힌 항목의 복습 상태를 아래 값으로 바꿉니다.",
+          control: `<input id="quizReviewOnCorrectCheckbox" type="checkbox" class="setting-switch" checked aria-labelledby="quizReviewOnCorrectLabel" />`
+        })}
+        ${settingRow({
+          label: "미룰 기간",
+          labelId: "quizCorrectReviewLabel",
+          extraClass: "setting-row-dependent",
+          rowId: "quizCorrectReviewRow",
+          control: `<select id="quizCorrectReviewSelect" aria-labelledby="quizCorrectReviewLabel"></select>`
+        })}
       </section>
 
       <section class="panel section" id="settings-tts">
-        <div class="panel-header"><h2 class="panel-title">음성 재생</h2></div>
-        <p class="muted" id="ttsDescription">스피커 버튼은 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.</p>
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">음성</h2>
+            <p class="muted settings-panel-desc">일본어 읽어 주기 방식입니다.</p>
+          </div>
+        </div>
+        <p class="muted" id="ttsDescription">스피커 버튼을 누르면 일본어를 소리 내어 읽어 줍니다. 음성은 기기와 브라우저에 따라 다를 수 있습니다.</p>
       </section>
 
       <section class="panel section" id="settings-voicevox" hidden>
@@ -588,6 +609,65 @@ function settingsPageTemplate() {
           <button class="ghost-btn" id="voicevoxTestBtn" type="button">테스트 재생</button>
         </div>
         <p class="muted tts-status" id="voicevoxTestStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="panel section" id="settings-account">
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">계정 및 동기화</h2>
+            <p class="muted settings-panel-desc">로그인하면 다른 기기와 공부 데이터를 동기화합니다.</p>
+          </div>
+        </div>
+        <div class="account-status" id="accountStatus" aria-live="polite"></div>
+        <p class="muted account-last-sync" id="syncLastSuccess" hidden></p>
+        <div class="settings-actions">
+          <button class="ghost-btn" id="googleSignInBtn" type="button">Google로 로그인</button>
+          <button class="ghost-btn" id="googleSignOutBtn" type="button" hidden>로그아웃</button>
+          <button class="ghost-btn" id="syncRetryBtn" type="button" disabled>동기화 재시도</button>
+        </div>
+      </section>
+
+      <section class="panel section" id="settings-data">
+        <div class="panel-header settings-panel-header">
+          <div>
+            <h2 class="panel-title">데이터</h2>
+            <p class="muted settings-panel-desc" id="storageNote">공부 데이터는 이 브라우저에만 저장됩니다. 브라우저의 사이트 데이터를 지우면 함께 사라지니 백업해 두세요.</p>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-row-text">
+            <div class="setting-row-label">백업 다운로드</div>
+            <p class="setting-row-desc">지금 데이터를 파일로 저장합니다.</p>
+          </div>
+          <div class="setting-row-control"><button class="ghost-btn" id="downloadBackupBtn" type="button">백업 다운로드</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-row-text">
+            <div class="setting-row-label">백업으로 교체</div>
+            <p class="setting-row-desc">지금 데이터를 지우고 백업 파일의 내용으로 바꿉니다.</p>
+          </div>
+          <div class="setting-row-control"><button class="ghost-btn caution-btn" id="loadBackupBtn" type="button">백업으로 교체</button></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-row-text">
+            <div class="setting-row-label">백업 합치기</div>
+            <p class="setting-row-desc">지금 데이터에 백업 파일의 내용을 더합니다. 겹치는 항목은 더 최근에 수정된 쪽을 남깁니다.</p>
+          </div>
+          <div class="setting-row-control"><button class="ghost-btn" id="mergeBackupBtn" type="button">백업 합치기</button></div>
+        </div>
+        <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
+        <input id="mergeBackupFileInput" type="file" accept="application/json,.json" hidden />
+        <p class="muted settings-storage-status" id="storageStatus" role="status"></p>
+        <div class="settings-danger-zone">
+          <h3 class="settings-subtitle">데이터 초기화</h3>
+          <div class="setting-row">
+            <div class="setting-row-text">
+              <div class="setting-row-label">모든 데이터 초기화</div>
+              <p class="setting-row-desc">저장된 공부 데이터를 모두 지우고 샘플 데이터 상태로 되돌립니다. 되돌릴 수 없으니 먼저 백업해 두세요.</p>
+            </div>
+            <div class="setting-row-control"><button class="danger-btn danger-outline-btn" id="resetDataBtn" type="button">모든 데이터 초기화</button></div>
+          </div>
+        </div>
       </section>
 
     </section>

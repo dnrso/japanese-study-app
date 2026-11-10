@@ -52,7 +52,7 @@ import {
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
 } from "./quiz.js";
 import { isDesktopApp } from "./platform.js";
-import { applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
+import { applyAppStorageWording, applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
 import {
   createBrowserProvider,
   createCapacitorProvider,
@@ -89,7 +89,6 @@ const store = desktopApp
   : createSyncingStorage(baseStore, {
     scheduleSync: () => syncCoordinator?.schedule()
   });
-const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
 
@@ -108,7 +107,7 @@ const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 �
 // packages/ui/components/pagination.js for the shared
 // paginate()/paginationControls() helpers.
 //
-// Persistence: neither this setting nor the existing quiz display settings
+// Persistence: neither this setting nor the quiz display settings
 // (quizQuestionFontSize/quizReviewOnCorrect/quizCorrectReview below) have
 // any existing persisted-settings mechanism to reuse - there's no
 // state.settings field, and storage-idb's "meta" object store is only
@@ -121,6 +120,9 @@ const LIST_PAGE_SIZE_STORAGE_KEY = "nihongo-study.listPageSizes";
 
 // 한자 카드 단어 표시 수: page-size와 같은 방식(전용 localStorage 키, 백업 제외).
 const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
+
+// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값): 같은 방식의 전용 키.
+const QUIZ_SETTINGS_STORAGE_KEY = "nihongo-study.quizSettings";
 
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
@@ -150,10 +152,11 @@ let reviewRevealedIds = new Set();
 let reviewSaving = false;
 let reviewUndo = null;
 const REVIEW_UNDO_MS = 5000;
-let quizQuestionFontSize = 32;
-let quizReviewOnCorrect = true;
-let quizCorrectReview = "내일";
-let storageStatus = storageNotice;
+const initialQuizSettings = loadQuizSettings();
+let quizQuestionFontSize = initialQuizSettings.questionFontSize;
+let quizReviewOnCorrect = initialQuizSettings.reviewOnCorrect;
+let quizCorrectReview = initialQuizSettings.correctReview;
+let storageStatus = "";
 let homeSentenceEntryId = null;
 // Current page (1-based) per paginated list tab. Reset to 1 wherever that
 // tab's filter/search/sort changes (see resetPageIndex callers below);
@@ -246,6 +249,45 @@ function saveKanjiWordLimitSetting() {
   } catch {
     // Ignore write failures - the setting just won't survive a reload.
   }
+}
+
+function loadQuizSettings() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(QUIZ_SETTINGS_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable - use the defaults.
+  }
+  return core.resolveQuizSettings(raw, scheduledReviewOptions);
+}
+
+function saveQuizSettings() {
+  try {
+    localStorage.setItem(QUIZ_SETTINGS_STORAGE_KEY, JSON.stringify({
+      questionFontSize: quizQuestionFontSize,
+      reviewOnCorrect: quizReviewOnCorrect,
+      correctReview: quizCorrectReview
+    }));
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
+}
+
+// Shows the "저장됨" status next to the changed control for ~1.5s. The slot
+// always occupies its space (opacity only), so nothing shifts.
+const savedIndicatorTimers = new WeakMap();
+function flashSaved(control) {
+  const slot = control?.closest?.(".setting-row")?.querySelector(".setting-saved");
+  if (!slot) {
+    return;
+  }
+  slot.textContent = "저장됨";
+  slot.classList.add("is-visible");
+  window.clearTimeout(savedIndicatorTimers.get(slot));
+  savedIndicatorTimers.set(slot, window.setTimeout(() => {
+    slot.classList.remove("is-visible");
+    slot.textContent = "";
+  }, 1500));
 }
 
 function pageSizeFor(view) {
@@ -638,18 +680,23 @@ function bindEvents() {
 
   byId("quizQuestionFontSizeRange").addEventListener("input", event => {
     quizQuestionFontSize = core.clampQuizQuestionFontSize(event.target.value);
-    applyQuizQuestionFontSize();
-    byId("quizQuestionFontSizeValue").textContent = `${quizQuestionFontSize}px`;
+    saveQuizSettings();
+    renderQuizSettings();
+    flashSaved(event.target);
   });
 
   byId("quizReviewOnCorrectCheckbox").addEventListener("change", event => {
     quizReviewOnCorrect = event.target.checked;
+    saveQuizSettings();
     renderQuizSettings();
+    flashSaved(event.target);
   });
 
   byId("quizCorrectReviewSelect").addEventListener("change", event => {
     quizCorrectReview = core.resolveQuizCorrectReview(event.target.value, scheduledReviewOptions);
+    saveQuizSettings();
     renderQuizSettings();
+    flashSaved(event.target);
   });
 
   document.querySelectorAll("[data-list-page-size-view]").forEach(select => {
@@ -657,6 +704,7 @@ function bindEvents() {
       const view = event.target.dataset.listPageSizeView;
       listPageSizeOverrides[view] = event.target.value ? Number(event.target.value) : null;
       saveListPageSizeOverrides();
+      flashSaved(event.target);
       // Only that tab's page index/list re-renders - a per-view setting
       // shouldn't disturb the other four lists.
       resetPageIndex(view);
@@ -667,6 +715,7 @@ function bindEvents() {
   byId("kanjiWordLimit").addEventListener("change", event => {
     kanjiWordLimitSetting = event.target.value;
     saveKanjiWordLimitSetting();
+    flashSaved(event.target);
     renderListPageSizeSettings();
     renderKanji();
   });
@@ -1880,12 +1929,12 @@ async function submitQuizChoice(kind, selectedAnswer) {
 }
 
 async function resetSampleData() {
-  if (!window.confirm("샘플 데이터를 초기 상태로 되돌릴까요?")) {
+  if (!window.confirm("저장된 공부 데이터를 모두 지우고 샘플 데이터로 되돌릴까요? 되돌릴 수 없습니다.")) {
     return;
   }
   state = await store.resetSampleData();
   resetTransientUiState();
-  storageStatus = "샘플 데이터로 초기화했습니다.";
+  storageStatus = "모든 데이터를 초기화했습니다. (샘플 데이터)";
   renderAll();
 }
 
@@ -1924,18 +1973,18 @@ async function loadBackupFromFile(event) {
   }
 
   try {
-    if (!window.confirm("현재 브라우저에 저장된 일본어 공부 데이터를 선택한 백업으로 교체할까요?")) {
+    if (!window.confirm("지금 저장된 일본어 공부 데이터를 지우고 선택한 백업으로 교체할까요?")) {
       return;
     }
     const backup = core.parseBackupFile(await file.text());
     state = await store.importFullBackup(backup);
     resetTransientUiState();
-    storageStatus = `백업 로드 완료: ${file.name}`;
+    storageStatus = `백업 교체 완료: ${file.name}`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
-    setStorageStatus(`백업 로드 실패: ${message}`);
-    window.alert(`백업 로드 실패\n${message}`);
+    setStorageStatus(`백업 교체 실패: ${message}`);
+    window.alert(`백업 교체 실패\n${message}`);
   } finally {
     input.value = "";
   }
@@ -1949,7 +1998,7 @@ async function mergeBackupFromFile(event) {
   }
 
   try {
-    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 추가할까요? 중복 데이터는 제외됩니다.")) {
+    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 합칠까요? 겹치는 항목은 더 최근에 수정된 쪽이 남습니다.")) {
       return;
     }
     const backup = core.parseBackupFile(await file.text());
@@ -1957,12 +2006,12 @@ async function mergeBackupFromFile(event) {
     const result = core.mergeBackupData(core.backupData(current), core.backupData(backup), selectedDate || todayKey());
     state = await store.importFullBackup({ data: result.data });
     resetTransientUiState();
-    storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
+    storageStatus = `백업 합치기 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
-    setStorageStatus(`백업 추가 실패: ${message}`);
-    window.alert(`백업 추가 실패\n${message}`);
+    setStorageStatus(`백업 합치기 실패: ${message}`);
+    window.alert(`백업 합치기 실패\n${message}`);
   } finally {
     input.value = "";
   }
@@ -2216,6 +2265,9 @@ function applyMobileAdSlotVisibility() {
 
 async function start() {
   renderAppShell(byId);
+  if (!desktopApp && isNativePlatform()) {
+    applyAppStorageWording();
+  }
   if (desktopApp) {
     applyDesktopGating();
     initVoicevoxSettings({

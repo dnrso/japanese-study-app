@@ -96,6 +96,41 @@ export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
   return scheduledReviewOptions.includes(value) ? value : "내일";
 }
 
+// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값)을 localStorage에서
+// 읽은 원시 값(JSON 문자열 또는 이미 파싱된 객체)으로부터 검증해 복원한다.
+// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬, "내일")으로 돌아간다.
+export const DEFAULT_QUIZ_SETTINGS = Object.freeze({
+  questionFontSize: 32,
+  reviewOnCorrect: true,
+  correctReview: "내일"
+});
+
+export function resolveQuizSettings(raw, scheduledReviewOptions = []) {
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { ...DEFAULT_QUIZ_SETTINGS };
+  }
+  const fontSize = Number(parsed.questionFontSize);
+  return {
+    questionFontSize: Number.isFinite(fontSize) && fontSize > 0
+      ? clampQuizQuestionFontSize(fontSize)
+      : DEFAULT_QUIZ_SETTINGS.questionFontSize,
+    reviewOnCorrect: typeof parsed.reviewOnCorrect === "boolean"
+      ? parsed.reviewOnCorrect
+      : DEFAULT_QUIZ_SETTINGS.reviewOnCorrect,
+    correctReview: typeof parsed.correctReview === "string"
+      ? resolveQuizCorrectReview(parsed.correctReview, scheduledReviewOptions)
+      : DEFAULT_QUIZ_SETTINGS.correctReview
+  };
+}
+
 export function reviewStatusText(item) {
   const review = item.review || "대기";
   if (item.reviewDueDate && !["오늘", "대기"].includes(review)) {
