@@ -119,6 +119,9 @@ const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 �
 // JSON backups/sync - those only cover study data).
 const LIST_PAGE_SIZE_STORAGE_KEY = "nihongo-study.listPageSizes";
 
+// 한자 카드 단어 표시 수: page-size와 같은 방식(전용 localStorage 키, 백업 제외).
+const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
+
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
 let aiSentenceAnalysisEnabled = false;
@@ -159,6 +162,9 @@ let pageIndex = {
 // entry in core.DEFAULT_LIST_PAGE_SIZES). Loaded once at startup from
 // localStorage; see LIST_PAGE_SIZE_STORAGE_KEY above.
 let listPageSizeOverrides = loadListPageSizeOverrides();
+// Stored as the select's string value ("0".."5" or "all"); see
+// core.resolveKanjiWordLimit() for validation/default handling.
+let kanjiWordLimitSetting = loadKanjiWordLimitSetting();
 
 syncCoordinator = createSyncCoordinator({
   sync,
@@ -212,6 +218,25 @@ function saveListPageSizeOverrides() {
   } catch {
     // Ignore write failures (quota, privacy mode, etc.) - the setting just
     // won't survive a reload in that case.
+  }
+}
+
+function loadKanjiWordLimitSetting() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(KANJI_WORD_LIMIT_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable - use the default.
+  }
+  const limit = core.resolveKanjiWordLimit(raw);
+  return limit === Infinity ? "all" : String(limit);
+}
+
+function saveKanjiWordLimitSetting() {
+  try {
+    localStorage.setItem(KANJI_WORD_LIMIT_STORAGE_KEY, kanjiWordLimitSetting);
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
   }
 }
 
@@ -612,6 +637,13 @@ function bindEvents() {
     });
   });
 
+  byId("kanjiWordLimit").addEventListener("change", event => {
+    kanjiWordLimitSetting = event.target.value;
+    saveKanjiWordLimitSetting();
+    renderListPageSizeSettings();
+    renderKanji();
+  });
+
   document.addEventListener("keydown", event => {
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
       event.preventDefault();
@@ -959,6 +991,7 @@ function renderKanji() {
     kanji: paged.pageItems,
     reviewOptions,
     wordsFor: item => wordsUsingKanji(item, words),
+    wordLimit: core.resolveKanjiWordLimit(kanjiWordLimitSetting),
     emptyMessage: total
       ? "조건에 맞는 한자가 없습니다."
       : "아직 등록된 한자가 없습니다. 오늘 공부에서 단어에 한자=雨(비 우)를 적어 등록하면 자동으로 모이고, + 한자 추가로 직접 넣을 수도 있습니다.",
@@ -1069,6 +1102,10 @@ function renderQuizSettings() {
 }
 
 function renderListPageSizeSettings() {
+  const limitSelect = byId("kanjiWordLimit");
+  if (limitSelect) {
+    limitSelect.value = kanjiWordLimitSetting;
+  }
   Object.keys(listPageSizeOverrides).forEach(view => {
     const select = byId(`listPageSize-${view}`);
     if (select) {

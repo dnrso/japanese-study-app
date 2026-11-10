@@ -6,7 +6,7 @@ import {
   SENTENCE_STATUS_FILTERS,
   sentenceEntryPanel
 } from "@nihongo-study/ui";
-import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
+import { DEFAULT_KANJI_WORD_LIMIT, DEFAULT_LIST_PAGE_SIZES, KANJI_WORD_LIMIT_OPTIONS, LIST_PAGE_SIZE_OPTIONS } from "@nihongo-study/core";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -464,6 +464,19 @@ function listPageSizeSelect(view, label) {
   `;
 }
 
+const KANJI_WORD_LIMIT_LABELS = { "0": "0개 (숨김)", all: "전체" };
+
+function kanjiWordLimitSelect() {
+  const options = KANJI_WORD_LIMIT_OPTIONS
+    .map(value => `<option value="${value}"${Number(value) === DEFAULT_KANJI_WORD_LIMIT ? " selected" : ""}>${KANJI_WORD_LIMIT_LABELS[value] || `${value}개`}</option>`)
+    .join("");
+  return `
+    <label>한자 카드 단어 표시 수
+      <select id="kanjiWordLimit">${options}</select>
+    </label>
+  `;
+}
+
 function settingsPageTemplate() {
   return `
     <section class="page hidden-page" id="settings">
@@ -512,6 +525,7 @@ function settingsPageTemplate() {
           ${listPageSizeSelect("grammar", "문법 페이지당 항목 수")}
           ${listPageSizeSelect("expression", "표현 페이지당 항목 수")}
           ${listPageSizeSelect("kanji", "한자 페이지당 항목 수")}
+          ${kanjiWordLimitSelect()}
         </div>
         <p class="muted">문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 따로 적용됩니다.</p>
       </section>

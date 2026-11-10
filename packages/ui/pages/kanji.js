@@ -1,10 +1,9 @@
 import { empty, icon, kanjiMemo, speakerButton } from "../components/index.js";
 
-const VISIBLE_WORDS = 3;
-
 // `wordsFor(item)` returns every word item that uses the kanji, newest first
+// `wordLimit`: 카드당 보여 줄 단어 수 (0 = 숨김, Infinity = 전체).
 // (computed by the caller so this template never scans app state).
-export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => [], emptyMessage = "한자를 추가해 보세요.", helpers }) {
+export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => [], emptyMessage = "한자를 추가해 보세요.", wordLimit = 3, helpers }) {
   const { escapeHtml, highlight } = helpers;
   return {
     html: {
@@ -14,7 +13,7 @@ export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => []
         const words = wordsFor(item);
         const memo = kanjiMemo(item, words);
         const hasInfo = Boolean(item.meaning || item.reading);
-        const shown = words.slice(0, VISIBLE_WORDS);
+        const shown = words.slice(0, wordLimit);
         return `
         <article class="kanji-card" data-item-id="${id}">
           <div class="kanji-card-head">
@@ -48,7 +47,7 @@ export function renderKanjiPage({ kanji, reviewOptions = [], wordsFor = () => []
                 </div>
               </li>`).join("")}
             </ul>
-            ${words.length > VISIBLE_WORDS ? `<button class="link-btn" type="button" data-show-kanji-words="${escapeHtml(item.title)}">단어 ${words.length}개 모두 보기</button>` : ""}
+            ${words.length > shown.length ? `<button class="link-btn" type="button" data-show-kanji-words="${escapeHtml(item.title)}">단어 ${words.length}개 모두 보기</button>` : ""}
           </div>` : ""}
         </article>
       `;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_LIST_PAGE_SIZES, LIST_PAGE_SIZE_OPTIONS, resolveListPageSize } from "@nihongo-study/core";
+import { DEFAULT_KANJI_WORD_LIMIT, DEFAULT_LIST_PAGE_SIZES, KANJI_WORD_LIMIT_OPTIONS, LIST_PAGE_SIZE_OPTIONS, resolveKanjiWordLimit, resolveListPageSize } from "@nihongo-study/core";
 
 describe("DEFAULT_LIST_PAGE_SIZES / LIST_PAGE_SIZE_OPTIONS", () => {
   it("has the expected per-view defaults", () => {
@@ -43,5 +43,28 @@ describe("resolveListPageSize", () => {
 
   it("falls back to the words default for an unknown view", () => {
     expect(resolveListPageSize("unknown-view", null)).toBe(20);
+  });
+});
+
+describe("resolveKanjiWordLimit", () => {
+  it("offers 0/1/2/3/5/all with a default of 3", () => {
+    expect(KANJI_WORD_LIMIT_OPTIONS).toEqual(["0", "1", "2", "3", "5", "all"]);
+    expect(DEFAULT_KANJI_WORD_LIMIT).toBe(3);
+  });
+
+  it("maps valid values to numbers and 'all' to Infinity", () => {
+    expect(resolveKanjiWordLimit("0")).toBe(0);
+    expect(resolveKanjiWordLimit("5")).toBe(5);
+    expect(resolveKanjiWordLimit(2)).toBe(2);
+    expect(resolveKanjiWordLimit("all")).toBe(Infinity);
+  });
+
+  it("falls back to 3 for missing or invalid values", () => {
+    expect(resolveKanjiWordLimit(null)).toBe(3);
+    expect(resolveKanjiWordLimit(undefined)).toBe(3);
+    expect(resolveKanjiWordLimit("")).toBe(3);
+    expect(resolveKanjiWordLimit("4")).toBe(3);
+    expect(resolveKanjiWordLimit("-1")).toBe(3);
+    expect(resolveKanjiWordLimit("abc")).toBe(3);
   });
 });

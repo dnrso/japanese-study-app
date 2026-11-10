@@ -248,6 +248,22 @@ describe("record ids rendered into HTML attributes", () => {
     expect(bare).toContain("내 메모");
   });
 
+  it("renderKanjiPage honours wordLimit: 0 hides, 1 caps, Infinity shows all", () => {
+    const item = { id: "k1", kind: "kanji", title: "雨", meaning: "비", reading: "う", review: "대기" };
+    const words = [1, 2, 3, 4, 5].map(n => ({ id: `w${n}`, title: `雨${n}`, reading: "あ", meaning: "비" }));
+    const render = wordLimit => patchHtml(renderKanjiPage({ kanji: [item], wordsFor: () => words, wordLimit, helpers: helpers() }));
+    const none = render(0);
+    expect(none).not.toContain("kanji-words");
+    expect(none).not.toContain("모두 보기");
+    const one = render(1);
+    expect(one.match(/class="kanji-word"/g)).toHaveLength(1);
+    expect(one).toContain("단어 5개 모두 보기");
+    const all = render(Infinity);
+    expect(all.match(/class="kanji-word"/g)).toHaveLength(5);
+    expect(all).not.toContain("모두 보기");
+    expect(render(undefined).match(/class="kanji-word"/g)).toHaveLength(3);
+  });
+
   it("renderKanjiPage shows the given empty message", () => {
     const html = patchHtml(renderKanjiPage({ kanji: [], emptyMessage: "조건에 맞는 한자가 없습니다.", helpers: helpers() }));
     expect(html).toContain("조건에 맞는 한자가 없습니다.");

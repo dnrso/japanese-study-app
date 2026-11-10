@@ -431,6 +431,20 @@ export function resolveListPageSize(view, override, defaults = DEFAULT_LIST_PAGE
   return defaults[view] || defaults.words;
 }
 
+// 한자 탭 카드에 보여 줄 "쓰인 단어" 개수 설정. 값은 select/저장용 문자열
+// ("all" = 전체)이고, resolveKanjiWordLimit()가 렌더링용 숫자(전체 = Infinity)로
+// 바꿔 준다. 알 수 없는 값은 기본값(3)으로 돌아간다.
+export const KANJI_WORD_LIMIT_OPTIONS = ["0", "1", "2", "3", "5", "all"];
+export const DEFAULT_KANJI_WORD_LIMIT = 3;
+
+export function resolveKanjiWordLimit(value) {
+  const key = String(value ?? "");
+  if (!KANJI_WORD_LIMIT_OPTIONS.includes(key)) {
+    return DEFAULT_KANJI_WORD_LIMIT;
+  }
+  return key === "all" ? Infinity : Number(key);
+}
+
 export function studyStats(state = {}) {
   const items = state.items || [];
   return {
