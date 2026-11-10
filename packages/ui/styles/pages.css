@@ -1347,3 +1347,11 @@ mark {
   box-shadow: 0 0 0 3px var(--accent-soft);
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
+
+/* 문장 카드의 추가한 날짜: 누르면 오늘 공부 탭의 그 날짜로 간다. */
+.sentence-row-date {
+  margin-right: auto;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
