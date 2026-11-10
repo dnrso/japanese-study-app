@@ -32,6 +32,7 @@ import {
   renderTodayPage,
   renderWordQuizPage,
   renderWordsPage,
+  kanjiMemo,
   noteFormFields,
   wordFormFields,
   reviewOptions,
@@ -312,12 +313,6 @@ function bindEvents() {
       return;
     }
 
-    const cycleTarget = event.target.closest("[data-cycle-review]");
-    if (cycleTarget) {
-      await cycleReview(cycleTarget.dataset.cycleReview);
-      return;
-    }
-
     const reviewQueueCycleTarget = event.target.closest("[data-cycle-review-queue]");
     if (reviewQueueCycleTarget) {
       reviewQueueDrafts = core.cycleReviewQueueDraft({
@@ -332,6 +327,9 @@ function bindEvents() {
 
     const kanjiWordsTarget = event.target.closest("[data-show-kanji-words]");
     if (kanjiWordsTarget) {
+      // Show only the words using this kanji: drop stale word filters first so
+      // they cannot hide matches, then search the 단어 tab for the character.
+      WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
       setSearch(kanjiWordsTarget.dataset.showKanjiWords);
       openPage("words");
       return;
@@ -467,6 +465,17 @@ function bindEvents() {
       resetPageIndex(kind);
       renderCards(kind, CARD_TARGETS[kind]);
     });
+  });
+  KANJI_FILTER_IDS.forEach(id => {
+    byId(id).addEventListener("change", () => {
+      resetPageIndex("kanji");
+      renderKanji();
+    });
+  });
+  byId("kanjiFilterResetBtn").addEventListener("click", () => {
+    KANJI_FILTER_IDS.forEach(id => { byId(id).value = ""; });
+    resetPageIndex("kanji");
+    renderKanji();
   });
   byId("noteDialogCancel").addEventListener("click", () => byId("noteDialog").close());
   byId("noteDialogForm").addEventListener("submit", saveNoteDialog);
@@ -828,6 +837,7 @@ function renderWordFilters() {
   renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
   renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
   CARD_KINDS.forEach(kind => renderSelectOptions(`${kind}ReviewFilter`, "전체 복습 상태", reviewOptions));
+  renderSelectOptions("kanjiReviewFilter", "전체 복습 상태", reviewOptions);
 }
 
 const WORD_FILTER_IDS = ["wordPartFilter", "wordScriptFilter", "wordReviewFilter", "wordSourceFilter"];
@@ -876,7 +886,9 @@ function renderWords() {
 
 const CARD_KINDS = ["grammar", "expression"];
 const CARD_TARGETS = { grammar: "grammarCards", expression: "expressionCards" };
-const CARD_LABELS = { grammar: "문법", expression: "표현" };
+const CARD_LABELS = { grammar: "문법", expression: "표현", kanji: "한자" };
+// Kinds that add/edit through the shared note dialog.
+const NOTE_DIALOG_KINDS = [...CARD_KINDS, "kanji"];
 
 function renderCards(kind, targetId) {
   const review = byId(`${kind}ReviewFilter`).value;
@@ -919,14 +931,50 @@ function renderCards(kind, targetId) {
   });
 }
 
+const KANJI_FILTER_IDS = ["kanjiReviewFilter", "kanjiMeaningFilter"];
+
+// Word items that use `kanjiItem`, newest first (state.items is kept newest
+// first): the word's `kanji` field names the character, falling back to the
+// word title itself.
+function wordsUsingKanji(kanjiItem, words) {
+  const char = kanjiItem.title;
+  if (!char) {
+    return [];
+  }
+  return words.filter(word => String(word.kanji || "").includes(char) || String(word.title || "").includes(char));
+}
+
 function renderKanji() {
-  const paged = paginate(items("kanji"), pageIndex.kanji, pageSizeFor("kanji"));
+  const review = byId("kanjiReviewFilter").value;
+  const meaningFilter = byId("kanjiMeaningFilter").value;
+  const filtering = Boolean(review || meaningFilter);
+  const words = core.itemsByKind(state.items, "word");
+  const total = core.itemsByKind(state.items, "kanji").length;
+  const rows = items("kanji").filter(item =>
+    (!review || (item.review || "대기") === review) &&
+    (!meaningFilter || (meaningFilter === "empty") === !String(item.meaning || "").trim()));
+  const paged = paginate(rows, pageIndex.kanji, pageSizeFor("kanji"));
   pageIndex.kanji = paged.page;
   applyPagePatch(renderKanjiPage({
     kanji: paged.pageItems,
+    reviewOptions,
+    wordsFor: item => wordsUsingKanji(item, words),
+    emptyMessage: total
+      ? "조건에 맞는 한자가 없습니다."
+      : "아직 등록된 한자가 없습니다. 오늘 공부에서 단어에 한자=雨(비 우)를 적어 등록하면 자동으로 모이고, + 한자 추가로 직접 넣을 수도 있습니다.",
     helpers: renderHelpers()
   }));
   applyPagePatch({
+    text: {
+      kanjiTotalCount: `${total}개`,
+      kanjiFilterSummary: [
+        filtering || searchTerm ? `${rows.length}개 표시` : "",
+        rows.length ? "최근 등록순" : ""
+      ].filter(Boolean).join(" · ")
+    },
+    hidden: {
+      kanjiFilterResetBtn: !filtering
+    },
     html: {
       kanjiPagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "kanji" })
     }
@@ -1388,7 +1436,7 @@ async function promptAddItem(kind) {
     openWordDialog();
     return;
   }
-  if (CARD_KINDS.includes(kind)) {
+  if (NOTE_DIALOG_KINDS.includes(kind)) {
     openNoteDialog(kind);
     return;
   }
@@ -1446,7 +1494,7 @@ async function promptEditItem(id) {
     openWordDialog(item);
     return;
   }
-  if (CARD_KINDS.includes(item.kind)) {
+  if (NOTE_DIALOG_KINDS.includes(item.kind)) {
     openNoteDialog(item.kind, item);
     return;
   }
@@ -1524,7 +1572,12 @@ function openNoteDialog(kind, item = null) {
   noteDialogKind = kind;
   noteDialogItemId = item?.id || "";
   byId("noteDialogTitle").textContent = `${CARD_LABELS[kind]} ${item ? "수정" : "추가"}`;
-  byId("noteDialogFields").innerHTML = noteFormFields({ kind, item: item || {}, escapeHtml });
+  byId("noteDialogFields").innerHTML = noteFormFields({
+    kind,
+    item: item || {},
+    escapeHtml,
+    linkedWords: kind === "kanji" && item ? wordsUsingKanji(item, core.itemsByKind(state.items, "word")) : []
+  });
   byId("noteDialog").showModal();
   byId("noteDialogForm").elements.title.focus();
 }
@@ -1534,11 +1587,20 @@ async function saveNoteDialog(event) {
   const form = event.currentTarget;
   const names = noteDialogKind === "grammar" ? ["title", "meaning", "note"] : ["title", "reading", "meaning", "note"];
   const fields = Object.fromEntries(names.map(name => [name, String(form.elements[name].value || "").trim()]));
-  if (!fields.title || !fields.meaning) {
+  // 한자 only needs the character; 뜻/읽기 can be filled in later.
+  if (!fields.title || (noteDialogKind !== "kanji" && !fields.meaning)) {
     form.reportValidity();
     return;
   }
   const existing = state.items.find(item => item.id === noteDialogItemId);
+  if (existing && noteDialogKind === "kanji" && !fields.note && existing.note) {
+    // The auto-generated source-word note is hidden in the form; an empty memo
+    // field must not wipe it.
+    const linked = wordsUsingKanji(existing, core.itemsByKind(state.items, "word"));
+    if (!kanjiMemo(existing, linked)) {
+      fields.note = existing.note;
+    }
+  }
   state = await store.upsertItem(existing
     ? { ...existing, ...fields, studyDate: selectedDate }
     : {
@@ -1593,17 +1655,6 @@ async function deleteDailyEntry(id) {
     return;
   }
   state = await store.deleteDailyEntry(id, selectedDate);
-  renderAll();
-}
-
-async function cycleReview(id) {
-  const item = state.items.find(candidate => candidate.id === id);
-  if (!item) {
-    return;
-  }
-  const currentIndex = reviewOptions.indexOf(item.review || "대기");
-  const nextReview = reviewOptions[((currentIndex >= 0 ? currentIndex : reviewOptions.length - 1) + 1) % reviewOptions.length];
-  state = await store.updateItemReview(id, nextReview, selectedDate);
   renderAll();
 }
 

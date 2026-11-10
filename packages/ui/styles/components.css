@@ -730,65 +730,111 @@ h1 {
 
 .kanji-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 12px;
+  align-items: stretch;
+}
+
+.kanji-grid > .empty-state {
+  grid-column: 1 / -1;
 }
 
 .kanji-card {
-  min-height: 188px;
-  padding: 12px;
-  display: grid;
-  grid-template-rows: auto 1fr auto auto;
-  gap: 8px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.kanji-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .kanji-char {
-  justify-self: center;
-  font-size: 64px;
+  flex: 0 0 auto;
+  font-size: 44px;
   line-height: 1;
   font-weight: 900;
 }
 
-.kanji-card-top {
-  min-height: 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
 .kanji-info {
   display: grid;
-  gap: 4px;
+  flex: 1 1 auto;
+  gap: 3px;
   align-content: start;
-  min-height: 44px;
+  justify-items: start;
+  min-width: 0;
 }
 
 .kanji-info strong {
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 800;
   color: var(--text);
 }
 
 .kanji-info p {
   margin: 0;
-  color: var(--muted-strong);
+  color: var(--muted);
   font-size: 13px;
+}
+
+.kanji-info .link-btn {
+  white-space: nowrap;
+}
+
+.kanji-info .kanji-memo {
+  line-height: 1.5;
+}
+
+.kanji-words {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  justify-items: start;
+}
+
+.kanji-words-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.kanji-word-list {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kanji-word {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.kanji-word strong {
+  flex: 0 0 auto;
   font-weight: 800;
 }
 
-.kanji-card .card-actions {
-  margin-top: 0;
-  justify-content: center;
+.kanji-word-reading {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
 }
 
-.kanji-card .card-actions .ghost-btn {
-  width: 100%;
-}
-
-.kanji-card .card-actions .danger-btn {
-  display: none;
+.kanji-word-meaning {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quiz-grid {

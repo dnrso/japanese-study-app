@@ -64,9 +64,37 @@ export function noteCard(item, reviewOptions, helpers, options = {}) {
   `;
 }
 
-// Fields for the 문법/표현 add/edit dialog.
-export function noteFormFields({ kind, item = {}, escapeHtml }) {
+// A kanji's note is auto-filled with the source word it was registered from
+// ("雨 (あめ)"). That is bookkeeping, not a user 메모: return the note only when
+// it is not exactly one of the linked words' `title` / `title (reading)`.
+export function kanjiMemo(item, linkedWords = []) {
+  const note = String(item.note || "").trim();
+  if (!note) {
+    return "";
+  }
+  const flat = value => String(value || "").replace(/\s+/g, " ").trim();
+  const autoNotes = linkedWords.flatMap(word => {
+    const title = flat(word.title);
+    const reading = flat(word.reading);
+    return reading ? [title, `${title} (${reading})`] : [title];
+  });
+  return autoNotes.includes(flat(note)) ? "" : note;
+}
+
+// Fields for the 문법/표현/한자 add/edit dialog. `linkedWords` (한자 only) are
+// the word items using the kanji, used to hide the auto-generated source note.
+export function noteFormFields({ kind, item = {}, escapeHtml, linkedWords = [] }) {
   const value = key => escapeHtml(item[key] || "");
+  if (kind === "kanji") {
+    return `
+      <div class="form-grid">
+        <label class="form-field"><span>한자 <em>*</em></span><input name="title" lang="ja" required maxlength="8" value="${value("title")}" placeholder="例) 雨" /></label>
+        <label class="form-field"><span>뜻</span><input name="meaning" value="${value("meaning")}" placeholder="예: 비 우" /></label>
+        <label class="form-field form-field-wide"><span>읽기</span><input name="reading" lang="ja" value="${value("reading")}" placeholder="예: 음 ウ / 훈 あめ" /></label>
+        <label class="form-field form-field-wide"><span>메모</span><input name="note" value="${escapeHtml(kanjiMemo(item, linkedWords))}" /></label>
+      </div>
+    `;
+  }
   if (kind === "grammar") {
     return `
       <div class="form-grid">

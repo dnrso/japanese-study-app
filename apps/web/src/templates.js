@@ -350,8 +350,17 @@ function kanjiPageTemplate() {
     <section class="page hidden-page" id="kanji">
       <section class="panel section" id="kanji-grid">
         <div class="panel-header">
-          <h2 class="panel-title">한자 노트</h2>
+          <h2 class="panel-title">한자 노트 <span class="panel-count" id="kanjiTotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="kanji" data-add-item>+ 한자 추가</button>
+        </div>
+        <div class="table-tools">
+          <select id="kanjiReviewFilter" aria-label="복습"><option value="">전체 복습 상태</option></select>
+          <select id="kanjiMeaningFilter" aria-label="뜻">
+            <option value="">전체</option>
+            <option value="empty">뜻 미입력</option>
+            <option value="filled">뜻 입력됨</option>
+          </select>
+          <p class="table-tools-summary"><span id="kanjiFilterSummary"></span><button class="link-btn" id="kanjiFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="kanji-grid" id="kanjiCards"></div>
         <div id="kanjiPagination"></div>

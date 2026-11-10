@@ -208,13 +208,49 @@ describe("record ids rendered into HTML attributes", () => {
   });
 
   it("renderKanjiPage does not let an id break out of its attributes", () => {
+    const words = [1, 2, 3, 4].map(n => hostileWord({ id: `w${n}`, title: `雨${n}` }));
     const html = patchHtml(renderKanjiPage({
-      kanji: [hostileWord({ kind: "kanji", title: "水" })],
+      kanji: [hostileWord({ kind: "kanji", title: `雨" onclick="x` })],
+      reviewOptions: ["대기", "오늘"],
+      wordsFor: () => words,
       helpers: helpers()
     }));
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-edit-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-show-kanji-words="${escapeHtml('雨" onclick="x')}"`);
+  });
+
+  it("renderKanjiPage shows linked words, caps them at 3 and hides the auto source note", () => {
+    const item = { id: "k1", kind: "kanji", title: "雨", meaning: "", reading: "", note: "雨 (あめ)", review: "대기" };
+    const words = [
+      { id: "w1", title: "雨", reading: "あめ", meaning: "비" },
+      { id: "w2", title: "大雨", reading: "おおあめ", meaning: "큰비" },
+      { id: "w3", title: "雨天", reading: "うてん", meaning: "우천" },
+      { id: "w4", title: "梅雨", reading: "つゆ", meaning: "장마" }
+    ];
+    const html = patchHtml(renderKanjiPage({ kanji: [item], reviewOptions: ["대기"], wordsFor: () => words, helpers: helpers() }));
+    expect(html).toContain("쓰인 단어");
+    expect(html.match(/class="kanji-word"/g)).toHaveLength(3);
+    expect(html).toContain("단어 4개 모두 보기");
+    expect(html).toContain("뜻·읽기 추가");
+    expect(html).not.toContain("kanji-memo");
+    const bare = patchHtml(renderKanjiPage({
+      kanji: [{ ...item, meaning: "비 우", note: "내 메모" }],
+      wordsFor: () => [],
+      helpers: helpers()
+    }));
+    expect(bare).not.toContain("쓰인 단어");
+    expect(bare).not.toContain("뜻·읽기 추가");
+    expect(bare).toContain("내 메모");
+  });
+
+  it("renderKanjiPage shows the given empty message", () => {
+    const html = patchHtml(renderKanjiPage({ kanji: [], emptyMessage: "조건에 맞는 한자가 없습니다.", helpers: helpers() }));
+    expect(html).toContain("조건에 맞는 한자가 없습니다.");
   });
 
   it("renderReviewPage does not let an id break out of its attributes", () => {
