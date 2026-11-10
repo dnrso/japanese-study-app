@@ -7,12 +7,12 @@ const CHOICE_ATTRIBUTES = {
 // Renders one quiz run: the question view while the session is in progress,
 // or the result view once it is finished. `family` is word | kanji | sentence;
 // `restartKind` is the data-quiz-kind that starts the same quiz again.
-export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulativeLabel, layout = "grid", restartKind }, helpers) {
+export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulativeLabel, layout = "grid", restartKind, itemById, missedCard, missedListClass }, helpers) {
   if (!quiz.question || !quiz.session) {
     return { hidden: true, html: "" };
   }
   if (quiz.session.finished) {
-    return { hidden: false, html: quizResult({ session: quiz.session, title, restartKind }, helpers) };
+    return { hidden: false, html: quizResult({ session: quiz.session, title, restartKind, itemById, missedCard, missedListClass }, helpers) };
   }
 
   const { item, choices } = quiz.question;
@@ -68,24 +68,37 @@ function quizFeedback(quiz, family) {
   `;
 }
 
-function quizResult({ session, title, restartKind }, { escapeHtml, highlight }) {
-  const missed = session.missed.length
-    ? `<ul class="quiz-missed-list">${session.missed.map(entry => `
-        <li><span class="quiz-missed-prompt">${highlight(entry.prompt)}</span><span class="quiz-missed-arrow" aria-hidden="true">→</span><strong>${highlight(entry.answer)}</strong></li>
-      `).join("")}</ul>`
-    : `<p class="quiz-missed-empty">모두 맞혔습니다!</p>`;
+// Missed entries are rendered with the tab's own card, from the CURRENT item in
+// app state (so edits/review changes show up); deleted items are skipped.
+function quizResult({ session, title, restartKind, itemById, missedCard, missedListClass }, helpers) {
+  const { escapeHtml } = helpers;
+  const seen = new Set();
+  const cards = [];
+  session.missed.forEach(entry => {
+    const key = entry.id ?? `${entry.prompt}\u0000${entry.answer}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    const item = typeof itemById === "function" ? itemById(entry.id) : null;
+    if (item && typeof missedCard === "function") {
+      cards.push(missedCard(item));
+    }
+  });
   return `
     <div class="quiz-session-header">
       <strong class="quiz-session-title">${title} 결과</strong>
     </div>
     <div class="quiz-result">
       <p class="quiz-result-score">${session.total}문제 중 <strong>${session.correct}문제</strong> 정답</p>
-      ${session.missed.length ? `<h3 class="quiz-missed-title">틀린 문제</h3>` : ""}
-      ${missed}
       <div class="quiz-result-actions">
         <button class="primary-btn" type="button" data-quiz-kind="${escapeHtml(restartKind)}">다시 풀기</button>
         <button class="ghost-btn" type="button" data-quiz-exit>목록으로</button>
       </div>
+      ${cards.length
+        ? `<h3 class="quiz-missed-title">틀린 문제 ${cards.length}개</h3>
+           <div class="quiz-missed-list ${escapeHtml(missedListClass || "")}">${cards.join("")}</div>`
+        : `<p class="quiz-missed-empty">모두 맞혔습니다!</p>`}
     </div>
   `;
 }

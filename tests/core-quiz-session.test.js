@@ -28,13 +28,13 @@ describe("quiz session", () => {
   it("counts correct answers and collects missed items (question -> answer)", () => {
     let session = createQuizSession(5);
     session = recordQuizAnswer(session, question("a", "M-a"), true);
-    session = recordQuizAnswer(session, question("b", "M-b"), false);
+    session = recordQuizAnswer(session, question("b", "M-b"), false, "틀린 보기");
     session = recordQuizAnswer(session, question("c", "T-c", "meaningToJp"), false);
     expect(session.correct).toBe(1);
     expect(session.seenIds).toEqual(["a", "b", "c"]);
     expect(session.missed).toEqual([
-      { id: "b", prompt: "Tb", answer: "M-b" },
-      { id: "c", prompt: "Mc", answer: "T-c" }
+      { id: "b", prompt: "Tb", answer: "M-b", item: { id: "b", title: "Tb", meaning: "Mb" }, selectedAnswer: "틀린 보기" },
+      { id: "c", prompt: "Mc", answer: "T-c", item: { id: "c", title: "Tc", meaning: "Mc" }, selectedAnswer: "" }
     ]);
   });
 

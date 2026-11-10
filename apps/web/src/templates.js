@@ -46,7 +46,8 @@ export function renderAppShell(byId) {
 
         <label class="search" aria-label="전체 검색">
           <span class="search-icon">${icon("search")}</span>
-          <input id="globalSearch" placeholder="단어, 문법, 표현, 자료 검색" />
+          <input id="globalSearch" placeholder="단어, 문장, 문법, 표현, 한자, 자료 검색" />
+          <button class="search-clear" id="searchClearBtn" type="button" data-clear-search aria-label="검색 지우기" hidden>✕</button>
           <span class="shortcut">Ctrl K</span>
         </label>
 
@@ -87,6 +88,7 @@ export function renderAppShell(byId) {
         <div id="mobileAdSlot" class="mobile-ad-slot" aria-hidden="true">광고</div>
 
         <main class="main">
+          <div id="searchStatus" class="search-status" hidden></div>
           ${homePageTemplate()}
           ${todayPageTemplate()}
           ${sourcesPageTemplate()}

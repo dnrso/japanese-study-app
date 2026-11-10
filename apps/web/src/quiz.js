@@ -162,7 +162,7 @@ export function submitSentenceQuizChoice(selectedAnswer, ctx) {
     answered: true,
     selectedAnswer,
     result: { correct, correctAnswer: quiz.question.correctAnswer },
-    session: core.recordQuizAnswer(quiz.session, quiz.question, correct)
+    session: core.recordQuizAnswer(quiz.session, quiz.question, correct, selectedAnswer)
   });
   ctx.renderSentenceQuiz();
 }
@@ -191,7 +191,7 @@ export async function submitQuizChoice(kind, selectedAnswer, ctx) {
     answered: true,
     selectedAnswer,
     result: response.result,
-    session: core.recordQuizAnswer(quiz.session, quiz.question, Boolean(response.result?.correct))
+    session: core.recordQuizAnswer(quiz.session, { ...quiz.question, item: item || quiz.question.item }, Boolean(response.result?.correct), selectedAnswer)
   };
   if (kind === "kanji") {
     ctx.setKanjiQuiz(nextQuiz);
