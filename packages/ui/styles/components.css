@@ -313,6 +313,7 @@ h1 {
 }
 
 .study-card .note-card-meaning {
+  margin-top: 6px;
   color: var(--text);
   font-size: 15px;
   line-height: 1.6;
@@ -347,13 +348,6 @@ h1 {
   margin-top: auto;
   padding-top: 4px;
   font-size: 13px;
-}
-
-.note-card-source-label {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 750;
 }
 
 .note-example-list {

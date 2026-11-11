@@ -58,7 +58,7 @@ function exampleBlock(item, helpers) {
       </div>
     </li>`;
   }).join("");
-  return `<div class="note-card-source"><span class="note-card-source-label">예문</span><ul class="note-example-list">${rows}</ul></div>`;
+  return `<div class="note-card-source"><ul class="note-example-list">${rows}</ul></div>`;
 }
 
 // Study card: title row (optional kind badge, speaker, title, review select,
