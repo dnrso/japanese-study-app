@@ -315,14 +315,16 @@ function cardPageTemplate(kind, sectionId, title, targetId, buttonLabel, pageId 
           <h2 class="panel-title">${title} <span class="panel-count" id="${kind}TotalCount"></span></h2>
           <button class="primary-btn" type="button" data-kind="${kind}" data-add-item>${buttonLabel}</button>
         </div>
-        <div class="table-tools">
-          <select id="${kind}ReviewFilter" aria-label="복습"><option value="">전체 복습 상태</option></select>
-          <select id="${kind}SourceFilter" aria-label="출처">
-            <option value="">전체 출처</option>
-            <option value="sentence">문장 연결</option>
-            <option value="manual">직접 추가</option>
+        <div class="card-tools">
+          <select id="${kind}Sort" aria-label="정렬">
+            <option value="recent">최근 등록순</option>
+            <option value="oldest">오래된순</option>
+            <option value="kana">가나다순</option>
+            <option value="due">복습 필요순</option>
           </select>
-          <p class="table-tools-summary"><span id="${kind}FilterSummary"></span><button class="link-btn" id="${kind}FilterResetBtn" type="button" hidden>필터 초기화</button></p>
+          <div class="segmented" id="${kind}ReviewTabs" role="group" aria-label="복습 상태"></div>
+          <div class="segmented" id="${kind}SourceTabs" role="group" aria-label="출처"></div>
+          <p class="table-tools-summary"><span id="${kind}FilterSummary"></span></p>
         </div>
         <div class="cards study-card-grid" id="${targetId}"></div>
         <div id="${kind}Pagination"></div>
@@ -339,6 +341,7 @@ function noteDialogTemplate() {
         <h2 class="panel-title" id="noteDialogTitle">문법 추가</h2>
         <div id="noteDialogFields"></div>
         <div class="item-dialog-actions">
+          <button class="ghost-btn dialog-delete-btn" type="button" id="noteDialogDelete" hidden>삭제</button>
           <button class="ghost-btn" type="button" value="cancel" id="noteDialogCancel">취소</button>
           <button class="primary-btn" type="submit" value="save">저장</button>
         </div>

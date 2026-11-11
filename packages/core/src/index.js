@@ -666,6 +666,64 @@ function isReviewQueueItem(item) {
   return ["오늘", "대기"].includes(review) && item.kind !== "source";
 }
 
+// 복습 필요 = in the review queue (review 오늘/대기); 예정 = every other item.
+export function isReviewDue(item = {}) {
+  return isReviewQueueItem(item);
+}
+
+export const STUDY_CARD_SORT_OPTIONS = [
+  ["recent", "최근 등록순"],
+  ["oldest", "오래된순"],
+  ["kana", "가나다순"],
+  ["due", "복습 필요순"]
+];
+
+function sortTitleKey(item) {
+  return String(item.title || "").trim().replace(/^[〜~]+\s*/, "");
+}
+
+// Items arrive newest first (store order), so "recent" keeps that order,
+// "oldest" reverses it, and "due" is a stable partition: due items first, each
+// group still newest first. Never mutates `list`.
+export function sortStudyCards(list = [], sortKey = "recent") {
+  const rows = [...list];
+  if (sortKey === "oldest") {
+    return rows.reverse();
+  }
+  if (sortKey === "kana") {
+    return rows.sort((a, b) => sortTitleKey(a).localeCompare(sortTitleKey(b), "ja"));
+  }
+  if (sortKey === "due") {
+    return [...rows.filter(isReviewDue), ...rows.filter(item => !isReviewDue(item))];
+  }
+  return rows;
+}
+
+export function normalizeStudyCardSort(value) {
+  return STUDY_CARD_SORT_OPTIONS.some(([key]) => key === value) ? value : "recent";
+}
+
+// Counts for the 문법/표현 filter tabs, within one (already search-narrowed)
+// list. Each group's counts ignore the other group's selection.
+export function studyCardFilterCounts(list = []) {
+  const due = list.filter(isReviewDue).length;
+  const sentence = list.filter(item => uniqueSourceSentences(item.sourceSentences).length > 0).length;
+  return {
+    review: { all: list.length, due, scheduled: list.length - due },
+    source: { all: list.length, sentence, manual: list.length - sentence }
+  };
+}
+
+export function matchesStudyCardFilters(item, { review = "", source = "" } = {}) {
+  if (review && isReviewDue(item) !== (review === "due")) {
+    return false;
+  }
+  if (source && (uniqueSourceSentences(item.sourceSentences).length > 0) !== (source === "sentence")) {
+    return false;
+  }
+  return true;
+}
+
 function wordSortValue(item, key) {
   if (key === "sourceSentence") {
     return (item.sourceSentences || [])

@@ -178,3 +178,47 @@ describe("reviewQueueDueDate / reviewSnapshot", () => {
     expect(reviewSnapshot({})).toEqual({ review: "대기", reviewDueDate: "", lastReviewedAt: "" });
   });
 });
+
+import {
+  isReviewDue,
+  matchesStudyCardFilters,
+  normalizeStudyCardSort,
+  sortStudyCards,
+  studyCardFilterCounts
+} from "@nihongo-study/core";
+
+describe("study card sort and filters", () => {
+  const list = [
+    { id: "a", title: "〜ている", review: "내일" },
+    { id: "b", title: "あげる", review: "대기", sourceSentences: [{ id: "s1", title: "x", studyDate: "2026-01-01" }] },
+    { id: "c", title: "~がち", review: "오늘" },
+    { id: "d", title: "いい", review: "일주일" }
+  ];
+  const ids = rows => rows.map(row => row.id);
+
+  it("keeps recent order, reverses for oldest, without mutating", () => {
+    expect(ids(sortStudyCards(list, "recent"))).toEqual(["a", "b", "c", "d"]);
+    expect(ids(sortStudyCards(list, "oldest"))).toEqual(["d", "c", "b", "a"]);
+    expect(ids(list)).toEqual(["a", "b", "c", "d"]);
+  });
+  it("sorts by title ignoring a leading 〜/~", () => {
+    expect(ids(sortStudyCards(list, "kana"))).toEqual(["b", "d", "c", "a"]);
+  });
+  it("puts due items first, then recent", () => {
+    expect(ids(sortStudyCards(list, "due"))).toEqual(["b", "c", "a", "d"]);
+    expect(isReviewDue(list[0])).toBe(false);
+  });
+  it("normalizes unknown sort keys", () => {
+    expect(normalizeStudyCardSort("zzz")).toBe("recent");
+    expect(normalizeStudyCardSort("kana")).toBe("kana");
+  });
+  it("counts and matches filters", () => {
+    expect(studyCardFilterCounts(list)).toEqual({
+      review: { all: 4, due: 2, scheduled: 2 },
+      source: { all: 4, sentence: 1, manual: 3 }
+    });
+    expect(ids(list.filter(item => matchesStudyCardFilters(item, { review: "due", source: "sentence" })))).toEqual(["b"]);
+    expect(ids(list.filter(item => matchesStudyCardFilters(item, { review: "scheduled" })))).toEqual(["a", "d"]);
+    expect(list.every(item => matchesStudyCardFilters(item, {}))).toBe(true);
+  });
+});
