@@ -324,9 +324,19 @@ h1 {
 }
 
 .study-card .note-card-note {
-  color: var(--muted);
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent-soft);
+  color: var(--muted-strong);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.note-card-note-label {
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .note-card-source {
@@ -334,6 +344,8 @@ h1 {
   align-items: baseline;
   gap: 8px;
   min-width: 0;
+  margin-top: auto;
+  padding-top: 4px;
   font-size: 13px;
 }
 
@@ -344,19 +356,74 @@ h1 {
   font-weight: 750;
 }
 
-.note-card-source .word-source-links {
+.note-example-list {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-example {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.note-example-speaker {
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding-top: 1px;
+}
+
+.note-example-speaker .speaker-btn {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border-radius: 6px;
+}
+
+.note-example-speaker .speaker-btn .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.note-example-body {
   min-width: 0;
   flex: 1 1 auto;
 }
 
-.note-card-source .source-link {
-  color: var(--muted-strong);
+.note-card-source .note-example-link {
+  display: inline;
+  max-width: 100%;
+  padding: 0;
+  color: var(--accent-deep);
   font-weight: 500;
+  text-align: left;
+  cursor: pointer;
 }
 
-.note-card-source .source-link:hover {
-  color: var(--accent-deep);
+.note-card-source .note-example-link:hover .note-example-text {
   text-decoration: underline;
+}
+
+.note-example-chevron {
+  margin-left: 4px;
+  font-weight: 800;
+}
+
+.example-hit {
+  font-weight: 800;
+}
+
+.study-card .note-example-meaning {
+  margin: 1px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 /* Shared pagination control bar (문장/단어/문법/표현/한자 list pages) - see
@@ -719,6 +786,7 @@ h1 {
 .item-dialog-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 18px;
 }
@@ -1616,4 +1684,49 @@ mark.search-hit {
 
 .search-clear[hidden] {
   display: none;
+}
+
+.item-dialog-actions .dialog-delete-btn {
+  margin-right: auto;
+  padding: 6px 4px;
+  background: transparent;
+  color: var(--red);
+  font-weight: 800;
+}
+
+.item-dialog-actions .dialog-delete-btn:hover {
+  text-decoration: underline;
+}
+
+/* 문법/표현 toolbar: sort select + counted segmented filters. */
+.card-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.card-tools .segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.card-tools .segmented-btn.is-empty {
+  opacity: 0.5;
+}
+
+.card-tools .segmented-btn .count {
+  margin-left: 4px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.card-tools select {
+  width: auto;
+  min-width: 110px;
+}
+
+.card-tools .table-tools-summary {
+  margin-left: auto;
 }

@@ -385,6 +385,16 @@ function bindEvents() {
       return;
     }
 
+    const cardFilterTarget = event.target.closest("[data-card-filter]");
+    if (cardFilterTarget) {
+      const { cardKind, cardFilter, cardValue } = cardFilterTarget.dataset;
+      cardFilters[cardKind][cardFilter] = cardValue;
+      resetPageIndex(cardKind);
+      renderCards(cardKind, CARD_TARGETS[cardKind]);
+      document.querySelector(`[data-card-kind="${cardKind}"][data-card-filter="${cardFilter}"][data-card-value="${cardValue}"]`)?.focus();
+      return;
+    }
+
     const deleteTarget = event.target.closest("[data-delete-item]");
     if (deleteTarget) {
       await deleteItem(deleteTarget.dataset.deleteItem);
@@ -557,14 +567,8 @@ function bindEvents() {
     }
   });
   CARD_KINDS.forEach(kind => {
-    [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => {
-      byId(id).addEventListener("change", () => {
-        resetPageIndex(kind);
-        renderCards(kind, CARD_TARGETS[kind]);
-      });
-    });
-    byId(`${kind}FilterResetBtn`).addEventListener("click", () => {
-      [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => { byId(id).value = ""; });
+    byId(`${kind}Sort`).addEventListener("change", event => {
+      cardSort[kind] = core.normalizeStudyCardSort(event.target.value);
       resetPageIndex(kind);
       renderCards(kind, CARD_TARGETS[kind]);
     });
@@ -581,6 +585,16 @@ function bindEvents() {
     renderKanji();
   });
   byId("noteDialogCancel").addEventListener("click", () => byId("noteDialog").close());
+  byId("noteDialogDelete").addEventListener("click", async () => {
+    const id = noteDialogItemId;
+    if (!id) {
+      return;
+    }
+    const deleted = await deleteItem(id);
+    if (deleted) {
+      byId("noteDialog").close();
+    }
+  });
   byId("noteDialogForm").addEventListener("submit", saveNoteDialog);
   byId("wordDialogCancel").addEventListener("click", () => byId("wordDialog").close());
   byId("wordDialogForm").addEventListener("submit", saveWordDialog);
@@ -971,7 +985,6 @@ function renderWordFilters() {
   renderSelectOptions("wordPartFilter", "전체 품사", partOptions);
   renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
   renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
-  CARD_KINDS.forEach(kind => renderSelectOptions(`${kind}ReviewFilter`, "전체 복습 상태", reviewOptions));
   renderSelectOptions("kanjiReviewFilter", "전체 복습 상태", reviewOptions);
 }
 
@@ -1025,16 +1038,29 @@ const CARD_LABELS = { grammar: "문법", expression: "표현", kanji: "한자" }
 // Kinds that add/edit through the shared note dialog.
 const NOTE_DIALOG_KINDS = [...CARD_KINDS, "kanji"];
 
+const cardFilters = {
+  grammar: { review: "", source: "" },
+  expression: { review: "", source: "" }
+};
+const cardSort = { grammar: "recent", expression: "recent" };
+
+function segmentedGroup(kind, filter, options, selected) {
+  return options.map(([value, label, count]) => {
+    const active = selected === value;
+    const empty = count === 0 && !active;
+    return `<button class="segmented-btn ${active ? "active" : ""} ${empty ? "is-empty" : ""}" type="button" data-card-kind="${kind}" data-card-filter="${filter}" data-card-value="${value}" aria-pressed="${active}">${label}${count === undefined ? "" : ` <span class="count">${count}</span>`}</button>`;
+  }).join("");
+}
+
 function renderCards(kind, targetId) {
-  const review = byId(`${kind}ReviewFilter`).value;
-  const source = byId(`${kind}SourceFilter`).value;
+  const { review, source } = cardFilters[kind];
   const filtering = Boolean(review || source);
   const visible = items(kind);
-  const rows = visible.filter(item => {
-    const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
-    return (!review || (item.review || "대기") === review) &&
-      (!source || (source === "sentence") === fromSentence);
-  });
+  const counts = core.studyCardFilterCounts(visible);
+  const rows = core.sortStudyCards(
+    visible.filter(item => core.matchesStudyCardFilters(item, { review, source })),
+    cardSort[kind]
+  );
   const paged = paginate(rows, pageIndex[kind], pageSizeFor(kind));
   pageIndex[kind] = paged.page;
   const total = core.itemsByKind(state.items, kind).length;
@@ -1052,18 +1078,26 @@ function renderCards(kind, targetId) {
   applyPagePatch({
     text: {
       [`${kind}TotalCount`]: `${total}개`,
-      [`${kind}FilterSummary`]: [
-        filtering || searchTerm ? `${rows.length}개 표시` : "",
-        rows.length ? "최근 등록순" : ""
-      ].filter(Boolean).join(" · ")
-    },
-    hidden: {
-      [`${kind}FilterResetBtn`]: !filtering
+      [`${kind}FilterSummary`]: filtering || searchTerm ? `${rows.length}개 표시` : ""
     },
     html: {
+      [`${kind}ReviewTabs`]: segmentedGroup(kind, "review", [
+        ["", "전체", counts.review.all],
+        ["due", "복습 필요", counts.review.due],
+        ["scheduled", "예정", counts.review.scheduled]
+      ], review),
+      [`${kind}SourceTabs`]: segmentedGroup(kind, "source", [
+        ["", "전체", undefined],
+        ["sentence", "문장", counts.source.sentence],
+        ["manual", "직접 추가", counts.source.manual]
+      ], source),
       [`${kind}Pagination`]: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: kind })
     }
   });
+  const sortSelect = byId(`${kind}Sort`);
+  if (sortSelect.value !== cardSort[kind]) {
+    sortSelect.value = cardSort[kind];
+  }
 }
 
 const KANJI_FILTER_IDS = ["kanjiReviewFilter", "kanjiMeaningFilter"];
@@ -1870,6 +1904,7 @@ function openNoteDialog(kind, item = null) {
   noteDialogKind = kind;
   noteDialogItemId = item?.id || "";
   byId("noteDialogTitle").textContent = `${CARD_LABELS[kind]} ${item ? "수정" : "추가"}`;
+  byId("noteDialogDelete").hidden = !item;
   byId("noteDialogFields").innerHTML = noteFormFields({
     kind,
     item: item || {},
@@ -1940,10 +1975,11 @@ function normalizeSourceProgressInput(value) {
 async function deleteItem(id) {
   const item = state.items.find(candidate => candidate.id === id);
   if (!item || !window.confirm(`${item.title} 항목을 삭제할까요?`)) {
-    return;
+    return false;
   }
   state = await store.deleteItem(id, selectedDate);
   renderAll();
+  return true;
 }
 
 async function deleteDailyEntry(id) {
@@ -2250,8 +2286,23 @@ function renderHelpers({ marks = true } = {}) {
     escapeHtml,
     highlight: marks ? highlight : escapeHtml,
     kindLabels,
-    reviewStatusText: core.reviewStatusText
+    reviewStatusText: core.reviewStatusText,
+    sentenceMeaning
   };
+}
+
+// Korean meaning of a daily sentence entry by id (sourceSentences only carry
+// id/title/studyDate). Index rebuilt only when the entries array changes.
+let sentenceMeaningIndex = { entries: null, map: new Map() };
+function sentenceMeaning(id) {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
+  if (sentenceMeaningIndex.entries !== entries) {
+    sentenceMeaningIndex = {
+      entries,
+      map: new Map(entries.filter(entry => entry.meaning).map(entry => [entry.id, entry.meaning]))
+    };
+  }
+  return sentenceMeaningIndex.map.get(id) || "";
 }
 
 function items(kind) {
