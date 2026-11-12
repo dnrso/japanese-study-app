@@ -553,7 +553,7 @@ function settingsPageTemplate() {
         <div class="panel-header settings-panel-header">
           <div>
             <h2 class="panel-title">퀴즈</h2>
-            <p class="muted settings-panel-desc">문제 글자 크기와 정답을 맞혔을 때의 복습 일정을 정합니다.</p>
+            <p class="muted settings-panel-desc">문제 글자 크기와 퀴즈 결과의 복습 일정 반영을 정합니다.</p>
           </div>
         </div>
         ${settingRow({
@@ -570,17 +570,10 @@ function settingsPageTemplate() {
         </div>`
         })}
         ${settingRow({
-          label: "정답을 맞히면 복습 일정 미루기",
-          labelId: "quizReviewOnCorrectLabel",
-          description: "퀴즈에서 맞힌 항목의 복습 상태를 아래 값으로 바꿉니다.",
-          control: `<input id="quizReviewOnCorrectCheckbox" type="checkbox" class="setting-switch" checked aria-labelledby="quizReviewOnCorrectLabel" />`
-        })}
-        ${settingRow({
-          label: "미룰 기간",
-          labelId: "quizCorrectReviewLabel",
-          extraClass: "setting-row-dependent",
-          rowId: "quizCorrectReviewRow",
-          control: `<select id="quizCorrectReviewSelect" aria-labelledby="quizCorrectReviewLabel"></select>`
+          label: "퀴즈 결과를 복습 일정에 반영",
+          labelId: "quizReflectInReviewLabel",
+          description: "틀리면 오늘 복습으로, 복습할 차례에 맞히면 다음 간격으로 넘깁니다.",
+          control: `<input id="quizReflectInReviewCheckbox" type="checkbox" class="setting-switch" checked aria-labelledby="quizReflectInReviewLabel" />`
         })}
       </section>
 

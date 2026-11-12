@@ -1308,6 +1308,11 @@ h1 {
   color: var(--accent-deep);
 }
 
+.quiz-result-review {
+  margin: 0;
+  font-size: 13px;
+}
+
 .quiz-missed-title {
   width: 100%;
   margin: 12px 0 0;

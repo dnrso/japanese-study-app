@@ -78,23 +78,15 @@ export function looksLikeSentenceBlockAttempt(rawText) {
   return lines.some(line => line.startsWith("#") || line.startsWith("읽기") || line.startsWith("해석"));
 }
 
-export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
-  if (value === "") {
-    return "";
-  }
-  return scheduledReviewOptions.includes(value) ? value : "내일";
-}
-
-// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값)을 localStorage에서
+// 퀴즈 설정(문제 글자 크기, 퀴즈 결과의 복습 일정 반영 여부)을 localStorage에서
 // 읽은 원시 값(JSON 문자열 또는 이미 파싱된 객체)으로부터 검증해 복원한다.
-// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬, "내일")으로 돌아간다.
+// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬)으로 돌아간다.
 export const DEFAULT_QUIZ_SETTINGS = Object.freeze({
   questionFontSize: 32,
-  reviewOnCorrect: true,
-  correctReview: "내일"
+  reflectInReview: true
 });
 
-export function resolveQuizSettings(raw, scheduledReviewOptions = []) {
+export function resolveQuizSettings(raw) {
   let parsed = raw;
   if (typeof raw === "string") {
     try {
@@ -111,13 +103,38 @@ export function resolveQuizSettings(raw, scheduledReviewOptions = []) {
     questionFontSize: Number.isFinite(fontSize) && fontSize > 0
       ? clampQuizQuestionFontSize(fontSize)
       : DEFAULT_QUIZ_SETTINGS.questionFontSize,
-    reviewOnCorrect: typeof parsed.reviewOnCorrect === "boolean"
-      ? parsed.reviewOnCorrect
-      : DEFAULT_QUIZ_SETTINGS.reviewOnCorrect,
-    correctReview: typeof parsed.correctReview === "string"
-      ? resolveQuizCorrectReview(parsed.correctReview, scheduledReviewOptions)
-      : DEFAULT_QUIZ_SETTINGS.correctReview
+    reflectInReview: typeof parsed.reflectInReview === "boolean"
+      ? parsed.reflectInReview
+      : DEFAULT_QUIZ_SETTINGS.reflectInReview
   };
+}
+
+// What a quiz answer does to the item's review schedule (pure).
+//  - wrong: back to "오늘" (due now), whatever the item had.
+//  - correct on an item that is due (review 오늘/대기, or a scheduled interval
+//    whose due date has passed): one step up the interval ladder
+//    (REVIEW_QUEUE_INTERVALS order); the top stays at the top.
+//  - correct on an item scheduled in the future: nothing, so replaying a quiz
+//    cannot inflate intervals.
+// `advance` is meant to be saved like a review-queue interval button
+// (store.completeReview); `reset` with store.updateItemReview, which does not
+// touch lastReviewedAt, so a miss never counts as "오늘 복습 완료".
+export function quizReviewOutcome(item, correct, { today = dateKey(new Date()) } = {}) {
+  const none = { action: "none", review: item?.review || "" };
+  if (!item || !REVIEW_KIND_ORDER.includes(item.kind)) {
+    return none;
+  }
+  const review = item.review || "대기";
+  if (!correct) {
+    return review === "오늘" ? none : { action: "reset", review: "오늘" };
+  }
+  const ladder = Object.keys(REVIEW_QUEUE_INTERVALS);
+  const step = ladder.indexOf(review);
+  const due = isReviewDue(item) || (step >= 0 && Boolean(item.reviewDueDate) && item.reviewDueDate <= today);
+  if (!due) {
+    return none;
+  }
+  return { action: "advance", review: ladder[Math.min(step + 1, ladder.length - 1)] };
 }
 
 export function reviewStatusText(item) {
@@ -323,7 +340,7 @@ export function quizAvailability({ items = [], entries = [], quizKind, mode = "r
 // --- Quiz session bookkeeping (pure). A session is up to QUIZ_SESSION_SIZE
 // questions; `index` is the 0-based current question.
 export function createQuizSession(poolSize, size = QUIZ_SESSION_SIZE) {
-  return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false };
+  return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false, reviewChanges: { reset: 0, advanced: 0 } };
 }
 
 export function quizMissedEntry(question, selectedAnswer = "") {
@@ -342,6 +359,17 @@ export function recordQuizAnswer(session, question, correct, selectedAnswer = ""
     missed: correct ? session.missed : [...session.missed, quizMissedEntry(question, selectedAnswer)],
     seenIds: session.seenIds.includes(question.item.id) ? session.seenIds : [...session.seenIds, question.item.id]
   };
+}
+
+// Tallies one review-schedule change applied for a quiz answer
+// (quizReviewOutcome's action: "reset" | "advance"; "none" changes nothing).
+export function recordQuizReviewChange(session, action) {
+  const key = action === "reset" ? "reset" : action === "advance" ? "advanced" : "";
+  if (!key) {
+    return session;
+  }
+  const changes = session.reviewChanges || { reset: 0, advanced: 0 };
+  return { ...session, reviewChanges: { ...changes, [key]: (changes[key] || 0) + 1 } };
 }
 
 export function isLastQuizQuestion(session) {

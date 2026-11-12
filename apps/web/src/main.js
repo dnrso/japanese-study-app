@@ -157,8 +157,7 @@ let reviewUndo = null;
 const REVIEW_UNDO_MS = 5000;
 const initialQuizSettings = loadQuizSettings();
 let quizQuestionFontSize = initialQuizSettings.questionFontSize;
-let quizReviewOnCorrect = initialQuizSettings.reviewOnCorrect;
-let quizCorrectReview = initialQuizSettings.correctReview;
+let quizReflectInReview = initialQuizSettings.reflectInReview;
 let storageStatus = "";
 let homeSentenceEntryId = null;
 // Current page (1-based) per paginated list tab. Reset to 1 wherever that
@@ -261,15 +260,14 @@ function loadQuizSettings() {
   } catch {
     // localStorage unavailable - use the defaults.
   }
-  return core.resolveQuizSettings(raw, scheduledReviewOptions);
+  return core.resolveQuizSettings(raw);
 }
 
 function saveQuizSettings() {
   try {
     localStorage.setItem(QUIZ_SETTINGS_STORAGE_KEY, JSON.stringify({
       questionFontSize: quizQuestionFontSize,
-      reviewOnCorrect: quizReviewOnCorrect,
-      correctReview: quizCorrectReview
+      reflectInReview: quizReflectInReview
     }));
   } catch {
     // Ignore write failures - the setting just won't survive a reload.
@@ -711,17 +709,11 @@ function bindEvents() {
     flashSaved(event.target);
   });
 
-  byId("quizReviewOnCorrectCheckbox").addEventListener("change", event => {
-    quizReviewOnCorrect = event.target.checked;
+  byId("quizReflectInReviewCheckbox").addEventListener("change", event => {
+    quizReflectInReview = event.target.checked;
     saveQuizSettings();
-    renderQuizSettings();
-    flashSaved(event.target);
-  });
-
-  byId("quizCorrectReviewSelect").addEventListener("change", event => {
-    quizCorrectReview = core.resolveQuizCorrectReview(event.target.value, scheduledReviewOptions);
-    saveQuizSettings();
-    renderQuizSettings();
+    // The result view's review line depends on this setting.
+    renderAll();
     flashSaved(event.target);
   });
 
@@ -1159,6 +1151,7 @@ function renderWordQuiz() {
   applyPagePatch(renderWordQuizPage({
     quiz: wordQuiz,
     itemById: currentItemById,
+    showReviewChanges: quizReflectInReview,
     reviewOptions,
     helpers: renderHelpers({ marks: false })
   }));
@@ -1170,6 +1163,7 @@ function renderKanjiQuiz() {
   applyPagePatch(renderKanjiQuizPage({
     quiz: kanjiQuiz,
     itemById: currentItemById,
+    showReviewChanges: quizReflectInReview,
     reviewOptions,
     wordsFor: item => wordsUsingKanji(item, words),
     wordLimit: core.resolveKanjiWordLimit(kanjiWordLimitSetting),
@@ -1183,6 +1177,7 @@ function renderSentenceQuiz() {
   applyPagePatch(renderSentenceQuizPage({
     quiz: sentenceQuiz,
     itemById: id => entries.find(entry => entry.id === id) || null,
+    showReviewChanges: quizReflectInReview,
     helpers: { ...renderHelpers({ marks: false }), linkedEntriesForSentence: linkedEntriesForAnySentence }
   }));
   updateQuizSessionView();
@@ -1385,14 +1380,8 @@ function renderQuickFilters() {
 
 function renderQuizSettings() {
   applyQuizQuestionFontSize();
-  applyPagePatch(renderQuizSettingsPage({
-    quizQuestionFontSize,
-    quizReviewOnCorrect,
-    quizCorrectReview,
-    scheduledReviewOptions,
-    helpers: renderHelpers()
-  }));
-  byId("quizReviewOnCorrectCheckbox").checked = quizReviewOnCorrect;
+  applyPagePatch(renderQuizSettingsPage({ quizQuestionFontSize }));
+  byId("quizReflectInReviewCheckbox").checked = quizReflectInReview;
 }
 
 function renderListPageSizeSettings() {
@@ -2384,8 +2373,8 @@ function quizCtx() {
     selectedDate,
     wordQuizMode,
     kanjiQuizMode,
-    quizReviewOnCorrect,
-    quizCorrectReview,
+    quizReflectInReview,
+    today: todayKey(),
     getWordQuiz: () => wordQuiz,
     setWordQuiz: nextQuiz => { wordQuiz = nextQuiz; },
     getKanjiQuiz: () => kanjiQuiz,
@@ -2396,8 +2385,7 @@ function quizCtx() {
     renderWordQuiz,
     renderKanjiQuiz,
     renderSentenceQuiz,
-    renderStats,
-    renderQuickFilters
+    renderAll
   };
 }
 

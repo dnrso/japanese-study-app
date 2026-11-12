@@ -47,16 +47,9 @@ describe("renderAccountStatusPage", () => {
 });
 
 describe("renderQuizSettingsPage", () => {
-  it("disables and dims the dependent review row when the checkbox is off", () => {
-    const patch = renderQuizSettingsPage({
-      quizQuestionFontSize: 40,
-      quizReviewOnCorrect: false,
-      quizCorrectReview: "내일",
-      scheduledReviewOptions: ["내일"],
-      helpers
-    });
-    expect(patch.disabled.quizCorrectReviewSelect).toBe(true);
-    expect(patch.classToggle.quizCorrectReviewRow).toEqual({ "is-disabled": true });
+  it("reflects the font size in the slider, label and preview", () => {
+    const patch = renderQuizSettingsPage({ quizQuestionFontSize: 40 });
+    expect(patch.value.quizQuestionFontSizeRange).toBe("40");
     expect(patch.style.quizQuestionFontSizePreview.fontSize).toBe("40px");
     expect(patch.text.quizQuestionFontSizeValue).toBe("40px");
   });

@@ -9,9 +9,10 @@ const SENTENCE_QUIZ_TITLES = {
 
 // Missed items are shown with the same cards the tabs use. `itemById(id)`
 // returns the CURRENT item from app state (null when it was deleted).
-export function renderWordQuizPage({ quiz, itemById = () => null, reviewOptions = [], helpers }) {
+export function renderWordQuizPage({ quiz, itemById = () => null, reviewOptions = [], showReviewChanges = false, helpers }) {
   const panel = quizPanel({
     quiz,
+    showReviewChanges,
     family: "word",
     title: "단어 퀴즈",
     restartKind: "word",
@@ -30,9 +31,10 @@ export function renderWordQuizPage({ quiz, itemById = () => null, reviewOptions 
   };
 }
 
-export function renderKanjiQuizPage({ quiz, itemById = () => null, reviewOptions = [], wordsFor = () => [], wordLimit = 3, helpers }) {
+export function renderKanjiQuizPage({ quiz, itemById = () => null, reviewOptions = [], wordsFor = () => [], wordLimit = 3, showReviewChanges = false, helpers }) {
   const panel = quizPanel({
     quiz,
+    showReviewChanges,
     family: "kanji",
     title: "한자 퀴즈",
     restartKind: "kanji",
@@ -51,10 +53,11 @@ export function renderKanjiQuizPage({ quiz, itemById = () => null, reviewOptions
   };
 }
 
-export function renderSentenceQuizPage({ quiz, itemById = () => null, helpers }) {
+export function renderSentenceQuizPage({ quiz, itemById = () => null, showReviewChanges = false, helpers }) {
   const mode = quiz.question?.mode;
   const panel = quizPanel({
     quiz,
+    showReviewChanges,
     family: "sentence",
     title: SENTENCE_QUIZ_TITLES[mode] || "문장 퀴즈",
     restartKind: mode === "listen" ? "sentence-listen" : "sentence-meaning",

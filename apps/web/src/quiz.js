@@ -13,10 +13,10 @@ import * as core from "@nihongo-study/core";
 // Expected `ctx` shape:
 // {
 //   byId, state (getter via ctx.getState()), store, selectedDate (getter),
-//   wordQuizMode, kanjiQuizMode, quizReviewOnCorrect, quizCorrectReview,
+//   wordQuizMode, kanjiQuizMode, quizReflectInReview, today (YYYY-MM-DD),
 //   getWordQuiz, setWordQuiz, getKanjiQuiz, setKanjiQuiz,
 //   getSentenceQuiz, setSentenceQuiz, speak,
-//   renderWordQuiz, renderKanjiQuiz, renderSentenceQuiz, renderStats, renderQuickFilters
+//   renderWordQuiz, renderKanjiQuiz, renderSentenceQuiz, renderAll
 // }
 
 export function emptyQuiz() {
@@ -148,58 +148,108 @@ export function nextQuizQuestion(family, ctx) {
   renderAllQuizzes(ctx);
 }
 
-// Sentence quizzes are practice-only: sentence entries are daily-entry-shaped,
-// not review items, so this never calls store.submitWordQuizAnswer and never
-// touches lastReviewedAt / SRS state. Only the in-session tally is kept.
-export function submitSentenceQuizChoice(selectedAnswer, ctx) {
+// Applies one answer to the item's review schedule (core.quizReviewOutcome)
+// through the same store calls the review queue uses: "advance" is the interval
+// button's completeReview, "reset" is updateItemReview("오늘"), which leaves
+// lastReviewedAt alone so a miss never counts as 오늘 복습 완료. Returns the
+// action taken ("none" when disabled, unregistered or unchanged) and refreshes
+// ctx state; the caller re-renders.
+async function applyQuizReview(item, correct, ctx) {
+  if (!ctx.quizReflectInReview || !item) {
+    return "none";
+  }
+  const { action, review } = core.quizReviewOutcome(item, correct, { today: ctx.today });
+  if (action === "advance") {
+    ctx.setState(await ctx.store.completeReview([{ id: item.id, review }], ctx.selectedDate));
+  } else if (action === "reset") {
+    ctx.setState(await ctx.store.updateItemReview(item.id, review, ctx.selectedDate));
+  }
+  return action;
+}
+
+// A sentence quiz question is a daily entry; its review item is the registered
+// sentence item with the same title (registration keys items by kind + title).
+// Unregistered sentences have no item, so nothing is applied.
+function sentenceReviewItem(entry, ctx) {
+  return ctx.getState().items.find(item => item.kind === "sentence" && item.title === entry.title) || null;
+}
+
+// One answer at a time: the review write is awaited, so a second click on a
+// choice must not run the same answer twice.
+let answerInFlight = false;
+
+// Sentence quizzes never touch quiz counters (sentence entries are
+// daily-entry-shaped); the answer only feeds the review schedule of the
+// registered sentence item, when there is one.
+export async function submitSentenceQuizChoice(selectedAnswer, ctx) {
   const quiz = ctx.getSentenceQuiz();
-  if (!quiz.question || quiz.answered) {
+  if (!quiz.question || quiz.answered || answerInFlight) {
     return;
   }
-  const correct = selectedAnswer === quiz.question.correctAnswer;
-  ctx.setSentenceQuiz({
-    ...quiz,
-    answered: true,
-    selectedAnswer,
-    result: { correct, correctAnswer: quiz.question.correctAnswer },
-    session: core.recordQuizAnswer(quiz.session, quiz.question, correct, selectedAnswer)
-  });
-  ctx.renderSentenceQuiz();
+  answerInFlight = true;
+  try {
+    const correct = selectedAnswer === quiz.question.correctAnswer;
+    const action = await applyQuizReview(sentenceReviewItem(quiz.question.item, ctx), correct, ctx);
+    if (ctx.getSentenceQuiz().question !== quiz.question) {
+      return;
+    }
+    ctx.setSentenceQuiz({
+      ...quiz,
+      answered: true,
+      selectedAnswer,
+      result: { correct, correctAnswer: quiz.question.correctAnswer },
+      session: core.recordQuizReviewChange(core.recordQuizAnswer(quiz.session, quiz.question, correct, selectedAnswer), action)
+    });
+    ctx.renderAll();
+  } finally {
+    answerInFlight = false;
+  }
 }
 
 export async function submitQuizChoice(kind, selectedAnswer, ctx) {
   const quiz = kind === "kanji" ? ctx.getKanjiQuiz() : ctx.getWordQuiz();
-  const response = await ctx.store.submitWordQuizAnswer({
-    quizKind: kind,
-    itemId: quiz.question.item.id,
-    selectedAnswer,
-    answerType: quiz.question.answerType,
-    updateReviewOnCorrect: ctx.quizReviewOnCorrect,
-    correctReview: ctx.quizCorrectReview,
-    studyDate: ctx.selectedDate
-  });
-  ctx.setState(response.state);
-  const current = kind === "kanji" ? ctx.getKanjiQuiz() : ctx.getWordQuiz();
-  if (current.question !== quiz.question) {
-    // The run was exited/restarted while the answer was being saved.
+  if (answerInFlight) {
     return;
   }
-  const item = response.state.items.find(candidate => candidate.id === quiz.question.item.id);
-  const nextQuiz = {
-    ...quiz,
-    question: { ...quiz.question, item: item || quiz.question.item },
-    answered: true,
-    selectedAnswer,
-    result: response.result,
-    session: core.recordQuizAnswer(quiz.session, { ...quiz.question, item: item || quiz.question.item }, Boolean(response.result?.correct), selectedAnswer)
-  };
-  if (kind === "kanji") {
-    ctx.setKanjiQuiz(nextQuiz);
-    ctx.renderKanjiQuiz();
-  } else {
-    ctx.setWordQuiz(nextQuiz);
-    ctx.renderWordQuiz();
+  answerInFlight = true;
+  try {
+    const response = await ctx.store.submitWordQuizAnswer({
+      quizKind: kind,
+      itemId: quiz.question.item.id,
+      selectedAnswer,
+      answerType: quiz.question.answerType,
+      studyDate: ctx.selectedDate
+    });
+    ctx.setState(response.state);
+    const correct = Boolean(response.result?.correct);
+    const savedItem = response.state.items.find(candidate => candidate.id === quiz.question.item.id);
+    const action = await applyQuizReview(response.result?.missing ? null : savedItem, correct, ctx);
+    const current = kind === "kanji" ? ctx.getKanjiQuiz() : ctx.getWordQuiz();
+    if (current.question !== quiz.question) {
+      // The run was exited/restarted while the answer was being saved.
+      ctx.renderAll();
+      return;
+    }
+    const item = ctx.getState().items.find(candidate => candidate.id === quiz.question.item.id);
+    const question = { ...quiz.question, item: item || quiz.question.item };
+    const nextQuiz = {
+      ...quiz,
+      question,
+      answered: true,
+      selectedAnswer,
+      result: response.result,
+      session: core.recordQuizReviewChange(core.recordQuizAnswer(quiz.session, question, correct, selectedAnswer), action)
+    };
+    if (kind === "kanji") {
+      ctx.setKanjiQuiz(nextQuiz);
+    } else {
+      ctx.setWordQuiz(nextQuiz);
+    }
+    // Full refresh: the review queue, home counts and result cards show the new
+    // review values. The quiz panels render from the quiz state set above, so
+    // the answer feedback and 다음 문제 button survive it.
+    ctx.renderAll();
+  } finally {
+    answerInFlight = false;
   }
-  ctx.renderStats();
-  ctx.renderQuickFilters();
 }
