@@ -1,9 +1,12 @@
 // Single definition of the SRS intervals lives in packages/storage-core, which
 // the storage adapter also reads, so the review queue's due-date arithmetic
 // can never drift from the intervals the adapter actually persists.
-import { addDays, dateKey, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
+import { addDays, dateKey, weakItems, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
 
 export * from "./merge.js";
+// Weak-item stats (recordQuizStat / isWeakItem / weakItems) live in storage-core
+// so the storage adapter can write them; re-exported here for the app and tests.
+export { WEAK_ITEM_CORRECT_STREAK, recordQuizStat, isWeakItem, weakItems } from "@nihongo-study/storage-core";
 
 // Display-only copy of the AI 문장 분석 usage limits, for the client to show
 // alongside the AI checkbox (see apps/web/src/main.js). The limits are
@@ -309,10 +312,34 @@ export function sentenceQuizCandidates(entries = []) {
   return entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
 }
 
+// Ids a weak-only quiz may ASK about (the wrong-answer choices still come from
+// the full pool). word/kanji: weak items that are quiz candidates. sentence-*:
+// the pool entries whose title matches a weak registered `sentence` item (the
+// same title mapping the sentence quiz uses to apply answers).
+export function weakQuizQuestionIds({ items = [], entries = [], quizKind } = {}) {
+  if (quizKind === "sentence-meaning" || quizKind === "sentence-listen") {
+    const weakTitles = new Set(weakItems(items, "sentence").map(item => item.title));
+    return sentenceQuizCandidates(entries).filter(entry => weakTitles.has(entry.title)).map(entry => entry.id);
+  }
+  return weakItems(quizCandidates(items, quizKind), quizKind).map(item => item.id);
+}
+
+// Weak counts for the quiz-selection summary (단어 N · 한자 M · 문장 K).
+export function weakQuizCounts({ items = [], entries = [] } = {}) {
+  return {
+    word: weakQuizQuestionIds({ items, entries, quizKind: "word" }).length,
+    kanji: weakQuizQuestionIds({ items, entries, quizKind: "kanji" }).length,
+    sentence: weakQuizQuestionIds({ items, entries, quizKind: "sentence-meaning" }).length
+  };
+}
+
 // Pool size and startability for one selection-screen card. `quizKind` is
 // word | kanji | sentence-meaning | sentence-listen; `mode` is the word/kanji
-// radio value (random needs both directions to be answerable).
-export function quizAvailability({ items = [], entries = [], quizKind, mode = "random" } = {}) {
+// radio value (random needs both directions to be answerable). With
+// `onlyWeak`, the card is also unavailable (reason "weak") when no weak item
+// of that kind can be asked; `questionCount` is how many questions may be
+// asked (the whole pool, or the weak ids) and sizes the session.
+export function quizAvailability({ items = [], entries = [], quizKind, mode = "random", onlyWeak = false } = {}) {
   const isSentence = quizKind === "sentence-meaning" || quizKind === "sentence-listen";
   const candidates = isSentence ? sentenceQuizCandidates(entries) : quizCandidates(items, quizKind);
   let answerTypes;
@@ -327,13 +354,16 @@ export function quizAvailability({ items = [], entries = [], quizKind, mode = "r
   }
   const distinct = Math.min(...answerTypes.map(type => new Set(candidates.map(item => item[type])).size));
   const poolSize = candidates.length;
-  const canStart = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
+  const poolStartable = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
+  const questionCount = onlyWeak ? weakQuizQuestionIds({ items, entries, quizKind }).length : poolSize;
+  const canStart = poolStartable && questionCount > 0;
   return {
     poolSize,
     distinctCount: distinct,
     required: QUIZ_MIN_CANDIDATES,
+    questionCount,
     canStart,
-    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : "distinct"
+    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : distinct < QUIZ_MIN_CANDIDATES ? "distinct" : "weak"
   };
 }
 
@@ -390,7 +420,8 @@ export function buildQuizQuestion({
   forwardMode,
   reverseMode,
   random = Math.random,
-  excludeIds = []
+  excludeIds = [],
+  questionIds = null
 }) {
   const candidates = quizCandidates(items, kind);
   const resolvedMode = mode === "random" ? randomItem([forwardMode, reverseMode], random) : mode;
@@ -401,8 +432,14 @@ export function buildQuizQuestion({
   }
 
   // Items already asked in this session are skipped while others remain.
-  const fresh = candidates.filter(item => !excludeIds.includes(item.id));
-  const askable = fresh.length ? fresh : candidates;
+  // `questionIds` (optional) restricts which items may be ASKED (weak-only
+  // quiz); the choices still come from every candidate.
+  const askableCandidates = questionIds ? candidates.filter(item => questionIds.includes(item.id)) : candidates;
+  if (!askableCandidates.length) {
+    return null;
+  }
+  const fresh = askableCandidates.filter(item => !excludeIds.includes(item.id));
+  const askable = fresh.length ? fresh : askableCandidates;
   const minCorrect = Math.min(...askable.map(item => Number(item.quizCorrectCount || 0)));
   const weakestItems = askable.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
   const item = randomItem(weakestItems, random);
@@ -435,7 +472,8 @@ export function buildSentenceQuizQuestion({
   mode = "meaning",
   random = Math.random,
   excludeItemId = "",
-  excludeIds = []
+  excludeIds = [],
+  questionIds = null
 } = {}) {
   const candidates = sentenceQuizCandidates(entries);
   const answerType = mode === "listen" ? "title" : "meaning";
@@ -444,8 +482,14 @@ export function buildSentenceQuizQuestion({
     return null;
   }
 
-  const pool = candidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
-  const item = randomItem(pool.length ? pool : candidates, random);
+  // `questionIds` (optional) restricts which entries may be ASKED (weak-only
+  // quiz); the choices still come from every candidate.
+  const askableCandidates = questionIds ? candidates.filter(entry => questionIds.includes(entry.id)) : candidates;
+  if (!askableCandidates.length) {
+    return null;
+  }
+  const pool = askableCandidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
+  const item = randomItem(pool.length ? pool : askableCandidates, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
     .map(candidate => candidate[answerType])

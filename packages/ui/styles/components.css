@@ -806,8 +806,17 @@ h1 {
 
 .kanji-card-head {
   display: flex;
-  align-items: center;
+  /* 오답 표시가 복습 선택 아래로 내려가도 수정·삭제는 첫 줄에 맞춘다. */
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kanji-head-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   min-width: 0;
 }
@@ -1728,4 +1737,54 @@ mark.search-hit {
 
 .card-tools .table-tools-summary {
   margin-left: auto;
+}
+
+/* 약한 항목: "오답 N" badge, the filter-row toggle and the quiz option. */
+.weak-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--red-soft);
+  color: #c65149;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.weak-toggle-group {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.segmented-btn.weak-toggle.active {
+  background: var(--red-soft);
+  color: #c65149;
+  box-shadow: 0 1px 2px rgba(198, 81, 73, 0.18);
+}
+
+.quiz-weak-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+
+.quiz-weak-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.quiz-weak-summary {
+  min-width: 0;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 700;
 }

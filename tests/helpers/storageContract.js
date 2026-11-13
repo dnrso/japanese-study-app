@@ -59,6 +59,12 @@ const storageContract = [
     note: "undo for completeReview: snapshot is { review, reviewDueDate, lastReviewedAt }."
   },
   { name: "submitWordQuizAnswer", params: ["payload"], returns: "stateResult" },
+  {
+    name: "recordQuizItemStat",
+    params: ["payload"],
+    returns: "state",
+    note: "payload is { itemId, correct, studyDate }: records a quiz answer on any non-source item (used for sentence quizzes) without touching the review."
+  },
   { name: "resetSampleData", params: [], returns: "state" },
   { name: "clearAllData", params: [], returns: "state" },
   { name: "exportData", params: [], returns: "export" },

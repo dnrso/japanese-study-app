@@ -12,6 +12,7 @@ import {
   missingDailyEntryMessage,
   parseDailyEntry as parseCanonicalDailyEntry,
   pruneStaleTombstones,
+  recordQuizStat,
   reviewIntervals,
   text,
   todayKey,
@@ -384,12 +385,15 @@ export function createIdbStorage(options = {}) {
     const correctAnswer = answerType === "title" ? item.title : item.meaning;
     const correct = text(payload.selectedAnswer ?? payload.selectedMeaning) === text(correctAnswer);
     const nextReview = normalizeReview(payload.correctReview || payload.reviewAfterCorrect);
+    const answeredAt = now();
     const nextItem = {
       ...item,
       quizCorrectCount: Number(item.quizCorrectCount || 0) + (correct ? 1 : 0),
-      quizWrongCount: Number(item.quizWrongCount || 0) + (correct ? 0 : 1),
-      lastQuizzedAt: now(),
-      updatedAt: now()
+      // quizWrongCount / quizCorrectStreak / lastQuizWrongAt: one write with
+      // the counters (core's recordQuizStat is the single definition).
+      ...recordQuizStat(item, correct, answeredAt),
+      lastQuizzedAt: answeredAt,
+      updatedAt: answeredAt
     };
 
     let reviewUpdated = false;
@@ -413,6 +417,26 @@ export function createIdbStorage(options = {}) {
         nextReviewDueDate: reviewUpdated ? nextItem.reviewDueDate : ""
       }
     };
+  }
+
+  // Records one quiz answer for an item that submitWordQuizAnswer does not
+  // cover (sentence quizzes: the question is a daily entry, the item is the
+  // registered sentence). Same stat fields as submitWordQuizAnswer; the review
+  // schedule is untouched. Unknown/deleted/source ids are ignored.
+  async function recordQuizItemStat(payload = {}) {
+    const item = await getValue("items", text(payload.itemId));
+    if (item && !item.deletedAt && item.kind !== "source") {
+      const answeredAt = now();
+      const correct = Boolean(payload.correct);
+      await putValue("items", {
+        ...item,
+        quizCorrectCount: Number(item.quizCorrectCount || 0) + (correct ? 1 : 0),
+        ...recordQuizStat(item, correct, answeredAt),
+        lastQuizzedAt: answeredAt,
+        updatedAt: answeredAt
+      });
+    }
+    return getState(payload.studyDate);
   }
 
   async function clearAllData() {
@@ -637,6 +661,7 @@ export function createIdbStorage(options = {}) {
     completeReview,
     restoreItemReview,
     submitWordQuizAnswer,
+    recordQuizItemStat,
     resetSampleData,
     clearAllData,
     exportData,
@@ -1044,6 +1069,8 @@ function normalizeItem(item = {}) {
     note: text(item.note),
     quizCorrectCount: toNumber(item.quizCorrectCount),
     quizWrongCount: toNumber(item.quizWrongCount),
+    quizCorrectStreak: Math.max(0, Math.trunc(toNumber(item.quizCorrectStreak))),
+    lastQuizWrongAt: text(item.lastQuizWrongAt),
     lastQuizzedAt: text(item.lastQuizzedAt),
     lastReviewedAt: text(item.lastReviewedAt),
     createdAt: text(item.createdAt || now()),

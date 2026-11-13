@@ -1,4 +1,4 @@
-import { empty, icon, sourceSentenceLinks, speakerButton } from "../components/index.js";
+import { empty, icon, sourceSentenceLinks, speakerButton, weakBadge } from "../components/index.js";
 
 export function renderWordsPage({ rows, reviewOptions = [], emptyMessage = "조건에 맞는 단어가 없습니다.", helpers }) {
   return {
@@ -16,7 +16,7 @@ function wordRow(item, reviewOptions, helpers) {
   const meta = [item.part, item.script].filter(Boolean).map(value => helpers.highlight(value)).join(" · ");
   return `
     <tr data-item-id="${id}">
-      <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span></div></td>
+      <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span>${weakBadge(item, helpers)}</div></td>
       <td class="word-reading" lang="ja">${reading}</td>
       <td class="word-meaning word-meaning-col">${helpers.highlight(item.meaning || "")}</td>
       <td class="word-kanji" lang="ja">${item.kanji ? helpers.highlight(item.kanji) : `<span class="muted">–</span>`}</td>

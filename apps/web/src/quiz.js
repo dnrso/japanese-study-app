@@ -13,7 +13,8 @@ import * as core from "@nihongo-study/core";
 // Expected `ctx` shape:
 // {
 //   byId, state (getter via ctx.getState()), store, selectedDate (getter),
-//   wordQuizMode, kanjiQuizMode, quizReflectInReview, today (YYYY-MM-DD),
+//   wordQuizMode, kanjiQuizMode, quizReflectInReview, quizWeakOnly (session-only
+//   "약한 항목만 풀기"), today (YYYY-MM-DD),
 //   getWordQuiz, setWordQuiz, getKanjiQuiz, setKanjiQuiz,
 //   getSentenceQuiz, setSentenceQuiz, speak,
 //   renderWordQuiz, renderKanjiQuiz, renderSentenceQuiz, renderAll
@@ -38,9 +39,11 @@ function sentenceModeOf(kind) {
 
 // Builds one question for `kind` (word | kanji | sentence-meaning |
 // sentence-listen), skipping items already asked in the session.
-function buildQuestion(kind, ctx, excludeIds) {
+// `questionIds` (null = whole pool) limits what may be asked; choices always
+// come from the full pool.
+function buildQuestion(kind, ctx, excludeIds, questionIds = null) {
   if (kind === "sentence-meaning" || kind === "sentence-listen") {
-    return core.buildSentenceQuizQuestion({ entries: allEntries(ctx), mode: sentenceModeOf(kind), excludeIds });
+    return core.buildSentenceQuizQuestion({ entries: allEntries(ctx), mode: sentenceModeOf(kind), excludeIds, questionIds });
   }
   const isKanji = kind === "kanji";
   return core.buildQuizQuestion({
@@ -49,17 +52,30 @@ function buildQuestion(kind, ctx, excludeIds) {
     mode: isKanji ? ctx.kanjiQuizMode : ctx.wordQuizMode,
     forwardMode: isKanji ? "kanjiToMeaning" : "jpToMeaning",
     reverseMode: isKanji ? "meaningToKanji" : "meaningToJp",
-    excludeIds
+    excludeIds,
+    questionIds
   });
 }
 
-function poolSizeFor(kind, ctx) {
+// Weak-only: the ids askable in this run, computed once at session start from
+// the CURRENT items (so a replay recomputes the pool) and kept on the quiz
+// state; null when the run draws from the whole pool.
+function questionIdsFor(kind, ctx) {
+  if (!ctx.quizWeakOnly) {
+    return null;
+  }
+  return core.weakQuizQuestionIds({ items: ctx.getState().items, entries: allEntries(ctx), quizKind: kind });
+}
+
+// Session length source: whole pool, or just the weak items in weak-only mode.
+function sessionPoolSizeFor(kind, ctx) {
   return core.quizAvailability({
     items: ctx.getState().items,
     entries: allEntries(ctx),
     quizKind: kind,
-    mode: kind === "kanji" ? ctx.kanjiQuizMode : ctx.wordQuizMode
-  }).poolSize;
+    mode: kind === "kanji" ? ctx.kanjiQuizMode : ctx.wordQuizMode,
+    onlyWeak: Boolean(ctx.quizWeakOnly)
+  }).questionCount;
 }
 
 function panelIdFor(kind) {
@@ -91,7 +107,8 @@ function renderAllQuizzes(ctx) {
 export function startQuiz(kind, ctx) {
   const { byId } = ctx;
   const family = familyOf(kind);
-  const question = buildQuestion(kind, ctx, []);
+  const questionIds = questionIdsFor(kind, ctx);
+  const question = buildQuestion(kind, ctx, [], questionIds);
   ctx.setWordQuiz(emptyQuiz());
   ctx.setKanjiQuiz(emptyQuiz());
   ctx.setSentenceQuiz(emptySentenceQuiz());
@@ -99,11 +116,12 @@ export function startQuiz(kind, ctx) {
     renderAllQuizzes(ctx);
     return;
   }
-  const session = core.createQuizSession(poolSizeFor(kind, ctx));
+  const session = core.createQuizSession(sessionPoolSizeFor(kind, ctx));
   slot(family, ctx).set({
     ...(family === "sentence" ? emptySentenceQuiz() : emptyQuiz()),
     question,
-    session
+    session,
+    questionIds
   });
   renderAllQuizzes(ctx);
   window.setTimeout(() => {
@@ -135,7 +153,7 @@ export function nextQuizQuestion(family, ctx) {
   } else {
     const mode = quiz.question.mode;
     const kind = family === "sentence" ? (mode === "listen" ? "sentence-listen" : "sentence-meaning") : family;
-    const question = buildQuestion(kind, ctx, session.seenIds);
+    const question = buildQuestion(kind, ctx, session.seenIds, quiz.questionIds || null);
     if (!question) {
       set({ ...quiz, session: { ...session, finished: true } });
     } else {
@@ -178,9 +196,9 @@ function sentenceReviewItem(entry, ctx) {
 // choice must not run the same answer twice.
 let answerInFlight = false;
 
-// Sentence quizzes never touch quiz counters (sentence entries are
-// daily-entry-shaped); the answer only feeds the review schedule of the
-// registered sentence item, when there is one.
+// A sentence answer is recorded on the registered sentence item (when there is
+// one) via store.recordQuizItemStat, then feeds its review schedule. The two
+// writes are awaited one after the other, never concurrently.
 export async function submitSentenceQuizChoice(selectedAnswer, ctx) {
   const quiz = ctx.getSentenceQuiz();
   if (!quiz.question || quiz.answered || answerInFlight) {
@@ -189,7 +207,11 @@ export async function submitSentenceQuizChoice(selectedAnswer, ctx) {
   answerInFlight = true;
   try {
     const correct = selectedAnswer === quiz.question.correctAnswer;
-    const action = await applyQuizReview(sentenceReviewItem(quiz.question.item, ctx), correct, ctx);
+    const reviewItem = sentenceReviewItem(quiz.question.item, ctx);
+    if (reviewItem) {
+      ctx.setState(await ctx.store.recordQuizItemStat({ itemId: reviewItem.id, correct, studyDate: ctx.selectedDate }));
+    }
+    const action = await applyQuizReview(reviewItem, correct, ctx);
     if (ctx.getSentenceQuiz().question !== quiz.question) {
       return;
     }

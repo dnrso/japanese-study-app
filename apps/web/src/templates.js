@@ -271,6 +271,7 @@ function wordsPageTemplate() {
             <option value="sentence">문장에서 등록</option>
             <option value="manual">직접 추가</option>
           </select>
+          <div class="segmented weak-toggle-group"><button class="segmented-btn weak-toggle" id="wordWeakToggle" type="button" data-weak-toggle="word" aria-pressed="false" disabled>약한 단어 0</button></div>
           <p class="table-tools-summary"><span id="wordFilterSummary"></span><button class="link-btn" id="wordFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="table-scroll">
@@ -365,6 +366,7 @@ function kanjiPageTemplate() {
             <option value="empty">뜻 미입력</option>
             <option value="filled">뜻 입력됨</option>
           </select>
+          <div class="segmented weak-toggle-group"><button class="segmented-btn weak-toggle" id="kanjiWeakToggle" type="button" data-weak-toggle="kanji" aria-pressed="false" disabled>약한 한자 0</button></div>
           <p class="table-tools-summary"><span id="kanjiFilterSummary"></span><button class="link-btn" id="kanjiFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="kanji-grid" id="kanjiCards"></div>
@@ -380,6 +382,10 @@ function quizPageTemplate() {
       <section class="panel section" id="quiz-select">
         <div class="panel-header" id="quizSelectHeader">
           <h2 class="panel-title">퀴즈</h2>
+        </div>
+        <div class="quiz-weak-option" id="quizWeakOption">
+          <label class="quiz-weak-toggle"><input type="checkbox" id="quizWeakOnlyCheckbox" data-quiz-weak-only /> <span>약한 항목만 풀기</span></label>
+          <span class="quiz-weak-summary" id="quizWeakSummary"></span>
         </div>
         <div class="quiz-grid" id="quizSelectGrid">
           <article class="quiz-card">

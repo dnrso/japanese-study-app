@@ -109,7 +109,7 @@ const adapter = {
 describe("storage contract", () => {
   it("storageMethodNames stays derived from storageContract", () => {
     expect(storageMethodNames).toEqual(storageContract.map(entry => entry.name));
-    expect(storageMethodNames).toHaveLength(21);
+    expect(storageMethodNames).toHaveLength(22);
     expect(new Set(storageMethodNames).size).toBe(storageMethodNames.length);
   });
 
@@ -495,6 +495,40 @@ describe("storage conformance: storage-idb", () => {
     });
     expect(byTitleAnswer.result.correctAnswer).toBe("오답");
     expect(byTitleAnswer.result.correct).toBe(true);
+  });
+
+  it("quiz stats: streak/lastQuizWrongAt are tracked in one write and survive export + import", async () => {
+    const store = await freshStore();
+    const created = await store.upsertItem({ kind: "word", title: "약함", meaning: "weak" });
+    const item = byTitle(created.items, "약함");
+    const answer = (selectedAnswer) => store.submitWordQuizAnswer({ itemId: item.id, quizKind: "word", answerType: "meaning", selectedAnswer, studyDate });
+
+    expect(item.quizCorrectStreak).toBe(0);
+    expect(item.lastQuizWrongAt).toBe("");
+    let current = byTitle((await answer("nope")).state.items, "약함");
+    expect(current).toMatchObject({ quizWrongCount: 1, quizCorrectStreak: 0 });
+    expect(current.lastQuizWrongAt).toBeTruthy();
+    current = byTitle((await answer("weak")).state.items, "약함");
+    expect(current).toMatchObject({ quizWrongCount: 1, quizCorrectStreak: 1 });
+
+    const exported = (await store.exportData()).data;
+    const other = await freshStore();
+    await other.importFullBackup({ data: exported });
+    const restored = byTitle((await other.getState(studyDate)).items, "약함");
+    expect(restored).toMatchObject({ quizWrongCount: 1, quizCorrectStreak: 1, lastQuizWrongAt: current.lastQuizWrongAt });
+  });
+
+  it("recordQuizItemStat() records an answer on a sentence item without touching its review", async () => {
+    const store = await freshStore();
+    const created = await store.upsertItem({ kind: "sentence", title: "文です", meaning: "문장" });
+    const item = byTitle(created.items, "文です");
+    const wrong = byTitle((await store.recordQuizItemStat({ itemId: item.id, correct: false, studyDate })).items, "文です");
+    expect(wrong).toMatchObject({ quizWrongCount: 1, quizCorrectStreak: 0, review: item.review });
+    expect(wrong.lastQuizWrongAt).toBeTruthy();
+    const right = byTitle((await store.recordQuizItemStat({ itemId: item.id, correct: true, studyDate })).items, "文です");
+    expect(right).toMatchObject({ quizWrongCount: 1, quizCorrectStreak: 1, quizCorrectCount: 1 });
+    // Unknown ids are ignored.
+    await expect(store.recordQuizItemStat({ itemId: "nope", correct: true, studyDate })).resolves.toBeTruthy();
   });
 
   it("submitWordQuizAnswer() updates the review only on a correct answer with updateReviewOnCorrect", async () => {

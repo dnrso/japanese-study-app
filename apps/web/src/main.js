@@ -141,6 +141,10 @@ let searchComposing = false;
 let searchTimer = 0;
 const SEARCH_DEBOUNCE_MS = 150;
 let wordSort = { key: "", direction: "" };
+// 약한 항목 filters (단어/한자 tabs) and the quiz "약한 항목만 풀기" option are
+// session-only view state: never persisted, default off.
+const weakOnly = { word: false, kanji: false };
+let quizWeakOnly = false;
 let wordQuizMode = "random";
 let kanjiQuizMode = "random";
 let wordQuiz = emptyQuiz();
@@ -363,6 +367,21 @@ function bindEvents() {
       return;
     }
 
+    const weakToggle = event.target.closest("[data-weak-toggle]");
+    if (weakToggle) {
+      const kind = weakToggle.dataset.weakToggle;
+      if (kind in weakOnly) {
+        weakOnly[kind] = !weakOnly[kind];
+        resetPageIndex(kind === "word" ? "words" : "kanji");
+        if (kind === "word") {
+          renderWords();
+        } else {
+          renderKanji();
+        }
+      }
+      return;
+    }
+
     const wordSortTarget = event.target.closest("[data-word-sort]");
     if (wordSortTarget) {
       wordSort = core.nextWordSort(wordSort, wordSortTarget.dataset.wordSort);
@@ -552,7 +571,12 @@ function bindEvents() {
       renderWords();
     });
   });
+  byId("quizWeakOnlyCheckbox").addEventListener("change", event => {
+    quizWeakOnly = event.target.checked;
+    renderQuizAvailability();
+  });
   byId("wordFilterResetBtn").addEventListener("click", () => {
+    weakOnly.word = false;
     WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
     resetPageIndex("words");
     renderWords();
@@ -578,6 +602,7 @@ function bindEvents() {
     });
   });
   byId("kanjiFilterResetBtn").addEventListener("click", () => {
+    weakOnly.kanji = false;
     KANJI_FILTER_IDS.forEach(id => { byId(id).value = ""; });
     resetPageIndex("kanji");
     renderKanji();
@@ -980,6 +1005,26 @@ function renderWordFilters() {
   renderSelectOptions("kanjiReviewFilter", "전체 복습 상태", reviewOptions);
 }
 
+// 약한 단어/한자 toggle: label + count (weak items of the kind, ignoring every
+// other filter and the search), dimmed and disabled at 0. A toggle left on
+// when the count falls to 0 (items stopped being weak) is switched off so the
+// list never ends up empty behind a disabled button.
+function syncWeakToggle(kind) {
+  const count = core.weakItems(state.items, kind).length;
+  if (!count) {
+    weakOnly[kind] = false;
+  }
+  const label = kind === "word" ? "약한 단어" : "약한 한자";
+  const button = byId(`${kind}WeakToggle`);
+  if (button) {
+    button.textContent = `${label} ${count}`;
+    button.disabled = !count;
+    button.setAttribute("aria-pressed", String(weakOnly[kind]));
+    button.classList.toggle("active", weakOnly[kind]);
+  }
+  return count;
+}
+
 const WORD_FILTER_IDS = ["wordPartFilter", "wordScriptFilter", "wordReviewFilter", "wordSourceFilter"];
 
 function renderWords() {
@@ -988,16 +1033,18 @@ function renderWords() {
   const review = byId("wordReviewFilter").value;
   const source = byId("wordSourceFilter").value;
   const words = items("word");
+  syncWeakToggle("word");
   const rows = core.sortWords(words.filter(item => {
     const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
-    return (!part || item.part === part) &&
+    return (!weakOnly.word || core.isWeakItem(item)) &&
+      (!part || item.part === part) &&
       (!script || item.script === script) &&
       (!review || (item.review || "대기") === review) &&
       (!source || (source === "sentence") === fromSentence);
   }), wordSort);
   const paged = paginate(rows, pageIndex.words, pageSizeFor("words"));
   pageIndex.words = paged.page;
-  const filtering = WORD_FILTER_IDS.some(id => byId(id).value);
+  const filtering = weakOnly.word || WORD_FILTER_IDS.some(id => byId(id).value);
   renderWordSortHeaders();
   applyPagePatch(renderWordsPage({
     rows: paged.pageItems,
@@ -1108,10 +1155,12 @@ function wordsUsingKanji(kanjiItem, words) {
 function renderKanji() {
   const review = byId("kanjiReviewFilter").value;
   const meaningFilter = byId("kanjiMeaningFilter").value;
-  const filtering = Boolean(review || meaningFilter);
+  const filtering = Boolean(review || meaningFilter || weakOnly.kanji);
   const words = core.itemsByKind(state.items, "word");
   const total = core.itemsByKind(state.items, "kanji").length;
+  syncWeakToggle("kanji");
   const rows = items("kanji").filter(item =>
+    (!weakOnly.kanji || core.isWeakItem(item)) &&
     (!review || (item.review || "대기") === review) &&
     (!meaningFilter || (meaningFilter === "empty") === !String(item.meaning || "").trim()));
   const paged = paginate(rows, pageIndex.kanji, pageSizeFor("kanji"));
@@ -1194,6 +1243,10 @@ function updateQuizSessionView() {
   const sessionActive = Boolean(wordQuiz.session || kanjiQuiz.session || sentenceQuiz.session);
   grid.hidden = sessionActive;
   header.hidden = sessionActive;
+  const weakOption = byId("quizWeakOption");
+  if (weakOption) {
+    weakOption.hidden = sessionActive;
+  }
 }
 
 const QUIZ_UNIT_LABELS = { word: "단어", kanji: "한자", "sentence-meaning": "문장", "sentence-listen": "문장" };
@@ -1203,6 +1256,9 @@ const QUIZ_UNIT_SUBJECT = { word: "단어가", kanji: "한자가", "sentence-mea
 // question generators use (core.quizAvailability).
 function renderQuizAvailability() {
   const entries = state.allDailyEntries || state.dailyEntries || [];
+  const weak = core.weakQuizCounts({ items: state.items, entries });
+  byId("quizWeakSummary").textContent = `단어 ${weak.word} · 한자 ${weak.kanji} · 문장 ${weak.sentence}`;
+  byId("quizWeakOnlyCheckbox").checked = quizWeakOnly;
   Object.keys(QUIZ_UNIT_LABELS).forEach(quizKind => {
     const pool = byId(`quizPool-${quizKind}`);
     const startBtn = document.querySelector(`.quiz-start-btn[data-quiz-kind="${quizKind}"]`);
@@ -1213,12 +1269,15 @@ function renderQuizAvailability() {
       items: state.items,
       entries,
       quizKind,
-      mode: quizKind === "kanji" ? kanjiQuizMode : wordQuizMode
+      mode: quizKind === "kanji" ? kanjiQuizMode : wordQuizMode,
+      onlyWeak: quizWeakOnly
     });
-    const warning = availability.canStart ? "" : availability.reason === "count"
+    const warning = availability.canStart ? "" : availability.reason === "weak"
+      ? "약한 항목이 없습니다"
+      : availability.reason === "count"
       ? `${QUIZ_UNIT_SUBJECT[quizKind]} ${availability.required}개 이상 필요합니다 (현재 ${availability.poolSize}개)`
       : `서로 다른 보기가 ${availability.required}개 이상 필요합니다 (현재 ${availability.distinctCount}개)`;
-    pool.innerHTML = `<span>${QUIZ_UNIT_LABELS[quizKind]} ${availability.poolSize}개</span>${warning ? `<p class="quiz-card-warn">${escapeHtml(warning)}</p>` : ""}`;
+    pool.innerHTML = `<span>${quizWeakOnly ? "약한 " : ""}${QUIZ_UNIT_LABELS[quizKind]} ${quizWeakOnly ? availability.questionCount : availability.poolSize}개</span>${warning ? `<p class="quiz-card-warn">${escapeHtml(warning)}</p>` : ""}`;
     startBtn.disabled = !availability.canStart;
   });
 }
@@ -2274,6 +2333,7 @@ function renderHelpers({ marks = true } = {}) {
     core,
     escapeHtml,
     highlight: marks ? highlight : escapeHtml,
+    isWeakItem: core.isWeakItem,
     kindLabels,
     reviewStatusText: core.reviewStatusText,
     sentenceMeaning
@@ -2374,6 +2434,7 @@ function quizCtx() {
     wordQuizMode,
     kanjiQuizMode,
     quizReflectInReview,
+    quizWeakOnly,
     today: todayKey(),
     getWordQuiz: () => wordQuiz,
     setWordQuiz: nextQuiz => { wordQuiz = nextQuiz; },

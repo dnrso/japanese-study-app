@@ -12,6 +12,7 @@
 export * from "./dailyEntryParser.js";
 export * from "./dates.js";
 export * from "./kinds.js";
+export * from "./quizStats.js";
 export * from "./review.js";
 export * from "./sampleState.js";
 export * from "./tombstones.js";
