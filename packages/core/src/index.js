@@ -1,10 +1,13 @@
 // Single definition of the SRS intervals lives in packages/storage-core, which
 // the storage adapter also reads, so the review queue's due-date arithmetic
 // can never drift from the intervals the adapter actually persists.
-import { addDays, dateKey, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
+import { addDays, dateKey, weakItems, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
 
 export * from "./merge.js";
 export * from "./notes.js";
+// Weak-item stats (recordQuizStat / isWeakItem / weakItems) live in storage-core
+// so the storage adapter can write them; re-exported here for the app and tests.
+export { WEAK_ITEM_CORRECT_STREAK, recordQuizStat, isWeakItem, weakItems } from "@nihongo-study/storage-core";
 
 // Display-only copy of the AI 문장 분석 usage limits, for the client to show
 // alongside the AI checkbox (see apps/web/src/main.js). The limits are
@@ -79,23 +82,15 @@ export function looksLikeSentenceBlockAttempt(rawText) {
   return lines.some(line => line.startsWith("#") || line.startsWith("읽기") || line.startsWith("해석"));
 }
 
-export function resolveQuizCorrectReview(value, scheduledReviewOptions) {
-  if (value === "") {
-    return "";
-  }
-  return scheduledReviewOptions.includes(value) ? value : "내일";
-}
-
-// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값)을 localStorage에서
+// 퀴즈 설정(문제 글자 크기, 퀴즈 결과의 복습 일정 반영 여부)을 localStorage에서
 // 읽은 원시 값(JSON 문자열 또는 이미 파싱된 객체)으로부터 검증해 복원한다.
-// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬, "내일")으로 돌아간다.
+// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬)으로 돌아간다.
 export const DEFAULT_QUIZ_SETTINGS = Object.freeze({
   questionFontSize: 32,
-  reviewOnCorrect: true,
-  correctReview: "내일"
+  reflectInReview: true
 });
 
-export function resolveQuizSettings(raw, scheduledReviewOptions = []) {
+export function resolveQuizSettings(raw) {
   let parsed = raw;
   if (typeof raw === "string") {
     try {
@@ -112,13 +107,38 @@ export function resolveQuizSettings(raw, scheduledReviewOptions = []) {
     questionFontSize: Number.isFinite(fontSize) && fontSize > 0
       ? clampQuizQuestionFontSize(fontSize)
       : DEFAULT_QUIZ_SETTINGS.questionFontSize,
-    reviewOnCorrect: typeof parsed.reviewOnCorrect === "boolean"
-      ? parsed.reviewOnCorrect
-      : DEFAULT_QUIZ_SETTINGS.reviewOnCorrect,
-    correctReview: typeof parsed.correctReview === "string"
-      ? resolveQuizCorrectReview(parsed.correctReview, scheduledReviewOptions)
-      : DEFAULT_QUIZ_SETTINGS.correctReview
+    reflectInReview: typeof parsed.reflectInReview === "boolean"
+      ? parsed.reflectInReview
+      : DEFAULT_QUIZ_SETTINGS.reflectInReview
   };
+}
+
+// What a quiz answer does to the item's review schedule (pure).
+//  - wrong: back to "오늘" (due now), whatever the item had.
+//  - correct on an item that is due (review 오늘/대기, or a scheduled interval
+//    whose due date has passed): one step up the interval ladder
+//    (REVIEW_QUEUE_INTERVALS order); the top stays at the top.
+//  - correct on an item scheduled in the future: nothing, so replaying a quiz
+//    cannot inflate intervals.
+// `advance` is meant to be saved like a review-queue interval button
+// (store.completeReview); `reset` with store.updateItemReview, which does not
+// touch lastReviewedAt, so a miss never counts as "오늘 복습 완료".
+export function quizReviewOutcome(item, correct, { today = dateKey(new Date()) } = {}) {
+  const none = { action: "none", review: item?.review || "" };
+  if (!item || !REVIEW_KIND_ORDER.includes(item.kind)) {
+    return none;
+  }
+  const review = item.review || "대기";
+  if (!correct) {
+    return review === "오늘" ? none : { action: "reset", review: "오늘" };
+  }
+  const ladder = Object.keys(REVIEW_QUEUE_INTERVALS);
+  const step = ladder.indexOf(review);
+  const due = isReviewDue(item) || (step >= 0 && Boolean(item.reviewDueDate) && item.reviewDueDate <= today);
+  if (!due) {
+    return none;
+  }
+  return { action: "advance", review: ladder[Math.min(step + 1, ladder.length - 1)] };
 }
 
 export function reviewStatusText(item) {
@@ -293,10 +313,34 @@ export function sentenceQuizCandidates(entries = []) {
   return entries.filter(entry => entry.kind === "sentence" && !entry.parentId && entry.title && entry.meaning);
 }
 
+// Ids a weak-only quiz may ASK about (the wrong-answer choices still come from
+// the full pool). word/kanji: weak items that are quiz candidates. sentence-*:
+// the pool entries whose title matches a weak registered `sentence` item (the
+// same title mapping the sentence quiz uses to apply answers).
+export function weakQuizQuestionIds({ items = [], entries = [], quizKind } = {}) {
+  if (quizKind === "sentence-meaning" || quizKind === "sentence-listen") {
+    const weakTitles = new Set(weakItems(items, "sentence").map(item => item.title));
+    return sentenceQuizCandidates(entries).filter(entry => weakTitles.has(entry.title)).map(entry => entry.id);
+  }
+  return weakItems(quizCandidates(items, quizKind), quizKind).map(item => item.id);
+}
+
+// Weak counts for the quiz-selection summary (단어 N · 한자 M · 문장 K).
+export function weakQuizCounts({ items = [], entries = [] } = {}) {
+  return {
+    word: weakQuizQuestionIds({ items, entries, quizKind: "word" }).length,
+    kanji: weakQuizQuestionIds({ items, entries, quizKind: "kanji" }).length,
+    sentence: weakQuizQuestionIds({ items, entries, quizKind: "sentence-meaning" }).length
+  };
+}
+
 // Pool size and startability for one selection-screen card. `quizKind` is
 // word | kanji | sentence-meaning | sentence-listen; `mode` is the word/kanji
-// radio value (random needs both directions to be answerable).
-export function quizAvailability({ items = [], entries = [], quizKind, mode = "random" } = {}) {
+// radio value (random needs both directions to be answerable). With
+// `onlyWeak`, the card is also unavailable (reason "weak") when no weak item
+// of that kind can be asked; `questionCount` is how many questions may be
+// asked (the whole pool, or the weak ids) and sizes the session.
+export function quizAvailability({ items = [], entries = [], quizKind, mode = "random", onlyWeak = false } = {}) {
   const isSentence = quizKind === "sentence-meaning" || quizKind === "sentence-listen";
   const candidates = isSentence ? sentenceQuizCandidates(entries) : quizCandidates(items, quizKind);
   let answerTypes;
@@ -311,20 +355,23 @@ export function quizAvailability({ items = [], entries = [], quizKind, mode = "r
   }
   const distinct = Math.min(...answerTypes.map(type => new Set(candidates.map(item => item[type])).size));
   const poolSize = candidates.length;
-  const canStart = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
+  const poolStartable = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
+  const questionCount = onlyWeak ? weakQuizQuestionIds({ items, entries, quizKind }).length : poolSize;
+  const canStart = poolStartable && questionCount > 0;
   return {
     poolSize,
     distinctCount: distinct,
     required: QUIZ_MIN_CANDIDATES,
+    questionCount,
     canStart,
-    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : "distinct"
+    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : distinct < QUIZ_MIN_CANDIDATES ? "distinct" : "weak"
   };
 }
 
 // --- Quiz session bookkeeping (pure). A session is up to QUIZ_SESSION_SIZE
 // questions; `index` is the 0-based current question.
 export function createQuizSession(poolSize, size = QUIZ_SESSION_SIZE) {
-  return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false };
+  return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false, reviewChanges: { reset: 0, advanced: 0 } };
 }
 
 export function quizMissedEntry(question, selectedAnswer = "") {
@@ -345,6 +392,17 @@ export function recordQuizAnswer(session, question, correct, selectedAnswer = ""
   };
 }
 
+// Tallies one review-schedule change applied for a quiz answer
+// (quizReviewOutcome's action: "reset" | "advance"; "none" changes nothing).
+export function recordQuizReviewChange(session, action) {
+  const key = action === "reset" ? "reset" : action === "advance" ? "advanced" : "";
+  if (!key) {
+    return session;
+  }
+  const changes = session.reviewChanges || { reset: 0, advanced: 0 };
+  return { ...session, reviewChanges: { ...changes, [key]: (changes[key] || 0) + 1 } };
+}
+
 export function isLastQuizQuestion(session) {
   return session.index + 1 >= session.total;
 }
@@ -363,7 +421,8 @@ export function buildQuizQuestion({
   forwardMode,
   reverseMode,
   random = Math.random,
-  excludeIds = []
+  excludeIds = [],
+  questionIds = null
 }) {
   const candidates = quizCandidates(items, kind);
   const resolvedMode = mode === "random" ? randomItem([forwardMode, reverseMode], random) : mode;
@@ -374,8 +433,14 @@ export function buildQuizQuestion({
   }
 
   // Items already asked in this session are skipped while others remain.
-  const fresh = candidates.filter(item => !excludeIds.includes(item.id));
-  const askable = fresh.length ? fresh : candidates;
+  // `questionIds` (optional) restricts which items may be ASKED (weak-only
+  // quiz); the choices still come from every candidate.
+  const askableCandidates = questionIds ? candidates.filter(item => questionIds.includes(item.id)) : candidates;
+  if (!askableCandidates.length) {
+    return null;
+  }
+  const fresh = askableCandidates.filter(item => !excludeIds.includes(item.id));
+  const askable = fresh.length ? fresh : askableCandidates;
   const minCorrect = Math.min(...askable.map(item => Number(item.quizCorrectCount || 0)));
   const weakestItems = askable.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
   const item = randomItem(weakestItems, random);
@@ -408,7 +473,8 @@ export function buildSentenceQuizQuestion({
   mode = "meaning",
   random = Math.random,
   excludeItemId = "",
-  excludeIds = []
+  excludeIds = [],
+  questionIds = null
 } = {}) {
   const candidates = sentenceQuizCandidates(entries);
   const answerType = mode === "listen" ? "title" : "meaning";
@@ -417,8 +483,14 @@ export function buildSentenceQuizQuestion({
     return null;
   }
 
-  const pool = candidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
-  const item = randomItem(pool.length ? pool : candidates, random);
+  // `questionIds` (optional) restricts which entries may be ASKED (weak-only
+  // quiz); the choices still come from every candidate.
+  const askableCandidates = questionIds ? candidates.filter(entry => questionIds.includes(entry.id)) : candidates;
+  if (!askableCandidates.length) {
+    return null;
+  }
+  const pool = askableCandidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
+  const item = randomItem(pool.length ? pool : askableCandidates, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
     .map(candidate => candidate[answerType])

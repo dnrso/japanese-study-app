@@ -7,12 +7,12 @@ const CHOICE_ATTRIBUTES = {
 // Renders one quiz run: the question view while the session is in progress,
 // or the result view once it is finished. `family` is word | kanji | sentence;
 // `restartKind` is the data-quiz-kind that starts the same quiz again.
-export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulativeLabel, layout = "grid", restartKind, itemById, missedCard, missedListClass }, helpers) {
+export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulativeLabel, layout = "grid", restartKind, itemById, missedCard, missedListClass, showReviewChanges = false }, helpers) {
   if (!quiz.question || !quiz.session) {
     return { hidden: true, html: "" };
   }
   if (quiz.session.finished) {
-    return { hidden: false, html: quizResult({ session: quiz.session, title, restartKind, itemById, missedCard, missedListClass }, helpers) };
+    return { hidden: false, html: quizResult({ session: quiz.session, title, restartKind, itemById, missedCard, missedListClass, showReviewChanges }, helpers) };
   }
 
   const { item, choices } = quiz.question;
@@ -70,7 +70,19 @@ function quizFeedback(quiz, family) {
 
 // Missed entries are rendered with the tab's own card, from the CURRENT item in
 // app state (so edits/review changes show up); deleted items are skipped.
-function quizResult({ session, title, restartKind, itemById, missedCard, missedListClass }, helpers) {
+// "복습 일정 반영 · 오늘로 3개 · 다음 간격으로 2개"; "" when nothing changed.
+function reviewChangesText(changes = {}) {
+  const parts = [];
+  if (changes.reset > 0) {
+    parts.push(`오늘로 ${changes.reset}개`);
+  }
+  if (changes.advanced > 0) {
+    parts.push(`다음 간격으로 ${changes.advanced}개`);
+  }
+  return parts.length ? ["복습 일정 반영", ...parts].join(" · ") : "";
+}
+
+function quizResult({ session, title, restartKind, itemById, missedCard, missedListClass, showReviewChanges }, helpers) {
   const { escapeHtml } = helpers;
   const seen = new Set();
   const cards = [];
@@ -85,12 +97,14 @@ function quizResult({ session, title, restartKind, itemById, missedCard, missedL
       cards.push(missedCard(item));
     }
   });
+  const reviewLine = showReviewChanges ? reviewChangesText(session.reviewChanges) : "";
   return `
     <div class="quiz-session-header">
       <strong class="quiz-session-title">${title} 결과</strong>
     </div>
     <div class="quiz-result">
       <p class="quiz-result-score">${session.total}문제 중 <strong>${session.correct}문제</strong> 정답</p>
+      ${reviewLine ? `<p class="muted quiz-result-review">${escapeHtml(reviewLine)}</p>` : ""}
       <div class="quiz-result-actions">
         <button class="primary-btn" type="button" data-quiz-kind="${escapeHtml(restartKind)}">다시 풀기</button>
         <button class="ghost-btn" type="button" data-quiz-exit>목록으로</button>

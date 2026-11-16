@@ -1,4 +1,4 @@
-import { empty, icon, kanjiMemo, speakerButton } from "../components/index.js";
+import { empty, icon, kanjiMemo, speakerButton, weakBadge } from "../components/index.js";
 
 // One kanji flashcard. Shared by the 한자 tab and the quiz result view.
 // `wordsFor(item)` returns every word item that uses the kanji, newest first
@@ -15,9 +15,12 @@ export function kanjiCard(item, { reviewOptions = [], wordsFor = () => [], wordL
   return `
     <article class="kanji-card" data-item-id="${id}">
       <div class="kanji-card-head">
-        <select class="review-select review-select-sm ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
-          ${reviewOptions.map(option => `<option value="${escapeHtml(option)}" ${option === review ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
-        </select>
+        <div class="kanji-head-main">
+          <select class="review-select review-select-sm ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
+            ${reviewOptions.map(option => `<option value="${escapeHtml(option)}" ${option === review ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+          ${weakBadge(item, helpers)}
+        </div>
         <div class="kanji-actions">
           <button class="icon-btn row-action-btn" type="button" data-edit-item="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
           <button class="icon-btn row-delete-btn" type="button" data-delete-item="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
