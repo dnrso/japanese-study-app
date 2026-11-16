@@ -19,6 +19,8 @@ import {
   renderKanjiPage,
   renderMarkdown,
   renderNotesPage,
+  renderNoteLinkEditor,
+  noteCardPopover,
   renderKanjiQuizPage,
   renderLearnedSectionsPage,
   renderQuickFiltersPage,
@@ -160,6 +162,10 @@ let homeSentenceEntryId = null;
 let notesView = "list";
 let activeNoteId = null;
 let noteEditorIsNew = false;
+// Card links of the note in the editor: the ones added by hand and the
+// auto-detected ones switched off, both as { kind, title }.
+let noteEditorLinks = [];
+let noteEditorExcluded = [];
 // Headings of the note being read, offered as the sidebar 목차.
 let noteHeadings = [];
 // Current page (1-based) per paginated list tab. Reset to 1 wherever that
@@ -344,6 +350,44 @@ function bindEvents() {
     const editTarget = event.target.closest("[data-edit-item]");
     if (editTarget) {
       await promptEditItem(editTarget.dataset.editItem);
+      return;
+    }
+
+    const cardOpenTarget = event.target.closest("[data-note-card-open-title]");
+    if (cardOpenTarget) {
+      openCardPage(cardOpenTarget.dataset.noteCardOpenKind, cardOpenTarget.dataset.noteCardOpenTitle);
+      return;
+    }
+
+    const cardTarget = event.target.closest("[data-note-card-title]");
+    if (cardTarget) {
+      toggleNoteCardPopover(cardTarget);
+      return;
+    }
+
+    // Any other click outside the card preview dismisses it.
+    if (!event.target.closest("#noteCardPopover")) {
+      hideNoteCardPopover();
+    }
+
+    const linkAddTarget = event.target.closest("[data-note-link-add-title]");
+    if (linkAddTarget) {
+      addNoteEditorLink({ kind: linkAddTarget.dataset.noteLinkAddKind, title: linkAddTarget.dataset.noteLinkAddTitle });
+      return;
+    }
+
+    const linkRemoveTarget = event.target.closest("[data-note-link-remove-title]");
+    if (linkRemoveTarget) {
+      removeNoteEditorLink(
+        { kind: linkRemoveTarget.dataset.noteLinkRemoveKind, title: linkRemoveTarget.dataset.noteLinkRemoveTitle },
+        linkRemoveTarget.dataset.noteLinkOrigin
+      );
+      return;
+    }
+
+    const linkRestoreTarget = event.target.closest("[data-note-link-restore-title]");
+    if (linkRestoreTarget) {
+      restoreNoteEditorLink({ kind: linkRestoreTarget.dataset.noteLinkRestoreKind, title: linkRestoreTarget.dataset.noteLinkRestoreTitle });
       return;
     }
 
@@ -571,9 +615,31 @@ function bindEvents() {
       saveNoteDraft();
       if (id === "noteBodyInput") {
         renderNotePreview();
+        renderNoteEditorLinks();
       }
     });
   });
+  byId("noteLinkSearch").addEventListener("input", renderNoteEditorLinks);
+  // Enter in the card search must not submit (save) the note.
+  byId("noteLinkSearch").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      byId("noteLinkResults").querySelector("[data-note-link-add-title]")?.click();
+    }
+  });
+  // The card preview is positioned against the chip that opened it, so it is
+  // dismissed rather than left behind when the page moves under it.
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      hideNoteCardPopover();
+    }
+  });
+  window.addEventListener("scroll", event => {
+    if (!(event.target instanceof Element) || !event.target.closest("#noteCardPopover")) {
+      hideNoteCardPopover();
+    }
+  }, true);
+  window.addEventListener("resize", hideNoteCardPopover);
 
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
@@ -1159,7 +1225,7 @@ function renderNotes() {
     activeNoteId = null;
   }
   const note = notesView === "read" ? noteById(activeNoteId) : null;
-  const rendered = note ? renderMarkdown(note.body) : null;
+  const rendered = note ? renderMarkdown(note.body, { cardKind: wikiLinkKind }) : null;
   noteHeadings = rendered ? rendered.headings : [];
   applyPagePatch(renderNotesPage({
     view: notesView,
@@ -1168,11 +1234,151 @@ function renderNotes() {
     note,
     rendered,
     searchTerm,
+    linksFor: noteLinksFor,
     helpers: renderHelpers()
   }));
+  if (notesView === "edit") {
+    // Cards may have been registered or deleted since the editor opened.
+    renderNoteEditorLinks();
+  }
   if (currentPage === "notes") {
     renderToc("notes");
   }
+}
+
+// Card links per note, computed once per loaded state: both the note objects
+// and state.items are replaced together by every getState().
+let noteLinksCache = new WeakMap();
+
+function noteLinksFor(note) {
+  let links = noteLinksCache.get(note);
+  if (!links) {
+    links = core.noteCardLinks(note, state.items);
+    noteLinksCache.set(note, links);
+  }
+  return links;
+}
+
+// The kind a [[제목]] is coloured as: the first registered card with that
+// title, in 한자 → 단어 → 문법 → 표현 order.
+function wikiLinkKind(title) {
+  const cards = core.cardsByTitle(state.items, title);
+  return core.NOTE_LINK_KINDS.find(kind => cards.some(card => card.kind === kind)) || "";
+}
+
+function hideNoteCardPopover() {
+  const popover = byId("noteCardPopover");
+  if (popover && !popover.hidden) {
+    popover.hidden = true;
+    popover.anchor = null;
+  }
+}
+
+// Shows the card preview under the chip / [[link]] that was clicked (above it
+// when there is no room below); clicking the same one again closes it.
+function toggleNoteCardPopover(anchor) {
+  let popover = byId("noteCardPopover");
+  if (popover && !popover.hidden && popover.anchor === anchor) {
+    hideNoteCardPopover();
+    return;
+  }
+  if (!popover) {
+    popover = document.createElement("div");
+    popover.id = "noteCardPopover";
+    popover.className = "notebook-popover";
+    popover.setAttribute("role", "dialog");
+    popover.setAttribute("aria-label", "카드 미리보기");
+    document.body.appendChild(popover);
+  }
+  const title = anchor.dataset.noteCardTitle;
+  const kind = anchor.dataset.noteCardKind;
+  const item = kind ? core.cardByLink(state.items, { kind, title }) : null;
+  popover.innerHTML = noteCardPopover({
+    title,
+    item,
+    pageLabel: item ? kindLabels[item.kind] : "",
+    helpers: renderHelpers()
+  });
+  popover.hidden = false;
+  popover.anchor = anchor;
+  const margin = 8;
+  const rect = anchor.getBoundingClientRect();
+  const { offsetWidth: width, offsetHeight: height } = popover;
+  const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+  const below = rect.bottom + 6;
+  const top = below + height + margin <= window.innerHeight ? below : Math.max(margin, rect.top - height - 6);
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+}
+
+// "○○ 탭에서 보기" in the card preview: that kind's tab, searched for the card.
+function openCardPage(kind, title) {
+  hideNoteCardPopover();
+  if (kind === "word") {
+    WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
+  }
+  setSearch(title);
+  openPage(pageForKind(kind));
+}
+
+function noteEditorDraftNote() {
+  return {
+    body: byId("noteBodyInput").value,
+    links: noteEditorLinks,
+    excludedLinks: noteEditorExcluded
+  };
+}
+
+function renderNoteEditorLinks() {
+  const draft = noteEditorDraftNote();
+  const links = core.noteCardLinks(draft, state.items);
+  const query = byId("noteLinkSearch").value;
+  // Only an exclusion that still switches something off is worth showing.
+  const excluded = core.normalizeNoteLinks(noteEditorExcluded).filter(link => {
+    const item = core.cardByLink(state.items, link);
+    const needle = item ? core.autoLinkNeedle(item) : "";
+    return Boolean(needle) && draft.body.includes(needle);
+  });
+  applyPagePatch(renderNoteLinkEditor({
+    links,
+    excluded,
+    query,
+    results: core.searchLinkableCards(state.items, query, { exclude: links.filter(link => link.item) }),
+    helpers: renderHelpers()
+  }));
+}
+
+function sameNoteLink(left, right) {
+  return core.noteLinkKey(left) === core.noteLinkKey(right);
+}
+
+function noteEditorLinksChanged() {
+  hideNoteCardPopover();
+  saveNoteDraft();
+  renderNoteEditorLinks();
+}
+
+function addNoteEditorLink(link) {
+  noteEditorExcluded = noteEditorExcluded.filter(candidate => !sameNoteLink(candidate, link));
+  noteEditorLinks = core.normalizeNoteLinks([...noteEditorLinks, link]);
+  byId("noteLinkSearch").value = "";
+  noteEditorLinksChanged();
+  byId("noteLinkSearch").focus();
+}
+
+// A hand-added link is simply dropped; an auto-detected one would come
+// straight back, so it is remembered as excluded instead.
+function removeNoteEditorLink(link, origin) {
+  noteEditorLinks = noteEditorLinks.filter(candidate => !sameNoteLink(candidate, link));
+  if (origin === "auto") {
+    noteEditorExcluded = core.normalizeNoteLinks([...noteEditorExcluded, link]);
+  }
+  noteEditorLinksChanged();
+}
+
+function restoreNoteEditorLink(link) {
+  noteEditorExcluded = noteEditorExcluded.filter(candidate => !sameNoteLink(candidate, link));
+  noteEditorLinksChanged();
 }
 
 function scrollNotesToTop() {
@@ -1200,7 +1406,13 @@ function loadNoteDraft() {
   try {
     const parsed = JSON.parse(localStorage.getItem(NOTE_DRAFT_STORAGE_KEY) || "null");
     if (parsed && typeof parsed === "object" && typeof parsed.body === "string") {
-      return { noteId: String(parsed.noteId || ""), title: String(parsed.title || ""), body: parsed.body };
+      return {
+        noteId: String(parsed.noteId || ""),
+        title: String(parsed.title || ""),
+        body: parsed.body,
+        links: core.normalizeNoteLinks(parsed.links),
+        excludedLinks: core.normalizeNoteLinks(parsed.excludedLinks)
+      };
     }
   } catch {
     // localStorage unavailable or a malformed value - there is no draft.
@@ -1218,7 +1430,9 @@ function saveNoteDraft() {
     localStorage.setItem(NOTE_DRAFT_STORAGE_KEY, JSON.stringify({
       noteId: noteEditorIsNew ? "" : activeNoteId,
       title: byId("noteTitleInput").value,
-      body: byId("noteBodyInput").value
+      body: byId("noteBodyInput").value,
+      links: noteEditorLinks,
+      excludedLinks: noteEditorExcluded
     }));
   } catch {
     // Ignore write failures - the draft just won't survive a reload.
@@ -1239,16 +1453,20 @@ function setNoteEditorStatus(message, { draft = false } = {}) {
   byId("noteEditorStatus").hidden = !message;
 }
 
-function fillNoteEditor({ title = "", body = "" }) {
+function fillNoteEditor({ title = "", body = "", links = [], excludedLinks = [] }) {
   byId("noteTitleInput").value = title || "";
   byId("noteBodyInput").value = body || "";
+  byId("noteLinkSearch").value = "";
+  noteEditorLinks = core.normalizeNoteLinks(links);
+  noteEditorExcluded = core.normalizeNoteLinks(excludedLinks);
   renderNotePreview();
+  renderNoteEditorLinks();
 }
 
 function renderNotePreview() {
   const body = byId("noteBodyInput").value;
   byId("notePreview").innerHTML = body.trim()
-    ? renderMarkdown(body).html
+    ? renderMarkdown(body, { cardKind: wikiLinkKind }).html
     : `<p class="muted">본문을 입력하면 여기에 미리보기가 나타납니다.</p>`;
 }
 
@@ -1276,7 +1494,7 @@ function openNoteEditor(id) {
     && draft.noteId === (note ? note.id : "")
     && core.noteDraftIsDirty(note, draft);
   byId("noteEditorHeading").textContent = note ? "노트 수정" : "새 노트";
-  fillNoteEditor(restoreDraft ? draft : { title: note?.title, body: note?.body });
+  fillNoteEditor(restoreDraft ? draft : (note || {}));
   setNoteEditorStatus(restoreDraft ? "저장하지 않은 초안을 불러왔습니다." : "", { draft: restoreDraft });
   setNoteEditorPane("write");
   notesView = "edit";
@@ -1288,11 +1506,14 @@ function openNoteEditor(id) {
 function noteEditorIsDirty() {
   return core.noteDraftIsDirty(noteEditorIsNew ? null : noteById(activeNoteId), {
     title: byId("noteTitleInput").value,
-    body: byId("noteBodyInput").value
+    body: byId("noteBodyInput").value,
+    links: noteEditorLinks,
+    excludedLinks: noteEditorExcluded
   });
 }
 
 function leaveNoteEditor() {
+  hideNoteCardPopover();
   clearNoteDraft();
   setNoteEditorStatus("");
   if (noteEditorIsNew || !noteById(activeNoteId)) {
@@ -1317,7 +1538,7 @@ function cancelNoteEdit() {
 function discardNoteDraft() {
   const note = noteEditorIsNew ? null : noteById(activeNoteId);
   clearNoteDraft();
-  fillNoteEditor({ title: note?.title, body: note?.body });
+  fillNoteEditor(note || {});
   setNoteEditorStatus("");
   byId("noteBodyInput").focus();
 }
@@ -1332,12 +1553,19 @@ async function saveNoteFromEditor(event) {
     return;
   }
   try {
-    state = await store.upsertNote({ id: activeNoteId, title, body }, selectedDate);
+    state = await store.upsertNote({
+      id: activeNoteId,
+      title,
+      body,
+      links: noteEditorLinks,
+      excludedLinks: noteEditorExcluded
+    }, selectedDate);
   } catch (error) {
     // The draft stays in localStorage, so nothing typed is lost.
     setNoteEditorStatus(`저장하지 못했습니다: ${error?.message || String(error)}`);
     return;
   }
+  hideNoteCardPopover();
   clearNoteDraft();
   setNoteEditorStatus("");
   noteEditorIsNew = false;
@@ -1539,6 +1767,7 @@ function openPage(pageId) {
     return;
   }
   currentPage = pageId;
+  hideNoteCardPopover();
   renderAll();
   byId(pageId).scrollIntoView({ block: "start" });
 }

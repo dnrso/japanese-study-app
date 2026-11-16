@@ -1078,10 +1078,28 @@ function normalizeNote(note = {}) {
     // so it is stored as typed rather than trimmed through text().
     body: typeof note.body === "string" ? note.body : "",
     pinned: Boolean(note.pinned),
+    // Cards linked by hand, and auto-detected ones the user switched off, as
+    // { kind, title } pairs (see noteCardLinks in @nihongo-study/core).
+    links: normalizeNoteLinkList(note.links),
+    excludedLinks: normalizeNoteLinkList(note.excludedLinks),
     createdAt: text(note.createdAt || now()),
     updatedAt: text(note.updatedAt || now()),
     deletedAt: normalizeDeletedAt(note.deletedAt)
   };
+}
+
+function normalizeNoteLinkList(links) {
+  const seen = new Set();
+  return (Array.isArray(links) ? links : [])
+    .map(link => ({ kind: text(link?.kind), title: text(link?.title) }))
+    .filter(link => {
+      const key = `${link.kind}::${link.title}`;
+      if (!link.kind || !link.title || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
 }
 
 function normalizeStudyLog(studyLog = {}) {

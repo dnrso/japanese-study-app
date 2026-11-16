@@ -9,4 +9,4 @@ export { renderKanjiQuizPage, renderSentenceQuizPage, renderWordQuizPage } from 
 export { renderReviewPage } from "./review.js";
 export { renderStatsPage } from "./stats.js";
 export { renderQuizSettingsPage } from "./settings.js";
-export { NOTES_VIEWS, noteDateLabel, renderNotesPage } from "./notes.js";
+export { NOTES_VIEWS, NOTE_ROW_CHIP_LIMIT, noteCardChip, noteCardChips, noteCardPopover, noteDateLabel, renderNoteLinkEditor, renderNotesPage } from "./notes.js";

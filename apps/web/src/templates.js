@@ -459,6 +459,7 @@ function notesPageTemplate() {
           </div>
           <h2 class="notebook-title" id="notesReadTitle"></h2>
           <p class="notebook-meta" id="notesReadMeta"></p>
+          <div class="notebook-chips notebook-links" id="notesReadLinks" hidden></div>
           <div class="notebook-body" id="notesReadBody"></div>
         </div>
 
@@ -474,6 +475,15 @@ function notesPageTemplate() {
             <button class="link-btn" id="noteDiscardDraftBtn" type="button" hidden>초안 버리기</button>
           </p>
           <input id="noteTitleInput" type="text" maxlength="200" aria-label="노트 제목" placeholder="제목 (비워 두면 본문 첫 줄을 제목으로 씁니다)" autocomplete="off" />
+          <div class="notebook-link-editor">
+            <div class="notebook-link-editor-head">
+              <span class="notebook-links-label">연결된 카드 <span id="noteLinkCount"></span></span>
+              <input id="noteLinkSearch" type="search" aria-label="연결할 카드 검색" placeholder="카드를 검색해서 추가" autocomplete="off" />
+            </div>
+            <div class="notebook-link-results" id="noteLinkResults" hidden></div>
+            <div class="notebook-chips" id="noteLinkChips"></div>
+            <div class="notebook-chips notebook-link-excluded" id="noteLinkExcluded" hidden></div>
+          </div>
           <div class="notebook-editor-tabs" role="tablist" aria-label="편집 화면 전환">
             <button class="notebook-editor-tab active" type="button" role="tab" aria-selected="true" data-note-pane="write">편집</button>
             <button class="notebook-editor-tab" type="button" role="tab" aria-selected="false" data-note-pane="preview">미리보기</button>
@@ -482,7 +492,7 @@ function notesPageTemplate() {
             <textarea id="noteBodyInput" aria-label="노트 본문 (Markdown)" spellcheck="false" placeholder="# 제목&#10;&#10;Markdown으로 적습니다. 표, 목록, **굵게**를 쓸 수 있습니다."></textarea>
             <div class="notebook-body notebook-preview" id="notePreview" aria-label="미리보기"></div>
           </div>
-          <p class="muted notebook-editor-hint">Markdown 형식 · Ctrl+S로 저장 · 입력 중인 내용은 이 브라우저에 초안으로 보관됩니다.</p>
+          <p class="muted notebook-editor-hint">Markdown 형식 · [[제목]]으로 카드 연결 · Ctrl+S로 저장 · 입력 중인 내용은 이 브라우저에 초안으로 보관됩니다.</p>
         </form>
       </section>
     </section>

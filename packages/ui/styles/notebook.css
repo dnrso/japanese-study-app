@@ -25,8 +25,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
+  /* Column gap only: the chips row sits directly under the title. */
+  gap: 0 10px;
   padding: 4px 10px 4px 0;
+}
+
+/* With chips underneath, the title gives up most of its bottom padding so
+   the two read as one block. */
+.notebook-row:has(.notebook-row-chips) .notebook-row-main {
+  padding-bottom: 4px;
 }
 
 .notebook-row + .notebook-row {
@@ -95,6 +102,250 @@
 .notebook-row-actions .row-delete-btn:focus-visible {
   background: var(--red-soft);
   color: #cb574f;
+}
+
+/* ---- card links: chips, [[links]], preview ---- */
+
+.notebook-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.notebook-row-chips {
+  grid-column: 1 / -1;
+  gap: 3px;
+  padding: 0 4px 9px 14px;
+}
+
+/* Colours come from .badge.<colour>; this only makes the badge a button.
+   Compact tags rather than pills: a note can carry dozens of them. */
+.notebook-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+button.notebook-chip:hover,
+button.notebook-chip:focus-visible {
+  filter: brightness(0.96);
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+
+.notebook-chip--missing,
+.notebook-chip--more,
+.notebook-chip--excluded {
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+}
+
+.notebook-chip--missing,
+.notebook-chip--excluded {
+  border: 1px dashed var(--line-strong);
+}
+
+.notebook-chip-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.notebook-chip-remove {
+  width: 18px;
+  height: 18px;
+  margin-left: -2px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.notebook-chip-remove:hover,
+.notebook-chip-remove:focus-visible {
+  background: var(--red-soft);
+  color: #cb574f;
+}
+
+.notebook-links {
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notebook-links-label {
+  margin-right: 4px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notebook-links-empty {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.notebook-link-editor {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.notebook-link-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notebook-link-editor-head input {
+  width: min(260px, 60%);
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 13px;
+}
+
+.notebook-link-results {
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.notebook-link-results > .notebook-links-empty {
+  padding: 5px 7px;
+}
+
+.notebook-link-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.notebook-link-result:hover,
+.notebook-link-result:focus-visible {
+  background: var(--accent-soft);
+}
+
+.notebook-link-result-title {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.notebook-link-result-meaning {
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A [[제목]] in the body: reads as text, underlined in its card's colour. */
+.notebook-link {
+  padding: 0 1px;
+  border-bottom: 2px solid var(--line-strong);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.notebook-link:hover,
+.notebook-link:focus-visible {
+  background: var(--surface-soft);
+}
+
+.notebook-link--kanji {
+  border-bottom-color: var(--yellow);
+}
+
+.notebook-link--word {
+  border-bottom-color: var(--red);
+}
+
+.notebook-link--grammar {
+  border-bottom-color: var(--blue);
+}
+
+.notebook-link--expression {
+  border-bottom-color: var(--accent);
+}
+
+.notebook-link--missing {
+  border-bottom-style: dashed;
+  color: var(--muted-strong);
+}
+
+.notebook-popover {
+  position: fixed;
+  z-index: 60;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(38, 36, 31, 0.16);
+}
+
+.notebook-popover p {
+  margin: 0;
+}
+
+.notebook-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.notebook-popover-title {
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.notebook-popover-reading {
+  color: var(--muted-strong);
+  font-size: 13px;
+}
+
+.notebook-popover-meaning {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.notebook-popover-missing {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.notebook-popover .link-btn {
+  justify-self: start;
+  margin-top: 4px;
 }
 
 /* ---- reader / editor chrome ---- */
@@ -390,26 +641,32 @@
 }
 
 @media (max-width: 768px) {
+  /* Same single line as on desktop (title · date · actions), just tighter:
+     stacking the date over the buttons made every row two lines tall and
+     pushed the chips away from the title. */
   .notebook-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0 6px;
-    padding-right: 6px;
+    gap: 0 4px;
+    padding-right: 4px;
   }
 
   .notebook-row-main {
-    grid-row: 1 / span 2;
     padding-left: 12px;
   }
 
   .notebook-row-date {
-    grid-column: 2;
-    justify-self: end;
-    padding-top: 8px;
+    font-size: 11px;
   }
 
-  .notebook-row-actions {
-    grid-column: 2;
-    justify-self: end;
+  .notebook-row-chips {
+    padding-left: 12px;
+  }
+
+  .notebook-link-editor-head {
+    flex-wrap: wrap;
+  }
+
+  .notebook-link-editor-head input {
+    width: 100%;
   }
 
   .notebook-title {
