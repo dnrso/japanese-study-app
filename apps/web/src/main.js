@@ -130,6 +130,8 @@ const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
 // reload or a closed tab does not lose it. Device-local on purpose: an
 // unsaved draft is not study data and must not ride along in backups/sync.
 const NOTE_DRAFT_STORAGE_KEY = "nihongo-study.noteDraft";
+// 노트 목록 정렬: a per-device view preference, like the page sizes above.
+const NOTE_SORT_STORAGE_KEY = "nihongo-study.noteSort";
 
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
@@ -162,6 +164,7 @@ let homeSentenceEntryId = null;
 let notesView = "list";
 let activeNoteId = null;
 let noteEditorIsNew = false;
+let noteSort = loadNoteSort();
 // Card links of the note in the editor: the ones added by hand and the
 // auto-detected ones switched off, both as { kind, title }.
 let noteEditorLinks = [];
@@ -177,7 +180,8 @@ let pageIndex = {
   words: 1,
   grammar: 1,
   expression: 1,
-  kanji: 1
+  kanji: 1,
+  notes: 1
 };
 // Per-view page-size override (null/undefined = 기본값, i.e. this view's
 // entry in core.DEFAULT_LIST_PAGE_SIZES). Loaded once at startup from
@@ -261,6 +265,14 @@ function saveKanjiWordLimitSetting() {
   }
 }
 
+function loadNoteSort() {
+  try {
+    return core.normalizeNoteSort(localStorage.getItem(NOTE_SORT_STORAGE_KEY));
+  } catch {
+    return core.DEFAULT_NOTE_SORT;
+  }
+}
+
 function pageSizeFor(view) {
   return core.resolveListPageSize(view, listPageSizeOverrides[view]);
 }
@@ -272,7 +284,8 @@ const PAGINATED_LIST_RENDERERS = {
   words: () => renderWords(),
   grammar: () => renderCards("grammar", "grammarCards"),
   expression: () => renderCards("expression", "expressionCards"),
-  kanji: () => renderKanji()
+  kanji: () => renderKanji(),
+  notes: () => renderNotes()
 };
 
 function changePage(pageName, direction) {
@@ -388,6 +401,26 @@ function bindEvents() {
     const linkRestoreTarget = event.target.closest("[data-note-link-restore-title]");
     if (linkRestoreTarget) {
       restoreNoteEditorLink({ kind: linkRestoreTarget.dataset.noteLinkRestoreKind, title: linkRestoreTarget.dataset.noteLinkRestoreTitle });
+      return;
+    }
+
+    // A row's ⋯ menu closes on any click that is not on its own toggle
+    // (picking one of its items included).
+    document.querySelectorAll("details.notebook-menu[open]").forEach(menu => {
+      if (!menu.querySelector("summary").contains(event.target)) {
+        menu.open = false;
+      }
+    });
+
+    const pinNoteTarget = event.target.closest("[data-pin-note]");
+    if (pinNoteTarget) {
+      await toggleNotePinned(pinNoteTarget.dataset.pinNote);
+      return;
+    }
+
+    const duplicateNoteTarget = event.target.closest("[data-duplicate-note]");
+    if (duplicateNoteTarget) {
+      await duplicateNote(duplicateNoteTarget.dataset.duplicateNote);
       return;
     }
 
@@ -544,7 +577,7 @@ function bindEvents() {
 
   byId("globalSearch").addEventListener("input", event => {
     searchTerm = event.target.value.trim();
-    resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
+    resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
     renderAll();
   });
 
@@ -600,6 +633,24 @@ function bindEvents() {
 
   byId("newNoteBtn").addEventListener("click", () => openNoteEditor(null));
   byId("noteEditBtn").addEventListener("click", () => openNoteEditor(activeNoteId));
+  byId("notePinBtn").addEventListener("click", () => toggleNotePinned(activeNoteId));
+  byId("noteDuplicateBtn").addEventListener("click", () => duplicateNote(activeNoteId));
+  byId("noteSortSelect").addEventListener("change", event => {
+    noteSort = core.normalizeNoteSort(event.target.value);
+    try {
+      localStorage.setItem(NOTE_SORT_STORAGE_KEY, noteSort);
+    } catch {
+      // The choice just won't survive a reload.
+    }
+    resetPageIndex("notes");
+    renderNotes();
+  });
+  // <details> toggle events do not bubble, hence the capture listener.
+  document.addEventListener("toggle", event => {
+    if (event.target instanceof Element && event.target.matches("details.notebook-menu")) {
+      positionNoteMenu(event.target);
+    }
+  }, true);
   byId("noteDeleteBtn").addEventListener("click", () => deleteNote(activeNoteId));
   byId("noteCancelBtn").addEventListener("click", cancelNoteEdit);
   byId("noteDiscardDraftBtn").addEventListener("click", discardNoteDraft);
@@ -632,14 +683,19 @@ function bindEvents() {
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
       hideNoteCardPopover();
+      closeNoteMenus();
     }
   });
   window.addEventListener("scroll", event => {
     if (!(event.target instanceof Element) || !event.target.closest("#noteCardPopover")) {
       hideNoteCardPopover();
     }
+    closeNoteMenus();
   }, true);
-  window.addEventListener("resize", hideNoteCardPopover);
+  window.addEventListener("resize", () => {
+    hideNoteCardPopover();
+    closeNoteMenus();
+  });
 
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
@@ -1227,10 +1283,16 @@ function renderNotes() {
   const note = notesView === "read" ? noteById(activeNoteId) : null;
   const rendered = note ? renderMarkdown(note.body, { cardKind: wikiLinkKind }) : null;
   noteHeadings = rendered ? rendered.headings : [];
+  const matching = core.visibleNotes(allNotes(), searchTerm, noteSort);
+  const paged = paginate(matching, pageIndex.notes, pageSizeFor("notes"));
+  pageIndex.notes = paged.page;
   applyPagePatch(renderNotesPage({
     view: notesView,
-    notes: core.visibleNotes(allNotes(), searchTerm),
+    notes: paged.pageItems,
     total: allNotes().length,
+    matched: matching.length,
+    sort: noteSort,
+    pagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "notes" }),
     note,
     rendered,
     searchTerm,
@@ -1570,6 +1632,56 @@ async function saveNoteFromEditor(event) {
   setNoteEditorStatus("");
   noteEditorIsNew = false;
   notesView = "read";
+  renderAll();
+  scrollNotesToTop();
+}
+
+function closeNoteMenus() {
+  document.querySelectorAll("details.notebook-menu[open]").forEach(menu => {
+    menu.open = false;
+  });
+}
+
+// The menu list is position: fixed (the list and .main clip overflow, which
+// would cut a menu hanging off the last row): place it under the ⋯ button,
+// right-aligned, or above it when there is no room below.
+function positionNoteMenu(menu) {
+  if (!menu.open) {
+    return;
+  }
+  const list = menu.querySelector(".notebook-menu-list");
+  const rect = menu.querySelector("summary").getBoundingClientRect();
+  const margin = 8;
+  const { offsetWidth: width, offsetHeight: height } = list;
+  const below = rect.bottom + 4;
+  const top = below + height + margin <= window.innerHeight ? below : Math.max(margin, rect.top - height - 4);
+  const left = Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin));
+  list.style.top = `${Math.round(top)}px`;
+  list.style.left = `${Math.round(left)}px`;
+}
+
+async function toggleNotePinned(id) {
+  const note = noteById(id);
+  if (!note) {
+    return;
+  }
+  state = await store.upsertNote({ id, pinned: !note.pinned }, selectedDate);
+  renderAll();
+}
+
+// Saves a copy and leaves the user where they were: the copy shows up in the
+// list (first, under the default sort) rather than opening in the editor.
+async function duplicateNote(id) {
+  const note = noteById(id);
+  if (!note) {
+    return;
+  }
+  state = await store.upsertNote({ id: nextId("note"), ...core.duplicateNoteFields(note) }, selectedDate);
+  if (notesView === "read") {
+    notesView = "list";
+    activeNoteId = null;
+  }
+  resetPageIndex("notes");
   renderAll();
   scrollNotesToTop();
 }
@@ -2433,7 +2545,7 @@ function applyQuizQuestionFontSize() {
 function setSearch(value) {
   searchTerm = String(value || "").trim();
   byId("globalSearch").value = searchTerm;
-  resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
+  resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
 }
 
 function applyPagePatch(patch) {

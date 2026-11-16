@@ -46,24 +46,60 @@ export function notePreview(note = {}, maxLength = 110) {
   return joined.length > maxLength ? `${joined.slice(0, maxLength).trimEnd()}…` : joined;
 }
 
+// Title, body and the titles of hand-linked cards (auto and [[wiki]] links
+// are already words in the body).
 export function matchesNoteSearch(note = {}, searchTerm = "") {
   const needle = String(searchTerm || "").trim().toLowerCase();
   if (!needle) {
     return true;
   }
-  return `${note.title || ""}\n${note.body || ""}`.toLowerCase().includes(needle);
+  const linked = (Array.isArray(note.links) ? note.links : []).map(link => link?.title || "");
+  return [note.title, note.body, ...linked].join("\n").toLowerCase().includes(needle);
 }
 
-// Pinned notes first, then the most recently edited.
-export function sortNotes(notes = []) {
+// When the note's text or links last changed. `updatedAt` is the sync merge
+// clock and also moves when a note is merely pinned, so it is only the
+// fallback for notes saved before `editedAt` existed.
+export function noteEditedAt(note = {}) {
+  return String(note.editedAt || note.updatedAt || "");
+}
+
+export const NOTE_SORT_OPTIONS = ["edited", "created", "title"];
+export const DEFAULT_NOTE_SORT = "edited";
+
+export function normalizeNoteSort(sort) {
+  return NOTE_SORT_OPTIONS.includes(sort) ? sort : DEFAULT_NOTE_SORT;
+}
+
+const NOTE_SORTERS = {
+  edited: (left, right) => noteEditedAt(right).localeCompare(noteEditedAt(left)),
+  created: (left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")),
+  title: (left, right) => noteDisplayTitle(left).localeCompare(noteDisplayTitle(right), "ko")
+    || noteEditedAt(right).localeCompare(noteEditedAt(left))
+};
+
+// Pinned notes first, then by the chosen order (most recently edited by
+// default).
+export function sortNotes(notes = [], sort = DEFAULT_NOTE_SORT) {
+  const compare = NOTE_SORTERS[normalizeNoteSort(sort)];
   return [...notes].sort((left, right) =>
-    Number(Boolean(right.pinned)) - Number(Boolean(left.pinned))
-    || String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""))
+    Number(Boolean(right.pinned)) - Number(Boolean(left.pinned)) || compare(left, right)
   );
 }
 
-export function visibleNotes(notes = [], searchTerm = "") {
-  return sortNotes(notes.filter(note => matchesNoteSearch(note, searchTerm)));
+export function visibleNotes(notes = [], searchTerm = "", sort = DEFAULT_NOTE_SORT) {
+  return sortNotes(notes.filter(note => matchesNoteSearch(note, searchTerm)), sort);
+}
+
+// What 복제 saves: the same text and links under a title that says it is a
+// copy. The pin is not carried over.
+export function duplicateNoteFields(note = {}) {
+  return {
+    title: `${noteDisplayTitle(note)} (사본)`,
+    body: String(note.body || ""),
+    links: normalizeNoteLinks(note.links),
+    excludedLinks: normalizeNoteLinks(note.excludedLinks)
+  };
 }
 
 // Whether the editor holds something the stored note does not. `note` is

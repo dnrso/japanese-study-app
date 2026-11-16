@@ -314,3 +314,107 @@ describe("noteCardPopover", () => {
     expect(html).not.toContain("data-note-card-open-title");
   });
 });
+
+describe("list order, pinning and copies", () => {
+  const notes = [
+    { id: "b", title: "나", createdAt: "2026-01-03", editedAt: "2026-02-01", updatedAt: "2026-06-01" },
+    { id: "a", title: "가", createdAt: "2026-01-01", editedAt: "2026-03-01", updatedAt: "2026-03-01" },
+    { id: "c", title: "다", createdAt: "2026-01-02", editedAt: "2026-01-15", updatedAt: "2026-01-15", pinned: true }
+  ];
+  const order = sort => core.sortNotes(notes, sort).map(note => note.id);
+
+  it("sorts by last edit, creation date or title, pinned notes always first", () => {
+    expect(order("edited")).toEqual(["c", "a", "b"]);
+    expect(order("created")).toEqual(["c", "b", "a"]);
+    expect(order("title")).toEqual(["c", "a", "b"]);
+    expect(order("nonsense")).toEqual(order("edited"));
+    expect(core.normalizeNoteSort("title")).toBe("title");
+    expect(core.normalizeNoteSort(null)).toBe(core.DEFAULT_NOTE_SORT);
+  });
+
+  it("orders by editedAt, not the sync clock, and falls back for older notes", () => {
+    expect(core.noteEditedAt(notes[0])).toBe("2026-02-01");
+    expect(core.noteEditedAt({ updatedAt: "2026-05-05" })).toBe("2026-05-05");
+    expect(core.visibleNotes(notes, "", "edited").map(note => note.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("finds a note by the title of a hand-linked card", () => {
+    const linked = [{ id: "n", title: "메모", body: "본문", links: [{ kind: "word", title: "掃除" }] }];
+    expect(core.visibleNotes(linked, "掃除")).toHaveLength(1);
+    expect(core.visibleNotes(linked, "経験")).toHaveLength(0);
+  });
+
+  it("copies text and links under a title marked as a copy, without the pin", () => {
+    const copy = core.duplicateNoteFields({
+      id: "n", title: "", body: "# 원본 제목\n내용", pinned: true,
+      links: [{ kind: "word", title: "掃除" }], excludedLinks: [{ kind: "kanji", title: "除" }]
+    });
+    expect(copy).toEqual({
+      title: "원본 제목 (사본)",
+      body: "# 원본 제목\n내용",
+      links: [{ kind: "word", title: "掃除" }],
+      excludedLinks: [{ kind: "kanji", title: "除" }]
+    });
+  });
+
+  it("pinning keeps editedAt; changing the text moves it", async () => {
+    const storage = createIdbStorage({ dbName: `note-pin-${Date.now()}-${Math.random().toString(16).slice(2)}` });
+    await storage.initDatabase();
+    const created = (await storage.upsertNote({ id: "p", title: "제목", body: "본문" })).notes[0];
+    expect(created.editedAt).toBe(created.updatedAt);
+
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const pinned = (await storage.upsertNote({ id: "p", pinned: true })).notes[0];
+    expect(pinned.pinned).toBe(true);
+    expect(pinned.editedAt).toBe(created.editedAt);
+    expect(pinned.updatedAt > created.updatedAt).toBe(true);
+
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const edited = (await storage.upsertNote({ id: "p", body: "본문 수정" })).notes[0];
+    expect(edited.pinned).toBe(true);
+    expect(edited.editedAt > created.editedAt).toBe(true);
+
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const relinked = (await storage.upsertNote({ id: "p", links: [{ kind: "word", title: "掃除" }] })).notes[0];
+    expect(relinked.editedAt > edited.editedAt).toBe(true);
+    await storage.close();
+  });
+});
+
+describe("list row menu and paging", () => {
+  const now = new Date(2026, 10, 16, 15, 0);
+  const base = { id: "n1", title: "노트", body: "본문", updatedAt: now.toISOString(), editedAt: new Date(2026, 10, 9, 12, 0).toISOString() };
+
+  it("puts pin, edit, duplicate and delete in the row menu", () => {
+    const { html } = renderNotesPage({ view: "list", notes: [base], total: 1, now, helpers });
+    expect(html.notesList).toContain('<details class="notebook-menu notebook-row-actions">');
+    ["data-pin-note", "data-edit-note", "data-duplicate-note", "data-delete-note"].forEach(attribute => {
+      expect(html.notesList).toContain(`${attribute}="n1"`);
+    });
+    expect(html.notesList).toContain("맨 위에 고정");
+    expect(html.notesList).not.toContain("notebook-row-pin");
+  });
+
+  it("marks a pinned row and offers to unpin it", () => {
+    const { html, text } = renderNotesPage({ view: "read", notes: [{ ...base, pinned: true }], total: 1, note: { ...base, pinned: true }, rendered: { html: "" }, now, helpers });
+    expect(html.notesList).toContain("notebook-row--pinned");
+    expect(html.notesList).toContain("notebook-row-pin");
+    expect(html.notesList).toContain("고정 해제");
+    expect(text.notePinBtn).toBe("고정 해제");
+    expect(renderNotesPage({ view: "read", notes: [base], total: 1, note: base, rendered: { html: "" }, now, helpers }).text.notePinBtn).toBe("고정");
+  });
+
+  it("dates a row by editedAt rather than updatedAt", () => {
+    const patch = renderNotesPage({ view: "read", notes: [base], total: 1, note: base, rendered: { html: "" }, now, helpers });
+    expect(patch.html.notesList).toContain("11월 9일");
+    expect(patch.html.notesList).not.toContain("오늘");
+    expect(patch.text.notesReadMeta).toBe("마지막 수정 11월 9일");
+  });
+
+  it("counts every match, not just the current page, and passes the sort and pager through", () => {
+    const patch = renderNotesPage({ view: "list", notes: [base], total: 45, matched: 23, searchTerm: "노트", sort: "title", pagination: "<nav>pager</nav>", now, helpers });
+    expect(patch.text.notesCount).toBe("노트 23개 / 전체 45개");
+    expect(patch.value).toEqual({ noteSortSelect: "title" });
+    expect(patch.html.notesPagination).toBe("<nav>pager</nav>");
+  });
+});

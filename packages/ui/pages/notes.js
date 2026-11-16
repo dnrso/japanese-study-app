@@ -53,17 +53,25 @@ function noteRow(note, { helpers, now, linksFor }) {
   // The chips say what the note is about; the body preview is only needed
   // when there are none.
   const preview = links.length ? "" : core.notePreview(note);
+  const pinned = Boolean(note.pinned);
+  // The row's actions live in a <details> menu: main.js positions the list
+  // when it opens and closes it on an outside click.
   return `
-    <article class="notebook-row" data-note-id="${id}">
+    <article class="notebook-row${pinned ? " notebook-row--pinned" : ""}" data-note-id="${id}">
       <button class="notebook-row-main" type="button" data-open-note="${id}">
-        <span class="notebook-row-title">${highlight(core.noteDisplayTitle(note))}</span>
+        <span class="notebook-row-title">${pinned ? `<span class="notebook-row-pin" title="고정됨" aria-label="고정됨">${icon("pin")}</span>` : ""}<span class="notebook-row-title-text">${highlight(core.noteDisplayTitle(note))}</span></span>
         ${preview ? `<span class="notebook-row-preview">${highlight(preview)}</span>` : ""}
       </button>
-      <span class="notebook-row-date">${escapeHtml(noteDateLabel(note.updatedAt, now))}</span>
-      <div class="notebook-row-actions">
-        <button class="icon-btn row-action-btn" type="button" data-edit-note="${id}" title="수정" aria-label="수정">${icon("pencil")}</button>
-        <button class="icon-btn row-delete-btn" type="button" data-delete-note="${id}" title="삭제" aria-label="삭제">${icon("trash")}</button>
-      </div>
+      <span class="notebook-row-date">${escapeHtml(noteDateLabel(core.noteEditedAt(note), now))}</span>
+      <details class="notebook-menu notebook-row-actions">
+        <summary class="icon-btn row-action-btn" title="노트 메뉴" aria-label="노트 메뉴">${icon("dots")}</summary>
+        <div class="notebook-menu-list">
+          <button type="button" data-pin-note="${id}">${pinned ? "고정 해제" : "맨 위에 고정"}</button>
+          <button type="button" data-edit-note="${id}">수정</button>
+          <button type="button" data-duplicate-note="${id}">복제</button>
+          <button type="button" class="notebook-menu-danger" data-delete-note="${id}">삭제</button>
+        </div>
+      </details>
       ${links.length ? `<div class="notebook-chips notebook-row-chips">${noteCardChips(links, helpers, { limit: NOTE_ROW_CHIP_LIMIT })}</div>` : ""}
     </article>
   `;
@@ -80,13 +88,17 @@ function noteRow(note, { helpers, now, linksFor }) {
 //   note      the open note (read view), or null
 //   rendered  { html } from renderMarkdown(note.body) for the read view
 //   linksFor  note => its card links (core.noteCardLinks), for the chips
-export function renderNotesPage({ view = "list", notes = [], total = 0, note = null, rendered = null, searchTerm = "", now = new Date(), linksFor = () => [], helpers }) {
-  const { escapeHtml } = helpers;
+//   matched   notes matching the search across every page (defaults to
+//             notes.length for an unpaged list)
+//   sort      the active sort key, re-selected in #noteSortSelect
+//   pagination  markup for the prev/next bar ("" when there is one page)
+export function renderNotesPage({ view = "list", notes = [], total = 0, matched = notes.length, note = null, rendered = null, searchTerm = "", sort = "", pagination = "", now = new Date(), linksFor = () => [], helpers }) {
+  const { core, escapeHtml } = helpers;
   const activeView = view === "read" && !note ? "list" : view;
   const emptyMessage = searchTerm
     ? `'${escapeHtml(searchTerm)}' 검색 결과가 없습니다.`
     : "공부하면서 정리한 내용을 노트로 남겨 보세요. Markdown 표와 목록을 그대로 붙여 넣을 수 있습니다.";
-  const edited = note ? noteDateLabel(note.updatedAt, now) : "";
+  const edited = note ? noteDateLabel(core.noteEditedAt(note), now) : "";
   const title = note ? String(note.title || "").trim() : "";
   const openLinks = note ? linksFor(note) : [];
 
@@ -99,7 +111,8 @@ export function renderNotesPage({ view = "list", notes = [], total = 0, note = n
       notesEditView: activeView !== "edit"
     },
     text: {
-      notesCount: searchTerm && notes.length !== total ? `노트 ${notes.length}개 / 전체 ${total}개` : `노트 ${total}개`,
+      notesCount: searchTerm && matched !== total ? `노트 ${matched}개 / 전체 ${total}개` : `노트 ${total}개`,
+      notePinBtn: note?.pinned ? "고정 해제" : "고정",
       // Only a title the user typed gets the big heading: a derived title is
       // the body's own first line and would just be shown twice.
       notesReadTitle: title,
@@ -109,13 +122,16 @@ export function renderNotesPage({ view = "list", notes = [], total = 0, note = n
       notesList: notes.length
         ? notes.map(item => noteRow(item, { helpers, now, linksFor })).join("")
         : empty(emptyMessage),
+      notesPagination: pagination,
       notesReadLinks: openLinks.length
         ? `<span class="notebook-links-label">연결된 카드 ${openLinks.length}</span>${noteCardChips(openLinks, helpers)}`
         : "",
       notesReadBody: note
         ? (String(note.body || "").trim() ? rendered?.html || "" : empty("본문이 비어 있습니다."))
         : ""
-    }
+    },
+    // applyPagePatch writes html before value; the <select> itself is static.
+    value: sort ? { noteSortSelect: sort } : {}
   };
 }
 

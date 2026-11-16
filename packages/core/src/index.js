@@ -418,7 +418,8 @@ export const DEFAULT_LIST_PAGE_SIZES = {
   words: 20,
   grammar: 12,
   expression: 12,
-  kanji: 24
+  kanji: 24,
+  notes: 20
 };
 
 // Pure resolver so the settings-driven page size is unit-testable without

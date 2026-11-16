@@ -321,13 +321,21 @@ export function createIdbStorage(options = {}) {
   async function upsertNote(note = {}, studyDate = todayKey()) {
     const id = text(note.id) || createId();
     const existing = await getValue("notes", id);
+    const stamp = now();
     const payload = normalizeNote({
       ...existing,
       ...note,
       id,
       deletedAt: null,
-      updatedAt: now()
+      updatedAt: stamp
     });
+    // editedAt is what the list shows and sorts by: it only moves when the
+    // text or the links change, so pinning a note does not make it look
+    // freshly edited. updatedAt always moves - it is the sync merge clock.
+    const previous = existing && !existing.deletedAt ? normalizeNote(existing) : null;
+    const contentChanged = !previous || ["title", "body", "links", "excludedLinks"]
+      .some(field => JSON.stringify(payload[field]) !== JSON.stringify(previous[field]));
+    payload.editedAt = contentChanged ? stamp : previous.editedAt;
     await putValue("notes", payload);
     return getState(studyDate);
   }
@@ -1083,6 +1091,7 @@ function normalizeNote(note = {}) {
     links: normalizeNoteLinkList(note.links),
     excludedLinks: normalizeNoteLinkList(note.excludedLinks),
     createdAt: text(note.createdAt || now()),
+    editedAt: text(note.editedAt || note.updatedAt || now()),
     updatedAt: text(note.updatedAt || now()),
     deletedAt: normalizeDeletedAt(note.deletedAt)
   };

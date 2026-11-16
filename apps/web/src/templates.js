@@ -446,14 +446,24 @@ function notesPageTemplate() {
             <h2 class="panel-title">노트</h2>
             <button class="primary-btn" id="newNoteBtn" type="button">새 노트</button>
           </div>
-          <p class="notebook-count" id="notesCount">노트 0개</p>
+          <div class="table-tools">
+            <select id="noteSortSelect" aria-label="노트 정렬">
+              <option value="edited">최근 수정순</option>
+              <option value="created">만든 날짜순</option>
+              <option value="title">제목순</option>
+            </select>
+            <p class="table-tools-summary" id="notesCount">노트 0개</p>
+          </div>
           <div class="notebook-list" id="notesList"></div>
+          <div id="notesPagination"></div>
         </div>
 
         <div id="notesReadView" hidden>
           <div class="notebook-toolbar">
             <button class="ghost-btn" type="button" data-notes-back>목록으로</button>
             <span class="notebook-toolbar-spacer"></span>
+            <button class="ghost-btn" id="notePinBtn" type="button">고정</button>
+            <button class="ghost-btn" id="noteDuplicateBtn" type="button">복제</button>
             <button class="ghost-btn" id="noteEditBtn" type="button">수정</button>
             <button class="danger-btn" id="noteDeleteBtn" type="button">삭제</button>
           </div>
@@ -594,6 +604,7 @@ function settingsPageTemplate() {
           ${listPageSizeSelect("grammar", "문법 페이지당 항목 수")}
           ${listPageSizeSelect("expression", "표현 페이지당 항목 수")}
           ${listPageSizeSelect("kanji", "한자 페이지당 항목 수")}
+          ${listPageSizeSelect("notes", "노트 페이지당 항목 수")}
           ${kanjiWordLimitSelect()}
         </div>
         <p class="muted">문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 따로 적용됩니다.</p>

@@ -1,13 +1,6 @@
 /* 노트 tab. Everything here is prefixed `notebook-` because `.note-card` /
    `noteCard` already name the 문법/표현 study cards. */
 
-.notebook-count {
-  margin: 0 0 8px;
-  color: var(--muted-strong);
-  font-size: 13px;
-  font-weight: 750;
-}
-
 /* ---- list ---- */
 
 .notebook-list {
@@ -61,11 +54,79 @@
 }
 
 .notebook-row-title {
-  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 15px;
   font-weight: 800;
+}
+
+.notebook-row-title-text {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.notebook-row-pin {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* ⋯ menu on a row. The list is position: fixed and placed by main.js
+   (positionNoteMenu), so nothing that clips overflow can cut it off. */
+.notebook-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.notebook-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.notebook-menu[open] > summary {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.notebook-menu-list {
+  position: fixed;
+  z-index: 60;
+  min-width: 132px;
+  display: grid;
+  gap: 1px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(38, 36, 31, 0.16);
+}
+
+.notebook-menu-list button {
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.notebook-menu-list button:hover,
+.notebook-menu-list button:focus-visible {
+  background: var(--surface-soft);
+}
+
+.notebook-menu-list .notebook-menu-danger {
+  color: #cb574f;
+}
+
+.notebook-menu-list .notebook-menu-danger:hover,
+.notebook-menu-list .notebook-menu-danger:focus-visible {
+  background: var(--red-soft);
 }
 
 .notebook-row-preview {
@@ -81,27 +142,6 @@
   font-size: 12px;
   font-weight: 750;
   white-space: nowrap;
-}
-
-.notebook-row-actions {
-  display: flex;
-  gap: 2px;
-}
-
-.notebook-row-actions .row-delete-btn {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  display: inline-grid;
-  place-items: center;
-  background: transparent;
-  color: var(--muted);
-}
-
-.notebook-row-actions .row-delete-btn:hover,
-.notebook-row-actions .row-delete-btn:focus-visible {
-  background: var(--red-soft);
-  color: #cb574f;
 }
 
 /* ---- card links: chips, [[links]], preview ---- */
