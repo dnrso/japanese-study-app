@@ -8,7 +8,8 @@ describe("DEFAULT_LIST_PAGE_SIZES / LIST_PAGE_SIZE_OPTIONS", () => {
       words: 20,
       grammar: 12,
       expression: 12,
-      kanji: 24
+      kanji: 24,
+      notes: 20
     });
   });
 

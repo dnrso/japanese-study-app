@@ -4,6 +4,7 @@
 import { addDays, dateKey, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
 
 export * from "./merge.js";
+export * from "./notes.js";
 
 // Display-only copy of the AI 문장 분석 usage limits, for the client to show
 // alongside the AI checkbox (see apps/web/src/main.js). The limits are
@@ -570,7 +571,8 @@ export const DEFAULT_LIST_PAGE_SIZES = {
   words: 20,
   grammar: 12,
   expression: 12,
-  kanji: 24
+  kanji: 24,
+  notes: 20
 };
 
 // Pure resolver so the settings-driven page size is unit-testable without

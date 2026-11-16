@@ -45,6 +45,13 @@ const storageContract = [
   { name: "updateTaskDone", params: ["id", "done", "studyDate"], returns: "state" },
   { name: "upsertItem", params: ["item"], returns: "state" },
   { name: "deleteItem", params: ["id", "studyDate"], returns: "state" },
+  {
+    name: "upsertNote",
+    params: ["note", "studyDate"],
+    returns: "state",
+    note: "note.id may be supplied by the caller for a new note; updatedAt is always re-stamped."
+  },
+  { name: "deleteNote", params: ["id", "studyDate"], returns: "state" },
   { name: "updateItemReview", params: ["id", "review", "studyDate"], returns: "state" },
   {
     name: "completeReview",
@@ -91,9 +98,9 @@ const storageContract = [
 const storageMethodNames = storageContract.map(entry => entry.name);
 
 const storageStateShape = {
-  required: ["selectedDate", "studyLog", "studyDays", "dailyEntries", "allDailyEntries", "tasks", "items"],
+  required: ["selectedDate", "studyLog", "studyDays", "dailyEntries", "allDailyEntries", "tasks", "items", "notes"],
   optional: [],
-  arrays: ["studyDays", "dailyEntries", "allDailyEntries", "tasks", "items"],
+  arrays: ["studyDays", "dailyEntries", "allDailyEntries", "tasks", "items", "notes"],
   studyLogKeys: ["minutes", "summary", "note", "totalMinutes"]
 };
 

@@ -40,6 +40,7 @@ export function renderAppShell(byId) {
           <button class="tab" type="button" data-page="kanji">한자</button>
           <button class="tab" type="button" data-page="quiz">퀴즈</button>
           <button class="tab" type="button" data-page="review">복습 큐</button>
+          <button class="tab" type="button" data-page="notes">노트</button>
           <button class="tab" type="button" data-page="stats">통계</button>
           <button class="tab" type="button" data-page="settings">설정</button>
         </nav>
@@ -100,6 +101,7 @@ export function renderAppShell(byId) {
           ${kanjiPageTemplate()}
           ${quizPageTemplate()}
           ${reviewPageTemplate()}
+          ${notesPageTemplate()}
           ${statsPageTemplate()}
           ${settingsPageTemplate()}
         </main>
@@ -458,6 +460,83 @@ function reviewPageTemplate() {
   `;
 }
 
+// 노트 tab: three views in one panel, switched by renderNotesPage() through
+// their `hidden` flags. The list and the reader are re-rendered from state;
+// the editor form is static markup that main.js fills once when editing
+// starts, so a background re-render (sync, another save) never touches what
+// is being typed.
+function notesPageTemplate() {
+  return `
+    <section class="page hidden-page" id="notes">
+      <section class="panel section" id="notes-list">
+        <div id="notesListView">
+          <div class="panel-header">
+            <h2 class="panel-title">노트</h2>
+            <button class="primary-btn" id="newNoteBtn" type="button">새 노트</button>
+          </div>
+          <div class="table-tools">
+            <select id="noteSortSelect" aria-label="노트 정렬">
+              <option value="edited">최근 수정순</option>
+              <option value="created">만든 날짜순</option>
+              <option value="title">제목순</option>
+            </select>
+            <p class="table-tools-summary" id="notesCount">노트 0개</p>
+          </div>
+          <div class="notebook-list" id="notesList"></div>
+          <div id="notesPagination"></div>
+        </div>
+
+        <div id="notesReadView" hidden>
+          <div class="notebook-toolbar">
+            <button class="ghost-btn" type="button" data-notes-back>목록으로</button>
+            <span class="notebook-toolbar-spacer"></span>
+            <button class="ghost-btn" id="notePinBtn" type="button">고정</button>
+            <button class="ghost-btn" id="noteDuplicateBtn" type="button">복제</button>
+            <button class="ghost-btn" id="noteEditBtn" type="button">수정</button>
+            <button class="danger-btn" id="noteDeleteBtn" type="button">삭제</button>
+          </div>
+          <h2 class="notebook-title" id="notesReadTitle"></h2>
+          <p class="notebook-meta" id="notesReadMeta"></p>
+          <div class="notebook-chips notebook-links" id="notesReadLinks" hidden></div>
+          <div class="notebook-body" id="notesReadBody"></div>
+        </div>
+
+        <form id="notesEditView" hidden novalidate>
+          <div class="notebook-toolbar">
+            <h2 class="panel-title" id="noteEditorHeading">새 노트</h2>
+            <span class="notebook-toolbar-spacer"></span>
+            <button class="ghost-btn" id="noteCancelBtn" type="button">취소</button>
+            <button class="primary-btn" type="submit">저장</button>
+          </div>
+          <p class="notebook-editor-status" id="noteEditorStatus" aria-live="polite" hidden>
+            <span id="noteEditorStatusText"></span>
+            <button class="link-btn" id="noteDiscardDraftBtn" type="button" hidden>초안 버리기</button>
+          </p>
+          <input id="noteTitleInput" type="text" maxlength="200" aria-label="노트 제목" placeholder="제목 (비워 두면 본문 첫 줄을 제목으로 씁니다)" autocomplete="off" />
+          <div class="notebook-link-editor">
+            <div class="notebook-link-editor-head">
+              <span class="notebook-links-label">연결된 카드 <span id="noteLinkCount"></span></span>
+              <input id="noteLinkSearch" type="search" aria-label="연결할 카드 검색" placeholder="카드를 검색해서 추가" autocomplete="off" />
+            </div>
+            <div class="notebook-link-results" id="noteLinkResults" hidden></div>
+            <div class="notebook-chips" id="noteLinkChips"></div>
+            <div class="notebook-chips notebook-link-excluded" id="noteLinkExcluded" hidden></div>
+          </div>
+          <div class="notebook-editor-tabs" role="tablist" aria-label="편집 화면 전환">
+            <button class="notebook-editor-tab active" type="button" role="tab" aria-selected="true" data-note-pane="write">편집</button>
+            <button class="notebook-editor-tab" type="button" role="tab" aria-selected="false" data-note-pane="preview">미리보기</button>
+          </div>
+          <div class="notebook-editor" id="noteEditor" data-pane="write">
+            <textarea id="noteBodyInput" aria-label="노트 본문 (Markdown)" spellcheck="false" placeholder="# 제목&#10;&#10;Markdown으로 적습니다. 표, 목록, **굵게**를 쓸 수 있습니다."></textarea>
+            <div class="notebook-body notebook-preview" id="notePreview" aria-label="미리보기"></div>
+          </div>
+          <p class="muted notebook-editor-hint">Markdown 형식 · [[제목]]으로 카드 연결 · Ctrl+S로 저장 · 입력 중인 내용은 이 브라우저에 초안으로 보관됩니다.</p>
+        </form>
+      </section>
+    </section>
+  `;
+}
+
 function statsPageTemplate() {
   return `
     <section class="page hidden-page" id="stats">
@@ -531,7 +610,7 @@ function settingsPageTemplate() {
         ${settingRow({
           label: "페이지당 항목 수",
           labelId: "listPageSizeLabel",
-          description: "문장 · 단어 · 문법 · 표현 · 한자 탭에 각각 적용됩니다.",
+          description: "문장 · 단어 · 문법 · 표현 · 한자 · 노트 탭에 각각 적용됩니다.",
           controlClass: "setting-row-control-group",
           control: `<div class="page-size-grid" role="group" aria-labelledby="listPageSizeLabel">
           ${listPageSizeSelect("sentences", "문장 페이지당 항목 수", "문장")}
@@ -539,6 +618,7 @@ function settingsPageTemplate() {
           ${listPageSizeSelect("grammar", "문법 페이지당 항목 수", "문법")}
           ${listPageSizeSelect("expression", "표현 페이지당 항목 수", "표현")}
           ${listPageSizeSelect("kanji", "한자 페이지당 항목 수", "한자")}
+          ${listPageSizeSelect("notes", "노트 페이지당 항목 수", "노트")}
         </div>`
         })}
         ${settingRow({

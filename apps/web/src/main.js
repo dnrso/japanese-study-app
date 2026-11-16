@@ -17,6 +17,10 @@ import {
   renderHomePage,
   renderHomeSentencePanel,
   renderKanjiPage,
+  renderMarkdown,
+  renderNotesPage,
+  renderNoteLinkEditor,
+  noteCardPopover,
   renderKanjiQuizPage,
   renderLearnedSectionsPage,
   renderQuickFiltersPage,
@@ -121,6 +125,12 @@ const LIST_PAGE_SIZE_STORAGE_KEY = "nihongo-study.listPageSizes";
 // 한자 카드 단어 표시 수: page-size와 같은 방식(전용 localStorage 키, 백업 제외).
 const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
 
+// The note being written, kept outside IndexedDB until 저장 is pressed so a
+// reload or a closed tab does not lose it. Device-local on purpose: an
+// unsaved draft is not study data and must not ride along in backups/sync.
+const NOTE_DRAFT_STORAGE_KEY = "nihongo-study.noteDraft";
+// 노트 목록 정렬: a per-device view preference, like the page sizes above.
+const NOTE_SORT_STORAGE_KEY = "nihongo-study.noteSort";
 // 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값): 같은 방식의 전용 키.
 const QUIZ_SETTINGS_STORAGE_KEY = "nihongo-study.quizSettings";
 
@@ -161,6 +171,19 @@ let quizReviewOnCorrect = initialQuizSettings.reviewOnCorrect;
 let quizCorrectReview = initialQuizSettings.correctReview;
 let storageStatus = "";
 let homeSentenceEntryId = null;
+// 노트 tab. `notesView` is "list" | "read" | "edit"; `activeNoteId` is the note
+// being read or edited (a freshly minted id while a new note is being
+// written, so the saved note can be opened straight away).
+let notesView = "list";
+let activeNoteId = null;
+let noteEditorIsNew = false;
+let noteSort = loadNoteSort();
+// Card links of the note in the editor: the ones added by hand and the
+// auto-detected ones switched off, both as { kind, title }.
+let noteEditorLinks = [];
+let noteEditorExcluded = [];
+// Headings of the note being read, offered as the sidebar 목차.
+let noteHeadings = [];
 // Current page (1-based) per paginated list tab. Reset to 1 wherever that
 // tab's filter/search/sort changes (see resetPageIndex callers below);
 // paginate() itself also falls back to 1 if data shrinks below the
@@ -170,7 +193,8 @@ let pageIndex = {
   words: 1,
   grammar: 1,
   expression: 1,
-  kanji: 1
+  kanji: 1,
+  notes: 1
 };
 // Per-view page-size override (null/undefined = 기본값, i.e. this view's
 // entry in core.DEFAULT_LIST_PAGE_SIZES). Loaded once at startup from
@@ -254,6 +278,14 @@ function saveKanjiWordLimitSetting() {
   }
 }
 
+function loadNoteSort() {
+  try {
+    return core.normalizeNoteSort(localStorage.getItem(NOTE_SORT_STORAGE_KEY));
+  } catch {
+    return core.DEFAULT_NOTE_SORT;
+  }
+}
+
 function loadQuizSettings() {
   let raw = null;
   try {
@@ -304,7 +336,8 @@ const PAGINATED_LIST_RENDERERS = {
   words: () => renderWords(),
   grammar: () => renderCards("grammar", "grammarCards"),
   expression: () => renderCards("expression", "expressionCards"),
-  kanji: () => renderKanji()
+  kanji: () => renderKanji(),
+  notes: () => renderNotes()
 };
 
 function changePage(pageName, direction) {
@@ -382,6 +415,93 @@ function bindEvents() {
     const editTarget = event.target.closest("[data-edit-item]");
     if (editTarget) {
       await promptEditItem(editTarget.dataset.editItem);
+      return;
+    }
+
+    const cardOpenTarget = event.target.closest("[data-note-card-open-title]");
+    if (cardOpenTarget) {
+      openCardPage(cardOpenTarget.dataset.noteCardOpenKind, cardOpenTarget.dataset.noteCardOpenTitle);
+      return;
+    }
+
+    const cardTarget = event.target.closest("[data-note-card-title]");
+    if (cardTarget) {
+      toggleNoteCardPopover(cardTarget);
+      return;
+    }
+
+    // Any other click outside the card preview dismisses it.
+    if (!event.target.closest("#noteCardPopover")) {
+      hideNoteCardPopover();
+    }
+
+    const linkAddTarget = event.target.closest("[data-note-link-add-title]");
+    if (linkAddTarget) {
+      addNoteEditorLink({ kind: linkAddTarget.dataset.noteLinkAddKind, title: linkAddTarget.dataset.noteLinkAddTitle });
+      return;
+    }
+
+    const linkRemoveTarget = event.target.closest("[data-note-link-remove-title]");
+    if (linkRemoveTarget) {
+      removeNoteEditorLink(
+        { kind: linkRemoveTarget.dataset.noteLinkRemoveKind, title: linkRemoveTarget.dataset.noteLinkRemoveTitle },
+        linkRemoveTarget.dataset.noteLinkOrigin
+      );
+      return;
+    }
+
+    const linkRestoreTarget = event.target.closest("[data-note-link-restore-title]");
+    if (linkRestoreTarget) {
+      restoreNoteEditorLink({ kind: linkRestoreTarget.dataset.noteLinkRestoreKind, title: linkRestoreTarget.dataset.noteLinkRestoreTitle });
+      return;
+    }
+
+    // A row's ⋯ menu closes on any click that is not on its own toggle
+    // (picking one of its items included).
+    document.querySelectorAll("details.notebook-menu[open]").forEach(menu => {
+      if (!menu.querySelector("summary").contains(event.target)) {
+        menu.open = false;
+      }
+    });
+
+    const pinNoteTarget = event.target.closest("[data-pin-note]");
+    if (pinNoteTarget) {
+      await toggleNotePinned(pinNoteTarget.dataset.pinNote);
+      return;
+    }
+
+    const duplicateNoteTarget = event.target.closest("[data-duplicate-note]");
+    if (duplicateNoteTarget) {
+      await duplicateNote(duplicateNoteTarget.dataset.duplicateNote);
+      return;
+    }
+
+    const openNoteTarget = event.target.closest("[data-open-note]");
+    if (openNoteTarget) {
+      openNote(openNoteTarget.dataset.openNote);
+      return;
+    }
+
+    const editNoteTarget = event.target.closest("[data-edit-note]");
+    if (editNoteTarget) {
+      openNoteEditor(editNoteTarget.dataset.editNote);
+      return;
+    }
+
+    const deleteNoteTarget = event.target.closest("[data-delete-note]");
+    if (deleteNoteTarget) {
+      await deleteNote(deleteNoteTarget.dataset.deleteNote);
+      return;
+    }
+
+    if (event.target.closest("[data-notes-back]")) {
+      showNotesList();
+      return;
+    }
+
+    const notePaneTarget = event.target.closest("[data-note-pane]");
+    if (notePaneTarget) {
+      setNoteEditorPane(notePaneTarget.dataset.notePane);
       return;
     }
 
@@ -606,6 +726,72 @@ function bindEvents() {
     renderReview();
   });
 
+  byId("newNoteBtn").addEventListener("click", () => openNoteEditor(null));
+  byId("noteEditBtn").addEventListener("click", () => openNoteEditor(activeNoteId));
+  byId("notePinBtn").addEventListener("click", () => toggleNotePinned(activeNoteId));
+  byId("noteDuplicateBtn").addEventListener("click", () => duplicateNote(activeNoteId));
+  byId("noteSortSelect").addEventListener("change", event => {
+    noteSort = core.normalizeNoteSort(event.target.value);
+    try {
+      localStorage.setItem(NOTE_SORT_STORAGE_KEY, noteSort);
+    } catch {
+      // The choice just won't survive a reload.
+    }
+    resetPageIndex("notes");
+    renderNotes();
+  });
+  // <details> toggle events do not bubble, hence the capture listener.
+  document.addEventListener("toggle", event => {
+    if (event.target instanceof Element && event.target.matches("details.notebook-menu")) {
+      positionNoteMenu(event.target);
+    }
+  }, true);
+  byId("noteDeleteBtn").addEventListener("click", () => deleteNote(activeNoteId));
+  byId("noteCancelBtn").addEventListener("click", cancelNoteEdit);
+  byId("noteDiscardDraftBtn").addEventListener("click", discardNoteDraft);
+  byId("notesEditView").addEventListener("submit", saveNoteFromEditor);
+  byId("notesEditView").addEventListener("keydown", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      byId("notesEditView").requestSubmit();
+    }
+  });
+  ["noteTitleInput", "noteBodyInput"].forEach(id => {
+    byId(id).addEventListener("input", () => {
+      saveNoteDraft();
+      if (id === "noteBodyInput") {
+        renderNotePreview();
+        renderNoteEditorLinks();
+      }
+    });
+  });
+  byId("noteLinkSearch").addEventListener("input", renderNoteEditorLinks);
+  // Enter in the card search must not submit (save) the note.
+  byId("noteLinkSearch").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      byId("noteLinkResults").querySelector("[data-note-link-add-title]")?.click();
+    }
+  });
+  // The card preview is positioned against the chip that opened it, so it is
+  // dismissed rather than left behind when the page moves under it.
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      hideNoteCardPopover();
+      closeNoteMenus();
+    }
+  });
+  window.addEventListener("scroll", event => {
+    if (!(event.target instanceof Element) || !event.target.closest("#noteCardPopover")) {
+      hideNoteCardPopover();
+    }
+    closeNoteMenus();
+  }, true);
+  window.addEventListener("resize", () => {
+    hideNoteCardPopover();
+    closeNoteMenus();
+  });
+
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
   byId("nextMonthBtn").addEventListener("click", () => moveCalendarMonth(1));
@@ -793,6 +979,7 @@ function renderAll() {
   renderSentenceQuiz();
   renderQuizAvailability();
   renderReview();
+  renderNotes();
   renderStats();
   renderQuickFilters();
   renderQuizSettings();
@@ -1304,6 +1491,440 @@ function renderReview() {
   }));
 }
 
+function allNotes() {
+  return state.notes || [];
+}
+
+function noteById(id) {
+  return allNotes().find(note => note.id === id) || null;
+}
+
+function renderNotes() {
+  // The note being read can disappear underneath us (deleted on another
+  // device and synced in, or a backup loaded): fall back to the list.
+  if (notesView === "read" && !noteById(activeNoteId)) {
+    notesView = "list";
+    activeNoteId = null;
+  }
+  const note = notesView === "read" ? noteById(activeNoteId) : null;
+  const rendered = note ? renderMarkdown(note.body, { cardKind: wikiLinkKind }) : null;
+  noteHeadings = rendered ? rendered.headings : [];
+  const matching = core.visibleNotes(allNotes(), searchTerm, noteSort);
+  const paged = paginate(matching, pageIndex.notes, pageSizeFor("notes"));
+  pageIndex.notes = paged.page;
+  applyPagePatch(renderNotesPage({
+    view: notesView,
+    notes: paged.pageItems,
+    total: allNotes().length,
+    matched: matching.length,
+    sort: noteSort,
+    pagination: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: "notes" }),
+    note,
+    rendered,
+    searchTerm,
+    linksFor: noteLinksFor,
+    helpers: renderHelpers()
+  }));
+  if (notesView === "edit") {
+    // Cards may have been registered or deleted since the editor opened.
+    renderNoteEditorLinks();
+  }
+  if (currentPage === "notes") {
+    renderToc("notes");
+  }
+}
+
+// Card links per note, computed once per loaded state: both the note objects
+// and state.items are replaced together by every getState().
+let noteLinksCache = new WeakMap();
+
+function noteLinksFor(note) {
+  let links = noteLinksCache.get(note);
+  if (!links) {
+    links = core.noteCardLinks(note, state.items);
+    noteLinksCache.set(note, links);
+  }
+  return links;
+}
+
+// The kind a [[제목]] is coloured as: the first registered card with that
+// title, in 한자 → 단어 → 문법 → 표현 order.
+function wikiLinkKind(title) {
+  const cards = core.cardsByTitle(state.items, title);
+  return core.NOTE_LINK_KINDS.find(kind => cards.some(card => card.kind === kind)) || "";
+}
+
+function hideNoteCardPopover() {
+  const popover = byId("noteCardPopover");
+  if (popover && !popover.hidden) {
+    popover.hidden = true;
+    popover.anchor = null;
+  }
+}
+
+// Shows the card preview under the chip / [[link]] that was clicked (above it
+// when there is no room below); clicking the same one again closes it.
+function toggleNoteCardPopover(anchor) {
+  let popover = byId("noteCardPopover");
+  if (popover && !popover.hidden && popover.anchor === anchor) {
+    hideNoteCardPopover();
+    return;
+  }
+  if (!popover) {
+    popover = document.createElement("div");
+    popover.id = "noteCardPopover";
+    popover.className = "notebook-popover";
+    popover.setAttribute("role", "dialog");
+    popover.setAttribute("aria-label", "카드 미리보기");
+    document.body.appendChild(popover);
+  }
+  const title = anchor.dataset.noteCardTitle;
+  const kind = anchor.dataset.noteCardKind;
+  const item = kind ? core.cardByLink(state.items, { kind, title }) : null;
+  popover.innerHTML = noteCardPopover({
+    title,
+    item,
+    pageLabel: item ? kindLabels[item.kind] : "",
+    helpers: renderHelpers()
+  });
+  popover.hidden = false;
+  popover.anchor = anchor;
+  const margin = 8;
+  const rect = anchor.getBoundingClientRect();
+  const { offsetWidth: width, offsetHeight: height } = popover;
+  const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+  const below = rect.bottom + 6;
+  const top = below + height + margin <= window.innerHeight ? below : Math.max(margin, rect.top - height - 6);
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+}
+
+// "○○ 탭에서 보기" in the card preview: that kind's tab, searched for the card.
+function openCardPage(kind, title) {
+  hideNoteCardPopover();
+  if (kind === "word") {
+    WORD_FILTER_IDS.forEach(id => { byId(id).value = ""; });
+  }
+  setSearch(title);
+  openPage(pageForKind(kind));
+}
+
+function noteEditorDraftNote() {
+  return {
+    body: byId("noteBodyInput").value,
+    links: noteEditorLinks,
+    excludedLinks: noteEditorExcluded
+  };
+}
+
+function renderNoteEditorLinks() {
+  const draft = noteEditorDraftNote();
+  const links = core.noteCardLinks(draft, state.items);
+  const query = byId("noteLinkSearch").value;
+  // Only an exclusion that still switches something off is worth showing.
+  const excluded = core.normalizeNoteLinks(noteEditorExcluded).filter(link => {
+    const item = core.cardByLink(state.items, link);
+    const needle = item ? core.autoLinkNeedle(item) : "";
+    return Boolean(needle) && draft.body.includes(needle);
+  });
+  applyPagePatch(renderNoteLinkEditor({
+    links,
+    excluded,
+    query,
+    results: core.searchLinkableCards(state.items, query, { exclude: links.filter(link => link.item) }),
+    helpers: renderHelpers()
+  }));
+}
+
+function sameNoteLink(left, right) {
+  return core.noteLinkKey(left) === core.noteLinkKey(right);
+}
+
+function noteEditorLinksChanged() {
+  hideNoteCardPopover();
+  saveNoteDraft();
+  renderNoteEditorLinks();
+}
+
+function addNoteEditorLink(link) {
+  noteEditorExcluded = noteEditorExcluded.filter(candidate => !sameNoteLink(candidate, link));
+  noteEditorLinks = core.normalizeNoteLinks([...noteEditorLinks, link]);
+  byId("noteLinkSearch").value = "";
+  noteEditorLinksChanged();
+  byId("noteLinkSearch").focus();
+}
+
+// A hand-added link is simply dropped; an auto-detected one would come
+// straight back, so it is remembered as excluded instead.
+function removeNoteEditorLink(link, origin) {
+  noteEditorLinks = noteEditorLinks.filter(candidate => !sameNoteLink(candidate, link));
+  if (origin === "auto") {
+    noteEditorExcluded = core.normalizeNoteLinks([...noteEditorExcluded, link]);
+  }
+  noteEditorLinksChanged();
+}
+
+function restoreNoteEditorLink(link) {
+  noteEditorExcluded = noteEditorExcluded.filter(candidate => !sameNoteLink(candidate, link));
+  noteEditorLinksChanged();
+}
+
+function scrollNotesToTop() {
+  byId("notes").scrollIntoView({ block: "start" });
+}
+
+function showNotesList() {
+  notesView = "list";
+  activeNoteId = null;
+  renderNotes();
+  scrollNotesToTop();
+}
+
+function openNote(id) {
+  if (!noteById(id)) {
+    return;
+  }
+  notesView = "read";
+  activeNoteId = id;
+  renderNotes();
+  scrollNotesToTop();
+}
+
+function loadNoteDraft() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(NOTE_DRAFT_STORAGE_KEY) || "null");
+    if (parsed && typeof parsed === "object" && typeof parsed.body === "string") {
+      return {
+        noteId: String(parsed.noteId || ""),
+        title: String(parsed.title || ""),
+        body: parsed.body,
+        links: core.normalizeNoteLinks(parsed.links),
+        excludedLinks: core.normalizeNoteLinks(parsed.excludedLinks)
+      };
+    }
+  } catch {
+    // localStorage unavailable or a malformed value - there is no draft.
+  }
+  return null;
+}
+
+// `noteId` is "" for a note that has never been saved, so a draft of a new
+// note is offered again the next time 새 노트 is pressed.
+function saveNoteDraft() {
+  if (notesView !== "edit") {
+    return;
+  }
+  try {
+    localStorage.setItem(NOTE_DRAFT_STORAGE_KEY, JSON.stringify({
+      noteId: noteEditorIsNew ? "" : activeNoteId,
+      title: byId("noteTitleInput").value,
+      body: byId("noteBodyInput").value,
+      links: noteEditorLinks,
+      excludedLinks: noteEditorExcluded
+    }));
+  } catch {
+    // Ignore write failures - the draft just won't survive a reload.
+  }
+}
+
+function clearNoteDraft() {
+  try {
+    localStorage.removeItem(NOTE_DRAFT_STORAGE_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+function setNoteEditorStatus(message, { draft = false } = {}) {
+  byId("noteEditorStatusText").textContent = message;
+  byId("noteDiscardDraftBtn").hidden = !draft;
+  byId("noteEditorStatus").hidden = !message;
+}
+
+function fillNoteEditor({ title = "", body = "", links = [], excludedLinks = [] }) {
+  byId("noteTitleInput").value = title || "";
+  byId("noteBodyInput").value = body || "";
+  byId("noteLinkSearch").value = "";
+  noteEditorLinks = core.normalizeNoteLinks(links);
+  noteEditorExcluded = core.normalizeNoteLinks(excludedLinks);
+  renderNotePreview();
+  renderNoteEditorLinks();
+}
+
+function renderNotePreview() {
+  const body = byId("noteBodyInput").value;
+  byId("notePreview").innerHTML = body.trim()
+    ? renderMarkdown(body, { cardKind: wikiLinkKind }).html
+    : `<p class="muted">본문을 입력하면 여기에 미리보기가 나타납니다.</p>`;
+}
+
+// 편집/미리보기 toggle. Only matters on narrow screens; wide screens show
+// both panes side by side regardless of the selected one.
+function setNoteEditorPane(pane) {
+  const active = pane === "preview" ? "preview" : "write";
+  byId("noteEditor").dataset.pane = active;
+  document.querySelectorAll("[data-note-pane]").forEach(tab => {
+    const selected = tab.dataset.notePane === active;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+  });
+}
+
+// Opens the editor on an existing note, or on a blank one when `id` matches
+// no note. A leftover draft for the same note is restored instead of the
+// stored text - that is the whole point of keeping it.
+function openNoteEditor(id) {
+  const note = id ? noteById(id) : null;
+  noteEditorIsNew = !note;
+  activeNoteId = note ? note.id : nextId("note");
+  const draft = loadNoteDraft();
+  const restoreDraft = Boolean(draft)
+    && draft.noteId === (note ? note.id : "")
+    && core.noteDraftIsDirty(note, draft);
+  byId("noteEditorHeading").textContent = note ? "노트 수정" : "새 노트";
+  fillNoteEditor(restoreDraft ? draft : (note || {}));
+  setNoteEditorStatus(restoreDraft ? "저장하지 않은 초안을 불러왔습니다." : "", { draft: restoreDraft });
+  setNoteEditorPane("write");
+  notesView = "edit";
+  renderNotes();
+  scrollNotesToTop();
+  byId(note ? "noteBodyInput" : "noteTitleInput").focus();
+}
+
+function noteEditorIsDirty() {
+  return core.noteDraftIsDirty(noteEditorIsNew ? null : noteById(activeNoteId), {
+    title: byId("noteTitleInput").value,
+    body: byId("noteBodyInput").value,
+    links: noteEditorLinks,
+    excludedLinks: noteEditorExcluded
+  });
+}
+
+function leaveNoteEditor() {
+  hideNoteCardPopover();
+  clearNoteDraft();
+  setNoteEditorStatus("");
+  if (noteEditorIsNew || !noteById(activeNoteId)) {
+    notesView = "list";
+    activeNoteId = null;
+  } else {
+    notesView = "read";
+  }
+  renderNotes();
+  scrollNotesToTop();
+}
+
+function cancelNoteEdit() {
+  if (noteEditorIsDirty() && !window.confirm("저장하지 않은 변경 내용을 버릴까요?")) {
+    return;
+  }
+  leaveNoteEditor();
+}
+
+// Throws the restored draft away and goes back to the stored text, staying
+// in the editor.
+function discardNoteDraft() {
+  const note = noteEditorIsNew ? null : noteById(activeNoteId);
+  clearNoteDraft();
+  fillNoteEditor(note || {});
+  setNoteEditorStatus("");
+  byId("noteBodyInput").focus();
+}
+
+async function saveNoteFromEditor(event) {
+  event.preventDefault();
+  const title = byId("noteTitleInput").value.trim();
+  const body = byId("noteBodyInput").value;
+  if (!title && !body.trim()) {
+    setNoteEditorStatus("제목이나 본문을 입력한 뒤 저장하세요.");
+    byId("noteBodyInput").focus();
+    return;
+  }
+  try {
+    state = await store.upsertNote({
+      id: activeNoteId,
+      title,
+      body,
+      links: noteEditorLinks,
+      excludedLinks: noteEditorExcluded
+    }, selectedDate);
+  } catch (error) {
+    // The draft stays in localStorage, so nothing typed is lost.
+    setNoteEditorStatus(`저장하지 못했습니다: ${error?.message || String(error)}`);
+    return;
+  }
+  hideNoteCardPopover();
+  clearNoteDraft();
+  setNoteEditorStatus("");
+  noteEditorIsNew = false;
+  notesView = "read";
+  renderAll();
+  scrollNotesToTop();
+}
+
+function closeNoteMenus() {
+  document.querySelectorAll("details.notebook-menu[open]").forEach(menu => {
+    menu.open = false;
+  });
+}
+
+// The menu list is position: fixed (the list and .main clip overflow, which
+// would cut a menu hanging off the last row): place it under the ⋯ button,
+// right-aligned, or above it when there is no room below.
+function positionNoteMenu(menu) {
+  if (!menu.open) {
+    return;
+  }
+  const list = menu.querySelector(".notebook-menu-list");
+  const rect = menu.querySelector("summary").getBoundingClientRect();
+  const margin = 8;
+  const { offsetWidth: width, offsetHeight: height } = list;
+  const below = rect.bottom + 4;
+  const top = below + height + margin <= window.innerHeight ? below : Math.max(margin, rect.top - height - 4);
+  const left = Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin));
+  list.style.top = `${Math.round(top)}px`;
+  list.style.left = `${Math.round(left)}px`;
+}
+
+async function toggleNotePinned(id) {
+  const note = noteById(id);
+  if (!note) {
+    return;
+  }
+  state = await store.upsertNote({ id, pinned: !note.pinned }, selectedDate);
+  renderAll();
+}
+
+// Saves a copy and leaves the user where they were: the copy shows up in the
+// list (first, under the default sort) rather than opening in the editor.
+async function duplicateNote(id) {
+  const note = noteById(id);
+  if (!note) {
+    return;
+  }
+  state = await store.upsertNote({ id: nextId("note"), ...core.duplicateNoteFields(note) }, selectedDate);
+  if (notesView === "read") {
+    notesView = "list";
+    activeNoteId = null;
+  }
+  resetPageIndex("notes");
+  renderAll();
+  scrollNotesToTop();
+}
+
+async function deleteNote(id) {
+  const note = noteById(id);
+  if (!note || !window.confirm(`'${core.noteDisplayTitle(note)}' 노트를 삭제할까요?`)) {
+    return;
+  }
+  state = await store.deleteNote(id, selectedDate);
+  if (activeNoteId === id && notesView !== "edit") {
+    notesView = "list";
+    activeNoteId = null;
+  }
+  renderAll();
+}
+
 function focusReviewRow(id) {
   const row = [...document.querySelectorAll("#reviewCards .review-row")].find(candidate => candidate.dataset.itemId === id);
   row?.querySelector("[data-review-value]")?.focus();
@@ -1442,10 +2063,15 @@ function renderDate() {
 }
 
 function renderToc(pageId) {
-  const tocItems = filterTocForPlatform(tocByPage[pageId] || [], desktopApp);
+  // A note that is being read lists its own headings (h1-h3) instead of the
+  // page's fixed sections. Heading text is user input, hence the escaping.
+  const noteToc = pageId === "notes" && notesView === "read"
+    ? noteHeadings.filter(heading => heading.level <= 3 && heading.text).map(heading => [heading.id, heading.text, ""])
+    : [];
+  const tocItems = noteToc.length ? noteToc : filterTocForPlatform(tocByPage[pageId] || [], desktopApp);
   byId("tocList").innerHTML = tocItems.map((item, index) => `
-    <a class="toc-item ${index === 0 ? "active" : ""}" href="#${item[0]}">
-      <span>${item[1]}</span>
+    <a class="toc-item ${index === 0 ? "active" : ""}" href="#${escapeHtml(item[0])}">
+      <span>${escapeHtml(item[1])}</span>
       ${item[2] ? `<span class="count">${item[2]}</span>` : ""}
     </a>
   `).join("");
@@ -1482,6 +2108,10 @@ function updatePageVisibility() {
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-current", active ? "page" : "false");
   });
+  // The tabbar scrolls sideways when it does not fit (narrow windows, the
+  // mobile bottom bar): keep the current tab visible. "nearest" on both axes
+  // so this never moves the page itself.
+  document.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function updateDailyEntryPlaceholder() {
@@ -1542,6 +2172,7 @@ function openPage(pageId) {
     return;
   }
   currentPage = pageId;
+  hideNoteCardPopover();
   renderAll();
   // 검색 중에는 페이지 위의 검색 상태 칩이 가려지지 않게 그쪽으로 맞춘다.
   (searchTerm ? byId("searchStatus") : byId(pageId)).scrollIntoView({ block: "start" });
@@ -2217,7 +2848,7 @@ function setSearch(value) {
   window.clearTimeout(searchTimer);
   searchTerm = String(value || "").trim();
   byId("globalSearch").value = searchTerm;
-  resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
+  resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
   syncSearchClearButton();
 }
 
@@ -2229,7 +2860,7 @@ function scheduleSearch(value, delay) {
       return;
     }
     searchTerm = next;
-    resetPageIndex("sentences", "words", "grammar", "expression", "kanji");
+    resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
     renderAll();
   }, delay);
 }
@@ -2256,6 +2887,7 @@ function searchResultCount() {
     case "expressions": return items("expression").length;
     case "kanji": return items("kanji").length;
     case "review": return core.reviewItems(state.items, searchTerm, reviewKindFilter).length;
+    case "notes": return core.visibleNotes(allNotes(), searchTerm).length;
     default: return null;
   }
 }

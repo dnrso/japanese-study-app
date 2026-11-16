@@ -1,0 +1,727 @@
+/* 노트 tab. Everything here is prefixed `notebook-` because `.note-card` /
+   `noteCard` already name the 문법/표현 study cards. */
+
+/* ---- list ---- */
+
+.notebook-list {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.notebook-list > .empty-state {
+  border: 0;
+}
+
+.notebook-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  /* Column gap only: the chips row sits directly under the title. */
+  gap: 0 10px;
+  padding: 4px 10px 4px 0;
+}
+
+/* With chips underneath, the title gives up most of its bottom padding so
+   the two read as one block. */
+.notebook-row:has(.notebook-row-chips) .notebook-row-main {
+  padding-bottom: 4px;
+}
+
+.notebook-row + .notebook-row {
+  border-top: 1px solid var(--line);
+}
+
+.notebook-row:hover {
+  background: var(--surface-soft);
+}
+
+.notebook-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 9px 4px 9px 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.notebook-row-main:focus-visible {
+  outline: 2px solid rgba(63, 129, 98, 0.55);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+.notebook-row-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.notebook-row-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notebook-row-pin {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* ⋯ menu on a row. The list is position: fixed and placed by main.js
+   (positionNoteMenu), so nothing that clips overflow can cut it off. */
+.notebook-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.notebook-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.notebook-menu[open] > summary {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.notebook-menu-list {
+  position: fixed;
+  z-index: 60;
+  min-width: 132px;
+  display: grid;
+  gap: 1px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(38, 36, 31, 0.16);
+}
+
+.notebook-menu-list button {
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.notebook-menu-list button:hover,
+.notebook-menu-list button:focus-visible {
+  background: var(--surface-soft);
+}
+
+.notebook-menu-list .notebook-menu-danger {
+  color: #cb574f;
+}
+
+.notebook-menu-list .notebook-menu-danger:hover,
+.notebook-menu-list .notebook-menu-danger:focus-visible {
+  background: var(--red-soft);
+}
+
+.notebook-row-preview {
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notebook-row-date {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+/* ---- card links: chips, [[links]], preview ---- */
+
+.notebook-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.notebook-row-chips {
+  grid-column: 1 / -1;
+  gap: 3px;
+  padding: 0 4px 9px 14px;
+}
+
+/* Colours come from .badge.<colour>; this only makes the badge a button.
+   Compact tags rather than pills: a note can carry dozens of them. */
+.notebook-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+button.notebook-chip:hover,
+button.notebook-chip:focus-visible {
+  filter: brightness(0.96);
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+
+.notebook-chip--missing,
+.notebook-chip--more,
+.notebook-chip--excluded {
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+}
+
+.notebook-chip--missing,
+.notebook-chip--excluded {
+  border: 1px dashed var(--line-strong);
+}
+
+.notebook-chip-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.notebook-chip-remove {
+  width: 18px;
+  height: 18px;
+  margin-left: -2px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.notebook-chip-remove:hover,
+.notebook-chip-remove:focus-visible {
+  background: var(--red-soft);
+  color: #cb574f;
+}
+
+.notebook-links {
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notebook-links-label {
+  margin-right: 4px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notebook-links-empty {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.notebook-link-editor {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.notebook-link-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notebook-link-editor-head input {
+  width: min(260px, 60%);
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 13px;
+}
+
+.notebook-link-results {
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.notebook-link-results > .notebook-links-empty {
+  padding: 5px 7px;
+}
+
+.notebook-link-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.notebook-link-result:hover,
+.notebook-link-result:focus-visible {
+  background: var(--accent-soft);
+}
+
+.notebook-link-result-title {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.notebook-link-result-meaning {
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A [[제목]] in the body: reads as text, underlined in its card's colour. */
+.notebook-link {
+  padding: 0 1px;
+  border-bottom: 2px solid var(--line-strong);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.notebook-link:hover,
+.notebook-link:focus-visible {
+  background: var(--surface-soft);
+}
+
+.notebook-link--kanji {
+  border-bottom-color: var(--yellow);
+}
+
+.notebook-link--word {
+  border-bottom-color: var(--red);
+}
+
+.notebook-link--grammar {
+  border-bottom-color: var(--blue);
+}
+
+.notebook-link--expression {
+  border-bottom-color: var(--accent);
+}
+
+.notebook-link--missing {
+  border-bottom-style: dashed;
+  color: var(--muted-strong);
+}
+
+.notebook-popover {
+  position: fixed;
+  z-index: 60;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(38, 36, 31, 0.16);
+}
+
+.notebook-popover p {
+  margin: 0;
+}
+
+.notebook-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.notebook-popover-title {
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.notebook-popover-reading {
+  color: var(--muted-strong);
+  font-size: 13px;
+}
+
+.notebook-popover-meaning {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.notebook-popover-missing {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.notebook-popover .link-btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+/* ---- reader / editor chrome ---- */
+
+.notebook-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.notebook-toolbar-spacer {
+  flex: 1;
+}
+
+.notebook-title {
+  margin: 4px 0 2px;
+  font-size: 24px;
+  line-height: 1.3;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.notebook-meta {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.notebook-editor-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--yellow-soft);
+  color: #8a5f12;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+#noteTitleInput {
+  min-height: 40px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.notebook-editor-tabs {
+  display: none;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.notebook-editor-tab {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.notebook-editor-tab.active {
+  border-color: rgba(63, 129, 98, 0.32);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.notebook-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.notebook-editor textarea {
+  min-height: 62vh;
+  resize: vertical;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "D2Coding", "Yu Gothic UI", "Malgun Gothic", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.notebook-preview {
+  max-height: 62vh;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+}
+
+.notebook-editor-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+/* ---- rendered Markdown ---- */
+
+/* Japanese faces first so kanji take Japanese glyph shapes; they carry no
+   hangul, which therefore falls through to the app's Korean stack. */
+.notebook-body {
+  max-width: 860px;
+  font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.notebook-body > :first-child {
+  margin-top: 0;
+}
+
+.notebook-body > :last-child {
+  margin-bottom: 0;
+}
+
+.notebook-body h1,
+.notebook-body h2,
+.notebook-body h3,
+.notebook-body h4,
+.notebook-body h5,
+.notebook-body h6 {
+  margin: 1.5em 0 0.5em;
+  line-height: 1.35;
+  font-weight: 850;
+  /* Sidebar 목차 links jump here; stay clear of the sticky topbar. */
+  scroll-margin-top: calc(var(--topbar-height) + 14px);
+}
+
+.notebook-body h1 {
+  font-size: 22px;
+}
+
+.notebook-body h2 {
+  font-size: 19px;
+}
+
+.notebook-body h3 {
+  font-size: 16.5px;
+}
+
+.notebook-body h4,
+.notebook-body h5,
+.notebook-body h6 {
+  font-size: 15px;
+}
+
+.notebook-body p,
+.notebook-body ul,
+.notebook-body ol,
+.notebook-body blockquote,
+.notebook-body pre,
+.notebook-table-wrap {
+  margin: 0 0 0.9em;
+}
+
+.notebook-body ul,
+.notebook-body ol {
+  padding-left: 1.5em;
+}
+
+.notebook-body li + li {
+  margin-top: 0.25em;
+}
+
+.notebook-body li > ul,
+.notebook-body li > ol {
+  margin: 0.25em 0 0;
+}
+
+.notebook-body strong {
+  font-weight: 850;
+}
+
+.notebook-body a {
+  color: var(--accent-deep);
+}
+
+.notebook-body hr {
+  height: 1px;
+  margin: 1.4em 0;
+  border: 0;
+  background: var(--line);
+}
+
+.notebook-body blockquote {
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted-strong);
+}
+
+.notebook-body code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-soft);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Yu Gothic UI", monospace;
+  font-size: 0.92em;
+}
+
+.notebook-body pre {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  overflow-x: auto;
+}
+
+.notebook-body pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.notebook-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* A wide table scrolls inside this box rather than widening the page. */
+.notebook-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.notebook-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.notebook-body th,
+.notebook-body td {
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+  /* Short cells ("버릴 사") should not be squeezed into one syllable per
+     line by a long neighbour: break Korean between words, not inside them. */
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.notebook-body th {
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.notebook-body tbody tr:nth-child(even) {
+  background: rgba(242, 239, 232, 0.45);
+}
+
+.notebook-body tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The lead cell of a row is the thing being studied (a kanji, a word):
+   show it large when it is written in bold. */
+.notebook-body td:first-child > strong:only-child {
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .notebook-editor-tabs {
+    display: flex;
+  }
+
+  .notebook-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .notebook-editor[data-pane="write"] .notebook-preview,
+  .notebook-editor[data-pane="preview"] textarea {
+    display: none;
+  }
+
+  .notebook-editor textarea,
+  .notebook-preview {
+    min-height: 52vh;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Same single line as on desktop (title · date · actions), just tighter:
+     stacking the date over the buttons made every row two lines tall and
+     pushed the chips away from the title. */
+  .notebook-row {
+    gap: 0 4px;
+    padding-right: 4px;
+  }
+
+  .notebook-row-main {
+    padding-left: 12px;
+  }
+
+  .notebook-row-date {
+    font-size: 11px;
+  }
+
+  .notebook-row-chips {
+    padding-left: 12px;
+  }
+
+  .notebook-link-editor-head {
+    flex-wrap: wrap;
+  }
+
+  .notebook-link-editor-head input {
+    width: 100%;
+  }
+
+  .notebook-title {
+    font-size: 20px;
+  }
+
+  .notebook-body th,
+  .notebook-body td {
+    padding: 7px 9px;
+  }
+
+  /* Table columns keep a readable width and the wrapper scrolls instead. */
+  .notebook-body table {
+    width: max-content;
+    min-width: 100%;
+    max-width: 640px;
+  }
+}
