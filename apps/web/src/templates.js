@@ -273,6 +273,7 @@ function wordsPageTemplate() {
             <option value="sentence">문장에서 등록</option>
             <option value="manual">직접 추가</option>
           </select>
+          <div class="segmented weak-toggle-group"><button class="segmented-btn weak-toggle" id="wordWeakToggle" type="button" data-weak-toggle="word" aria-pressed="false" disabled>약한 단어 0</button></div>
           <p class="table-tools-summary"><span id="wordFilterSummary"></span><button class="link-btn" id="wordFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="table-scroll">
@@ -367,6 +368,7 @@ function kanjiPageTemplate() {
             <option value="empty">뜻 미입력</option>
             <option value="filled">뜻 입력됨</option>
           </select>
+          <div class="segmented weak-toggle-group"><button class="segmented-btn weak-toggle" id="kanjiWeakToggle" type="button" data-weak-toggle="kanji" aria-pressed="false" disabled>약한 한자 0</button></div>
           <p class="table-tools-summary"><span id="kanjiFilterSummary"></span><button class="link-btn" id="kanjiFilterResetBtn" type="button" hidden>필터 초기화</button></p>
         </div>
         <div class="kanji-grid" id="kanjiCards"></div>
@@ -382,6 +384,10 @@ function quizPageTemplate() {
       <section class="panel section" id="quiz-select">
         <div class="panel-header" id="quizSelectHeader">
           <h2 class="panel-title">퀴즈</h2>
+        </div>
+        <div class="quiz-weak-option" id="quizWeakOption">
+          <label class="quiz-weak-toggle"><input type="checkbox" id="quizWeakOnlyCheckbox" data-quiz-weak-only /> <span>약한 항목만 풀기</span></label>
+          <span class="quiz-weak-summary" id="quizWeakSummary"></span>
         </div>
         <div class="quiz-grid" id="quizSelectGrid">
           <article class="quiz-card">
@@ -633,7 +639,7 @@ function settingsPageTemplate() {
         <div class="panel-header settings-panel-header">
           <div>
             <h2 class="panel-title">퀴즈</h2>
-            <p class="muted settings-panel-desc">문제 글자 크기와 정답을 맞혔을 때의 복습 일정을 정합니다.</p>
+            <p class="muted settings-panel-desc">문제 글자 크기와 퀴즈 결과의 복습 일정 반영을 정합니다.</p>
           </div>
         </div>
         ${settingRow({
@@ -650,17 +656,10 @@ function settingsPageTemplate() {
         </div>`
         })}
         ${settingRow({
-          label: "정답을 맞히면 복습 일정 미루기",
-          labelId: "quizReviewOnCorrectLabel",
-          description: "퀴즈에서 맞힌 항목의 복습 상태를 아래 값으로 바꿉니다.",
-          control: `<input id="quizReviewOnCorrectCheckbox" type="checkbox" class="setting-switch" checked aria-labelledby="quizReviewOnCorrectLabel" />`
-        })}
-        ${settingRow({
-          label: "미룰 기간",
-          labelId: "quizCorrectReviewLabel",
-          extraClass: "setting-row-dependent",
-          rowId: "quizCorrectReviewRow",
-          control: `<select id="quizCorrectReviewSelect" aria-labelledby="quizCorrectReviewLabel"></select>`
+          label: "퀴즈 결과를 복습 일정에 반영",
+          labelId: "quizReflectInReviewLabel",
+          description: "틀리면 오늘 복습으로, 복습할 차례에 맞히면 다음 간격으로 넘깁니다.",
+          control: `<input id="quizReflectInReviewCheckbox" type="checkbox" class="setting-switch" checked aria-labelledby="quizReflectInReviewLabel" />`
         })}
       </section>
 

@@ -1,32 +1,13 @@
-export function renderQuizSettingsPage({
-  quizQuestionFontSize,
-  quizReviewOnCorrect,
-  quizCorrectReview,
-  scheduledReviewOptions,
-  helpers
-}) {
+export function renderQuizSettingsPage({ quizQuestionFontSize }) {
   return {
     value: {
-      quizQuestionFontSizeRange: String(quizQuestionFontSize),
-      quizCorrectReviewSelect: quizCorrectReview
+      quizQuestionFontSizeRange: String(quizQuestionFontSize)
     },
     text: {
       quizQuestionFontSizeValue: `${quizQuestionFontSize}px`
     },
     style: {
       quizQuestionFontSizePreview: { fontSize: `${quizQuestionFontSize}px` }
-    },
-    classToggle: {
-      quizCorrectReviewRow: { "is-disabled": !quizReviewOnCorrect }
-    },
-    html: {
-      quizCorrectReviewSelect: [
-        `<option value="">변경 안 함</option>`,
-        ...scheduledReviewOptions.map(option => `<option value="${helpers.escapeHtml(option)}">${helpers.escapeHtml(option)}</option>`)
-      ].join("")
-    },
-    disabled: {
-      quizCorrectReviewSelect: !quizReviewOnCorrect
     }
   };
 }

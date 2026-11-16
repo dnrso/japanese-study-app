@@ -4,5 +4,6 @@ export { paginate, paginationControls } from "./pagination.js";
 export { quizPanel } from "./quizPanel.js";
 export { sourceSentenceLinks } from "./sourceLinks.js";
 export { speakerButton } from "./speech.js";
+export { weakBadge } from "./weakBadge.js";
 export { kanjiMemo, noteCard, noteFormFields } from "./noteCard.js";
 export { renderMarkdown } from "./markdown.js";
