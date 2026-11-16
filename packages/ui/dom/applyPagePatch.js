@@ -6,6 +6,19 @@ export function applyPagePatch(patch = {}, options = {}) {
   applyStylePatch(patch.style, getElementById);
   applyBooleanPatch(patch.hidden, "hidden", getElementById);
   applyBooleanPatch(patch.disabled, "disabled", getElementById);
+  applyClassTogglePatch(patch.classToggle, getElementById);
+}
+
+function applyClassTogglePatch(classPatch = {}, getElementById) {
+  Object.entries(classPatch).forEach(([id, classes]) => {
+    const element = getElementById(id);
+    if (!element) {
+      return;
+    }
+    Object.entries(classes || {}).forEach(([name, on]) => {
+      element.classList.toggle(name, Boolean(on));
+    });
+  });
 }
 
 function createElementResolver(options = {}) {

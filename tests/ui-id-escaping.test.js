@@ -46,8 +46,6 @@ function helpers(extra = {}) {
     highlight: escapeHtml,
     kindLabels,
     reviewStatusText: core.reviewStatusText,
-    reviewQueueReview: item => core.reviewQueueReview(item),
-    reviewQueueStatusText: item => core.reviewQueueStatusText({ item }),
     ...extra
   };
 }
@@ -143,7 +141,7 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
     expect(html).toContain(`data-item-id="${escapeHtml(HOSTILE_ID)}"`);
-    expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).not.toContain("data-delete-item");
     expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
   });
 
@@ -183,7 +181,7 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).not.toContain(HOSTILE_ID);
     expect(html).toContain(`data-edit-item="${escapeHtml(HOSTILE_ID)}"`);
-    expect(html).toContain(`data-delete-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).not.toContain("data-delete-item");
     expect(html).toContain(`data-review-select="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
   });
@@ -270,9 +268,16 @@ describe("record ids rendered into HTML attributes", () => {
   });
 
   it("renderReviewPage does not let an id break out of its attributes", () => {
-    const html = patchHtml(renderReviewPage({ reviewItems: [hostileWord()], helpers: helpers() }));
+    const html = patchHtml(renderReviewPage({
+      reviewItems: [hostileWord()],
+      kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
+      scheduledReviewOptions: ["내일", "3일 후"],
+      hideMeaning: true,
+      helpers: helpers()
+    }));
     expect(injectedAttributes(html)).toEqual([]);
-    expect(html).toContain(`data-cycle-review-queue="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-item="${escapeHtml(HOSTILE_ID)}"`);
+    expect(html).toContain(`data-review-reveal="${escapeHtml(HOSTILE_ID)}"`);
   });
 
   it("renderTasksPage does not let a task id break out of its attributes", () => {
@@ -318,5 +323,23 @@ describe("record ids rendered into HTML attributes", () => {
     expect(injectedAttributes(html)).toEqual([]);
     expect(html).toContain(`data-daily-entry-id="${escapeHtml(HOSTILE_ID)}"`);
     expect(html).toContain(`data-jump-sentence="${escapeHtml(HOSTILE_ID)}"`);
+  });
+});
+
+describe("noteCard examples", () => {
+  const base = { id: "g1", kind: "grammar", title: "〜てしまう", meaning: "m", sourceSentences: [{ id: "s1", title: "忘れてしまう <b>", studyDate: "2026-01-01" }] };
+  it("emphasizes the title match, shows meaning, and puts the speaker on the example for grammar", () => {
+    const h = { ...helpers(), sentenceMeaning: id => (id === "s1" ? "잊어버렸다" : "") };
+    const html = noteCard(base, ["대기"], h);
+    expect(html).toContain('<strong class="example-hit">てしまう</strong>');
+    expect(html).toContain("잊어버렸다");
+    expect(html).toContain("&lt;b&gt;");
+    expect(html.match(/data-speak-text/g)).toHaveLength(1);
+    expect(html.indexOf("data-speak-text")).toBeGreaterThan(html.indexOf("note-example"));
+  });
+  it("keeps the title speaker for expressions and works without sentenceMeaning", () => {
+    const html = noteCard({ ...base, kind: "expression", title: "x" }, ["대기"], helpers());
+    expect(html.indexOf("data-speak-text")).toBeLessThan(html.indexOf("note-example"));
+    expect(html).not.toContain("note-example-meaning");
   });
 });

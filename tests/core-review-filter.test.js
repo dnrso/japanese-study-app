@@ -3,8 +3,12 @@ import {
   REVIEW_KIND_FILTER_OPTIONS,
   matchesReviewKindFilter,
   normalizeReviewKindFilter,
-  reviewCompletionTargets,
-  reviewItems
+  groupReviewItemsByKind,
+  reviewItems,
+  reviewKindCounts,
+  reviewQueueDueDate,
+  reviewQueueProgress,
+  reviewSnapshot
 } from "@nihongo-study/core";
 
 // Minimal review-item shapes: isReviewQueueItem only cares about `review`
@@ -25,8 +29,8 @@ const items = [
 const ids = list => list.map(item => item.id);
 
 describe("REVIEW_KIND_FILTER_OPTIONS", () => {
-  it("offers 단어/표현/문법/문장/한자 in control order", () => {
-    expect(REVIEW_KIND_FILTER_OPTIONS).toEqual(["word", "expression", "grammar", "sentence", "kanji"]);
+  it("offers 단어/문법/표현/한자/문장 in display order", () => {
+    expect(REVIEW_KIND_FILTER_OPTIONS).toEqual(["word", "grammar", "expression", "kanji", "sentence"]);
   });
 
   // 자료 is the one kind isReviewQueueItem excludes outright, so it must never
@@ -122,47 +126,99 @@ describe("reviewItems kind filtering", () => {
   });
 });
 
-describe("reviewCompletionTargets with a kind filter", () => {
-  const drafts = new Map([
-    ["w1", "내일"],
-    ["e1", "일주일"],
-    ["s1", "한달"],
-    ["k1", "3일 후"]
-  ]);
+describe("reviewKindCounts", () => {
+  it("counts the search-narrowed queue per kind, plus the 전체 total", () => {
+    expect(reviewKindCounts(items)).toEqual({ all: 6, word: 2, grammar: 1, expression: 1, kanji: 1, sentence: 1 });
+    expect(reviewKindCounts(items, "犬")).toEqual({ all: 3, word: 1, grammar: 0, expression: 0, kanji: 1, sentence: 1 });
+  });
+});
 
-  it("completes every drafted queue item under 전체", () => {
-    expect(reviewCompletionTargets({ items, drafts })).toEqual([
-      { id: "w1", review: "내일" },
-      { id: "e1", review: "일주일" },
-      { id: "s1", review: "한달" },
-      { id: "k1", review: "3일 후" }
-    ]);
+describe("groupReviewItemsByKind", () => {
+  it("groups in the fixed kind order and skips empty kinds", () => {
+    const groups = groupReviewItemsByKind(reviewItems(items));
+    expect(groups.map(group => group.kind)).toEqual(["word", "grammar", "expression", "kanji", "sentence"]);
+    expect(groups.map(group => ids(group.items))).toEqual([["w1", "w2"], ["g1"], ["e1"], ["k1"], ["s1"]]);
+    expect(groupReviewItemsByKind(reviewItems(items, "犬")).map(group => group.kind)).toEqual(["word", "kanji", "sentence"]);
+    expect(groupReviewItemsByKind([])).toEqual([]);
+  });
+});
+
+describe("reviewQueueProgress", () => {
+  const reviewed = (id, kind, at) => ({ id, kind, title: id, review: "일주일", lastReviewedAt: at });
+  const base = [
+    ...items,
+    reviewed("d1", "word", "2026-11-10T01:00:00.000Z"),
+    reviewed("d2", "sentence", "2026-11-10T02:00:00.000Z"),
+    reviewed("old", "word", "2026-11-09T02:00:00.000Z")
+  ];
+
+  it("counts today's completions against the remaining queue", () => {
+    expect(reviewQueueProgress(base, "", "2026-11-10")).toEqual({ done: 2, remaining: 6, percent: 25 });
   });
 
-  it("only completes what the active kind filter leaves visible", () => {
-    expect(reviewCompletionTargets({ items, drafts, kindFilter: "word" })).toEqual([
-      { id: "w1", review: "내일" }
-    ]);
-    expect(reviewCompletionTargets({ items, drafts, kindFilter: "sentence" })).toEqual([
-      { id: "s1", review: "한달" }
-    ]);
-    expect(reviewCompletionTargets({ items, drafts, kindFilter: "kanji" })).toEqual([
-      { id: "k1", review: "3일 후" }
-    ]);
+  it("narrows only the remaining side by the search term", () => {
+    expect(reviewQueueProgress(base, "犬", "2026-11-10")).toEqual({ done: 2, remaining: 3, percent: 40 });
   });
 
-  it("intersects the kind filter with the search term", () => {
-    expect(reviewCompletionTargets({ items, drafts, searchTerm: "犬", kindFilter: "sentence" })).toEqual([
-      { id: "s1", review: "한달" }
-    ]);
-    // The drafted word item (w1 = 私) is filtered out by the search term.
-    expect(reviewCompletionTargets({ items, drafts, searchTerm: "犬", kindFilter: "word" })).toEqual([]);
+  it("is 0% with nothing done or remaining", () => {
+    expect(reviewQueueProgress([], "", "2026-11-10")).toEqual({ done: 0, remaining: 0, percent: 0 });
+  });
+});
+
+describe("reviewQueueDueDate / reviewSnapshot", () => {
+  it("resolves intervals from the given day", () => {
+    expect(reviewQueueDueDate("내일", "2026-11-10")).toBe("2026-11-11");
+    expect(reviewQueueDueDate("3일 후", "2026-11-10")).toBe("2026-11-13");
+    expect(reviewQueueDueDate("대기", "2026-11-10")).toBe("");
   });
 
-  it("skips visible items that have no draft (still 대기)", () => {
-    // w2/g1 are visible but undrafted, so a kind filter matching them
-    // produces nothing to complete.
-    expect(reviewCompletionTargets({ items, drafts: new Map(), kindFilter: "word" })).toEqual([]);
-    expect(reviewCompletionTargets({ items, drafts, kindFilter: "grammar" })).toEqual([]);
+  it("captures exactly what a completion overwrites", () => {
+    expect(reviewSnapshot({ review: "오늘", reviewDueDate: "", lastReviewedAt: "x", title: "y" }))
+      .toEqual({ review: "오늘", reviewDueDate: "", lastReviewedAt: "x" });
+    expect(reviewSnapshot({})).toEqual({ review: "대기", reviewDueDate: "", lastReviewedAt: "" });
+  });
+});
+
+import {
+  isReviewDue,
+  matchesStudyCardFilters,
+  normalizeStudyCardSort,
+  sortStudyCards,
+  studyCardFilterCounts
+} from "@nihongo-study/core";
+
+describe("study card sort and filters", () => {
+  const list = [
+    { id: "a", title: "〜ている", review: "내일" },
+    { id: "b", title: "あげる", review: "대기", sourceSentences: [{ id: "s1", title: "x", studyDate: "2026-01-01" }] },
+    { id: "c", title: "~がち", review: "오늘" },
+    { id: "d", title: "いい", review: "일주일" }
+  ];
+  const ids = rows => rows.map(row => row.id);
+
+  it("keeps recent order, reverses for oldest, without mutating", () => {
+    expect(ids(sortStudyCards(list, "recent"))).toEqual(["a", "b", "c", "d"]);
+    expect(ids(sortStudyCards(list, "oldest"))).toEqual(["d", "c", "b", "a"]);
+    expect(ids(list)).toEqual(["a", "b", "c", "d"]);
+  });
+  it("sorts by title ignoring a leading 〜/~", () => {
+    expect(ids(sortStudyCards(list, "kana"))).toEqual(["b", "d", "c", "a"]);
+  });
+  it("puts due items first, then recent", () => {
+    expect(ids(sortStudyCards(list, "due"))).toEqual(["b", "c", "a", "d"]);
+    expect(isReviewDue(list[0])).toBe(false);
+  });
+  it("normalizes unknown sort keys", () => {
+    expect(normalizeStudyCardSort("zzz")).toBe("recent");
+    expect(normalizeStudyCardSort("kana")).toBe("kana");
+  });
+  it("counts and matches filters", () => {
+    expect(studyCardFilterCounts(list)).toEqual({
+      review: { all: 4, due: 2, scheduled: 2 },
+      source: { all: 4, sentence: 1, manual: 3 }
+    });
+    expect(ids(list.filter(item => matchesStudyCardFilters(item, { review: "due", source: "sentence" })))).toEqual(["b"]);
+    expect(ids(list.filter(item => matchesStudyCardFilters(item, { review: "scheduled" })))).toEqual(["a", "d"]);
+    expect(list.every(item => matchesStudyCardFilters(item, {}))).toBe(true);
   });
 });

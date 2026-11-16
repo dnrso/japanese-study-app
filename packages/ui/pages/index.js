@@ -1,12 +1,12 @@
 export { homeSentencePanel, homeSummaryPanel, renderHomePage, renderHomeSentencePanel, renderQuickFiltersPage, renderTasksPage } from "./home.js";
 export { ENTRY_MODES, entryFormatHelp, renderCalendarPage, renderLearnedSectionsPage, renderTodayPage, sentenceEntryPanel } from "./today.js";
 export { renderSourcesPage, safeSourceUrl } from "./sources.js";
-export { SENTENCE_PERIOD_FILTERS, SENTENCE_STATUS_FILTERS, renderSentencesPage, sentenceChildren } from "./sentences.js";
+export { SENTENCE_PERIOD_FILTERS, SENTENCE_STATUS_FILTERS, renderSentencesPage, sentenceCard, sentenceChildren } from "./sentences.js";
 export { renderWordsPage, wordFormFields } from "./words.js";
 export { renderStudyCardsPage } from "./studyCards.js";
-export { renderKanjiPage } from "./kanji.js";
+export { kanjiCard, renderKanjiPage } from "./kanji.js";
 export { renderKanjiQuizPage, renderSentenceQuizPage, renderWordQuizPage } from "./quiz.js";
 export { renderReviewPage } from "./review.js";
 export { renderStatsPage } from "./stats.js";
-export { renderQuizSettingsPage } from "./settings.js";
+export { renderAccountStatusPage, renderQuizSettingsPage } from "./settings.js";
 export { NOTES_VIEWS, NOTE_ROW_CHIP_LIMIT, noteCardChip, noteCardChips, noteCardPopover, noteDateLabel, renderNoteLinkEditor, renderNotesPage } from "./notes.js";

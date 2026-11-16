@@ -11,6 +11,7 @@ const syncMutationMethods = Object.freeze([
   "deleteNote",
   "updateItemReview",
   "completeReview",
+  "restoreItemReview",
   "submitWordQuizAnswer",
   "resetSampleData",
   "clearAllData",

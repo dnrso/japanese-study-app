@@ -11,7 +11,7 @@ export const tocByPage = {
   review: [["review-queue", "복습 큐", ""]],
   notes: [["notes-list", "노트 목록", ""]],
   stats: [["stats-overview", "주간 통계", ""]],
-  settings: [["settings-general", "일반 설정", ""], ["settings-account", "계정 및 동기화", ""], ["settings-quiz", "퀴즈 표시", ""], ["settings-tts", "음성 재생", ""]]
+  settings: [["settings-display", "화면 표시", ""], ["settings-quiz", "퀴즈", ""], ["settings-tts", "음성", ""], ["settings-account", "계정 및 동기화", ""], ["settings-data", "데이터", ""]]
 };
 
 export const kindLabels = {

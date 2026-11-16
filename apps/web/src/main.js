@@ -50,13 +50,13 @@ import {
   emptyQuiz,
   emptySentenceQuiz,
   startQuiz as startQuizSession,
-  startSentenceQuiz as startSentenceQuizSession,
+  nextQuizQuestion as nextQuizQuestionImpl,
   exitQuizSession as exitQuizSessionImpl,
   submitQuizChoice as submitQuizChoiceImpl,
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
 } from "./quiz.js";
 import { isDesktopApp } from "./platform.js";
-import { applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
+import { applyAppStorageWording, applyDesktopGating, filterTocForPlatform } from "./desktopGating.js";
 import {
   createBrowserProvider,
   createCapacitorProvider,
@@ -93,7 +93,6 @@ const store = desktopApp
   : createSyncingStorage(baseStore, {
     scheduleSync: () => syncCoordinator?.schedule()
   });
-const storageNotice = "웹 데이터는 IndexedDB에 저장됩니다. 브라우저 사이트 데이터를 삭제하면 함께 삭제됩니다.";
 const backupFormat = "nihongo-study-web-backup";
 const backupVersion = 1;
 
@@ -112,7 +111,7 @@ const aiSentenceAnalysisTooLongMessage = "문장은 300자 이내로 입력해 �
 // packages/ui/components/pagination.js for the shared
 // paginate()/paginationControls() helpers.
 //
-// Persistence: neither this setting nor the existing quiz display settings
+// Persistence: neither this setting nor the quiz display settings
 // (quizQuestionFontSize/quizReviewOnCorrect/quizCorrectReview below) have
 // any existing persisted-settings mechanism to reuse - there's no
 // state.settings field, and storage-idb's "meta" object store is only
@@ -132,6 +131,8 @@ const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
 const NOTE_DRAFT_STORAGE_KEY = "nihongo-study.noteDraft";
 // 노트 목록 정렬: a per-device view preference, like the page sizes above.
 const NOTE_SORT_STORAGE_KEY = "nihongo-study.noteSort";
+// 퀴즈 설정(문제 글자 크기, 정답 시 복습 상태 변경 여부/값): 같은 방식의 전용 키.
+const QUIZ_SETTINGS_STORAGE_KEY = "nihongo-study.quizSettings";
 
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
@@ -146,17 +147,29 @@ let entryMode = "sentence";
 let sentenceStatusFilter = "all";
 let sentencePeriodFilter = "all";
 let searchTerm = "";
+let searchComposing = false;
+let searchTimer = 0;
+const SEARCH_DEBOUNCE_MS = 150;
 let wordSort = { key: "", direction: "" };
 let wordQuizMode = "random";
 let kanjiQuizMode = "random";
 let wordQuiz = emptyQuiz();
 let kanjiQuiz = emptyQuiz();
 let sentenceQuiz = emptySentenceQuiz();
-let reviewQueueDrafts = new Map();
-let quizQuestionFontSize = 32;
-let quizReviewOnCorrect = true;
-let quizCorrectReview = "내일";
-let storageStatus = storageNotice;
+const REVIEW_HIDE_MEANING_STORAGE_KEY = "nihongo-study.reviewHideMeaning";
+// 복습 큐 view state: kind tab, 뜻 가리기 pref (default ON, localStorage like the
+// other small UI prefs), rows revealed one by one, and the one undoable save.
+let reviewKindFilter = "";
+let reviewHideMeaning = loadReviewHideMeaning();
+let reviewRevealedIds = new Set();
+let reviewSaving = false;
+let reviewUndo = null;
+const REVIEW_UNDO_MS = 5000;
+const initialQuizSettings = loadQuizSettings();
+let quizQuestionFontSize = initialQuizSettings.questionFontSize;
+let quizReviewOnCorrect = initialQuizSettings.reviewOnCorrect;
+let quizCorrectReview = initialQuizSettings.correctReview;
+let storageStatus = "";
 let homeSentenceEntryId = null;
 // 노트 tab. `notesView` is "list" | "read" | "edit"; `activeNoteId` is the note
 // being read or edited (a freshly minted id while a new note is being
@@ -271,6 +284,45 @@ function loadNoteSort() {
   } catch {
     return core.DEFAULT_NOTE_SORT;
   }
+}
+
+function loadQuizSettings() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(QUIZ_SETTINGS_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable - use the defaults.
+  }
+  return core.resolveQuizSettings(raw, scheduledReviewOptions);
+}
+
+function saveQuizSettings() {
+  try {
+    localStorage.setItem(QUIZ_SETTINGS_STORAGE_KEY, JSON.stringify({
+      questionFontSize: quizQuestionFontSize,
+      reviewOnCorrect: quizReviewOnCorrect,
+      correctReview: quizCorrectReview
+    }));
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
+}
+
+// Shows the "저장됨" status next to the changed control for ~1.5s. The slot
+// always occupies its space (opacity only), so nothing shifts.
+const savedIndicatorTimers = new WeakMap();
+function flashSaved(control) {
+  const slot = control?.closest?.(".setting-row")?.querySelector(".setting-saved");
+  if (!slot) {
+    return;
+  }
+  slot.textContent = "저장됨";
+  slot.classList.add("is-visible");
+  window.clearTimeout(savedIndicatorTimers.get(slot));
+  savedIndicatorTimers.set(slot, window.setTimeout(() => {
+    slot.classList.remove("is-visible");
+    slot.textContent = "";
+  }, 1500));
 }
 
 function pageSizeFor(view) {
@@ -453,21 +505,51 @@ function bindEvents() {
       return;
     }
 
+    const cardFilterTarget = event.target.closest("[data-card-filter]");
+    if (cardFilterTarget) {
+      const { cardKind, cardFilter, cardValue } = cardFilterTarget.dataset;
+      cardFilters[cardKind][cardFilter] = cardValue;
+      resetPageIndex(cardKind);
+      renderCards(cardKind, CARD_TARGETS[cardKind]);
+      document.querySelector(`[data-card-kind="${cardKind}"][data-card-filter="${cardFilter}"][data-card-value="${cardValue}"]`)?.focus();
+      return;
+    }
+
     const deleteTarget = event.target.closest("[data-delete-item]");
     if (deleteTarget) {
       await deleteItem(deleteTarget.dataset.deleteItem);
       return;
     }
 
-    const reviewQueueCycleTarget = event.target.closest("[data-cycle-review-queue]");
-    if (reviewQueueCycleTarget) {
-      reviewQueueDrafts = core.cycleReviewQueueDraft({
-        items: state.items,
-        drafts: reviewQueueDrafts,
-        id: reviewQueueCycleTarget.dataset.cycleReviewQueue,
-        options: ["대기", ...scheduledReviewOptions]
-      });
+    const reviewKindTarget = event.target.closest("[data-review-kind]");
+    if (reviewKindTarget) {
+      reviewKindFilter = core.normalizeReviewKindFilter(reviewKindTarget.dataset.reviewKind);
       renderReview();
+      document.querySelector(`[data-review-kind="${reviewKindFilter}"]`)?.focus();
+      return;
+    }
+
+    const reviewRevealTarget = event.target.closest("[data-review-reveal]");
+    if (reviewRevealTarget) {
+      const id = reviewRevealTarget.dataset.reviewReveal;
+      reviewRevealedIds.add(id);
+      renderReview();
+      focusReviewRow(id);
+      return;
+    }
+
+    const reviewIntervalTarget = event.target.closest("[data-review-item][data-review-value]");
+    if (reviewIntervalTarget) {
+      await saveReviewInterval(
+        reviewIntervalTarget.dataset.reviewItem,
+        reviewIntervalTarget.dataset.reviewValue,
+        { fromKeyboard: event.detail === 0 }
+      );
+      return;
+    }
+
+    if (event.target.closest("[data-review-undo]")) {
+      await undoReviewInterval();
       return;
     }
 
@@ -513,8 +595,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-clear-search]")) {
-      setSearch("");
-      renderAll();
+      clearSearch();
       return;
     }
 
@@ -560,25 +641,31 @@ function bindEvents() {
       return;
     }
 
-    if (event.target.closest("[data-next-word-quiz]")) {
-      startQuiz("word");
+    const nextQuizTarget = event.target.closest("[data-quiz-next]");
+    if (nextQuizTarget) {
+      nextQuizQuestionImpl(nextQuizTarget.dataset.quizNext, quizCtx());
       return;
     }
 
-    if (event.target.closest("[data-next-kanji-quiz]")) {
-      startQuiz("kanji");
-      return;
-    }
-
-    if (event.target.closest("[data-next-sentence-quiz]")) {
-      startSentenceQuizSession(sentenceQuiz.question?.mode || "meaning", quizCtx());
+    if (event.target.closest("[data-quiz-exit]")) {
+      exitQuizSession();
     }
   });
 
-  byId("globalSearch").addEventListener("input", event => {
-    searchTerm = event.target.value.trim();
-    resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
-    renderAll();
+  // Debounced, and never mid-IME-composition (Japanese/Korean input fires
+  // `input` for every uncommitted syllable); compositionend commits it.
+  const searchInput = byId("globalSearch");
+  searchInput.addEventListener("compositionstart", () => { searchComposing = true; });
+  searchInput.addEventListener("compositionend", () => {
+    searchComposing = false;
+    scheduleSearch(searchInput.value, 0);
+  });
+  searchInput.addEventListener("input", event => {
+    syncSearchClearButton();
+    if (searchComposing || event.isComposing) {
+      return;
+    }
+    scheduleSearch(event.target.value, SEARCH_DEBOUNCE_MS);
   });
 
   WORD_FILTER_IDS.forEach(id => {
@@ -600,14 +687,8 @@ function bindEvents() {
     }
   });
   CARD_KINDS.forEach(kind => {
-    [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => {
-      byId(id).addEventListener("change", () => {
-        resetPageIndex(kind);
-        renderCards(kind, CARD_TARGETS[kind]);
-      });
-    });
-    byId(`${kind}FilterResetBtn`).addEventListener("click", () => {
-      [`${kind}ReviewFilter`, `${kind}SourceFilter`].forEach(id => { byId(id).value = ""; });
+    byId(`${kind}Sort`).addEventListener("change", event => {
+      cardSort[kind] = core.normalizeStudyCardSort(event.target.value);
       resetPageIndex(kind);
       renderCards(kind, CARD_TARGETS[kind]);
     });
@@ -624,12 +705,26 @@ function bindEvents() {
     renderKanji();
   });
   byId("noteDialogCancel").addEventListener("click", () => byId("noteDialog").close());
+  byId("noteDialogDelete").addEventListener("click", async () => {
+    const id = noteDialogItemId;
+    if (!id) {
+      return;
+    }
+    const deleted = await deleteItem(id);
+    if (deleted) {
+      byId("noteDialog").close();
+    }
+  });
   byId("noteDialogForm").addEventListener("submit", saveNoteDialog);
   byId("wordDialogCancel").addEventListener("click", () => byId("wordDialog").close());
   byId("wordDialogForm").addEventListener("submit", saveWordDialog);
   // Only the 복습 큐 needs re-rendering: the sidebar 복습 필요 count and the
   // home 복습 항목 stat intentionally stay whole-queue numbers.
-  byId("reviewKindFilter").addEventListener("change", renderReview);
+  byId("reviewHideMeaning").addEventListener("change", event => {
+    reviewHideMeaning = event.target.checked;
+    saveReviewHideMeaning();
+    renderReview();
+  });
 
   byId("newNoteBtn").addEventListener("click", () => openNoteEditor(null));
   byId("noteEditBtn").addEventListener("click", () => openNoteEditor(activeNoteId));
@@ -736,8 +831,7 @@ function bindEvents() {
   byId("sentenceHideMeaning").addEventListener("change", event => {
     byId("sentenceCards").classList.toggle("hide-meaning", event.target.checked);
   });
-  byId("completeReviewBtn").addEventListener("click", completeSelectedReview);
-  byId("quizExitBtn").addEventListener("click", exitQuizSession);
+  document.addEventListener("keydown", handleQuizKeydown);
   byId("resetDataBtn").addEventListener("click", resetSampleData);
   byId("downloadBackupBtn").addEventListener("click", downloadBackup);
   byId("loadBackupBtn").addEventListener("click", () => byId("backupFileInput").click());
@@ -782,8 +876,8 @@ function bindEvents() {
     input.addEventListener("change", event => {
       wordQuizMode = event.target.value;
       wordQuiz = emptyQuiz();
-      byId("quizStatus").textContent = "단어 퀴즈 유형을 선택했습니다.";
       renderWordQuiz();
+      renderQuizAvailability();
     });
   });
 
@@ -791,25 +885,30 @@ function bindEvents() {
     input.addEventListener("change", event => {
       kanjiQuizMode = event.target.value;
       kanjiQuiz = emptyQuiz();
-      byId("quizStatus").textContent = "한자 퀴즈 유형을 선택했습니다.";
       renderKanjiQuiz();
+      renderQuizAvailability();
     });
   });
 
   byId("quizQuestionFontSizeRange").addEventListener("input", event => {
     quizQuestionFontSize = core.clampQuizQuestionFontSize(event.target.value);
-    applyQuizQuestionFontSize();
-    byId("quizQuestionFontSizeValue").textContent = `${quizQuestionFontSize}px`;
+    saveQuizSettings();
+    renderQuizSettings();
+    flashSaved(event.target);
   });
 
   byId("quizReviewOnCorrectCheckbox").addEventListener("change", event => {
     quizReviewOnCorrect = event.target.checked;
+    saveQuizSettings();
     renderQuizSettings();
+    flashSaved(event.target);
   });
 
   byId("quizCorrectReviewSelect").addEventListener("change", event => {
     quizCorrectReview = core.resolveQuizCorrectReview(event.target.value, scheduledReviewOptions);
+    saveQuizSettings();
     renderQuizSettings();
+    flashSaved(event.target);
   });
 
   document.querySelectorAll("[data-list-page-size-view]").forEach(select => {
@@ -817,6 +916,7 @@ function bindEvents() {
       const view = event.target.dataset.listPageSizeView;
       listPageSizeOverrides[view] = event.target.value ? Number(event.target.value) : null;
       saveListPageSizeOverrides();
+      flashSaved(event.target);
       // Only that tab's page index/list re-renders - a per-view setting
       // shouldn't disturb the other four lists.
       resetPageIndex(view);
@@ -827,14 +927,29 @@ function bindEvents() {
   byId("kanjiWordLimit").addEventListener("change", event => {
     kanjiWordLimitSetting = event.target.value;
     saveKanjiWordLimitSetting();
+    flashSaved(event.target);
     renderListPageSizeSettings();
     renderKanji();
   });
 
   document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !document.querySelector("dialog[open]")) {
+      const searchInput = byId("globalSearch");
+      if (event.target === searchInput ? searchInput.value : searchTerm) {
+        event.preventDefault();
+        clearSearch();
+        searchInput.focus();
+        return;
+      }
+    }
     if (event.ctrlKey && event.key.toLowerCase() === "k") {
       event.preventDefault();
       byId("globalSearch").focus();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && currentPage === "review" && reviewUndo
+      && !event.target?.closest?.("input, textarea, select, [contenteditable='true']")) {
+      event.preventDefault();
+      undoReviewInterval();
     }
     if (event.ctrlKey && event.key.toLowerCase() === "n") {
       event.preventDefault();
@@ -862,6 +977,7 @@ function renderAll() {
   renderWordQuiz();
   renderKanjiQuiz();
   renderSentenceQuiz();
+  renderQuizAvailability();
   renderReview();
   renderNotes();
   renderStats();
@@ -870,6 +986,7 @@ function renderAll() {
   renderListPageSizeSettings();
   renderStorageStatus();
   renderAccountStatus();
+  renderSearchStatus();
 }
 
 async function refreshState(studyDate = selectedDate) {
@@ -881,9 +998,9 @@ async function refreshState(studyDate = selectedDate) {
 
 function renderHome() {
   applyPagePatch(renderHomePage({
-    overview: core.homeOverview(state, searchTerm),
+    overview: core.homeOverview(state),
     reviewOptions,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
   renderHomeSentence();
 }
@@ -894,14 +1011,14 @@ function renderHomeSentence({ reroll = false } = {}) {
   homeSentenceEntryId = sentence ? sentence.id : null;
   applyPagePatch(renderHomeSentencePanel({
     sentence,
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
 }
 
 function renderTasks() {
   applyPagePatch(renderTasksPage({
     tasks: state.tasks.filter(task => !task.studyDate || task.studyDate === selectedDate),
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
 }
 
@@ -913,7 +1030,7 @@ function renderToday() {
     sentenceEntries: core.rootSentenceEntries(entries),
     unregisteredCount: entries.filter(entry => core.entryNeedsRegistration(entry)).length,
     helpers: {
-      ...renderHelpers(),
+      ...renderHelpers({ marks: false }),
       entryToCandidate: core.dailyEntryToCandidate,
       linkedEntriesForSentence
     }
@@ -954,7 +1071,7 @@ function renderLearnedSections() {
       grammar: dailyEntriesByKind("grammar"),
       expression: dailyEntriesByKind("expression")
     },
-    helpers: renderHelpers()
+    helpers: renderHelpers({ marks: false })
   }));
 }
 
@@ -980,7 +1097,6 @@ function renderSentences() {
       pending: filtered.filter(entry => pending.has(entry)).length,
       shown: filtered.length
     },
-    searchTerm,
     helpers
   }));
   applyPagePatch({
@@ -1056,7 +1172,6 @@ function renderWordFilters() {
   renderSelectOptions("wordPartFilter", "전체 품사", partOptions);
   renderSelectOptions("wordScriptFilter", "전체 문자", scriptOptions);
   renderSelectOptions("wordReviewFilter", "전체 복습", reviewOptions);
-  CARD_KINDS.forEach(kind => renderSelectOptions(`${kind}ReviewFilter`, "전체 복습 상태", reviewOptions));
   renderSelectOptions("kanjiReviewFilter", "전체 복습 상태", reviewOptions);
 }
 
@@ -1110,16 +1225,29 @@ const CARD_LABELS = { grammar: "문법", expression: "표현", kanji: "한자" }
 // Kinds that add/edit through the shared note dialog.
 const NOTE_DIALOG_KINDS = [...CARD_KINDS, "kanji"];
 
+const cardFilters = {
+  grammar: { review: "", source: "" },
+  expression: { review: "", source: "" }
+};
+const cardSort = { grammar: "recent", expression: "recent" };
+
+function segmentedGroup(kind, filter, options, selected) {
+  return options.map(([value, label, count]) => {
+    const active = selected === value;
+    const empty = count === 0 && !active;
+    return `<button class="segmented-btn ${active ? "active" : ""} ${empty ? "is-empty" : ""}" type="button" data-card-kind="${kind}" data-card-filter="${filter}" data-card-value="${value}" aria-pressed="${active}">${label}${count === undefined ? "" : ` <span class="count">${count}</span>`}</button>`;
+  }).join("");
+}
+
 function renderCards(kind, targetId) {
-  const review = byId(`${kind}ReviewFilter`).value;
-  const source = byId(`${kind}SourceFilter`).value;
+  const { review, source } = cardFilters[kind];
   const filtering = Boolean(review || source);
   const visible = items(kind);
-  const rows = visible.filter(item => {
-    const fromSentence = core.uniqueSourceSentences(item.sourceSentences).length > 0;
-    return (!review || (item.review || "대기") === review) &&
-      (!source || (source === "sentence") === fromSentence);
-  });
+  const counts = core.studyCardFilterCounts(visible);
+  const rows = core.sortStudyCards(
+    visible.filter(item => core.matchesStudyCardFilters(item, { review, source })),
+    cardSort[kind]
+  );
   const paged = paginate(rows, pageIndex[kind], pageSizeFor(kind));
   pageIndex[kind] = paged.page;
   const total = core.itemsByKind(state.items, kind).length;
@@ -1137,18 +1265,26 @@ function renderCards(kind, targetId) {
   applyPagePatch({
     text: {
       [`${kind}TotalCount`]: `${total}개`,
-      [`${kind}FilterSummary`]: [
-        filtering || searchTerm ? `${rows.length}개 표시` : "",
-        rows.length ? "최근 등록순" : ""
-      ].filter(Boolean).join(" · ")
-    },
-    hidden: {
-      [`${kind}FilterResetBtn`]: !filtering
+      [`${kind}FilterSummary`]: filtering || searchTerm ? `${rows.length}개 표시` : ""
     },
     html: {
+      [`${kind}ReviewTabs`]: segmentedGroup(kind, "review", [
+        ["", "전체", counts.review.all],
+        ["due", "복습 필요", counts.review.due],
+        ["scheduled", "예정", counts.review.scheduled]
+      ], review),
+      [`${kind}SourceTabs`]: segmentedGroup(kind, "source", [
+        ["", "전체", undefined],
+        ["sentence", "문장", counts.source.sentence],
+        ["manual", "직접 추가", counts.source.manual]
+      ], source),
       [`${kind}Pagination`]: paginationControls({ page: paged.page, totalPages: paged.totalPages, pageName: kind })
     }
   });
+  const sortSelect = byId(`${kind}Sort`);
+  if (sortSelect.value !== cardSort[kind]) {
+    sortSelect.value = cardSort[kind];
+  }
 }
 
 const KANJI_FILTER_IDS = ["kanjiReviewFilter", "kanjiMeaningFilter"];
@@ -1202,65 +1338,155 @@ function renderKanji() {
   });
 }
 
+function currentItemById(id) {
+  return state.items.find(item => item.id === id) || null;
+}
+
 function renderWordQuiz() {
   applyPagePatch(renderWordQuizPage({
     quiz: wordQuiz,
-    helpers: renderHelpers()
+    itemById: currentItemById,
+    reviewOptions,
+    helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
 }
 
 function renderKanjiQuiz() {
+  const words = core.itemsByKind(state.items, "word");
   applyPagePatch(renderKanjiQuizPage({
     quiz: kanjiQuiz,
-    helpers: renderHelpers()
+    itemById: currentItemById,
+    reviewOptions,
+    wordsFor: item => wordsUsingKanji(item, words),
+    wordLimit: core.resolveKanjiWordLimit(kanjiWordLimitSetting),
+    helpers: renderHelpers({ marks: false })
   }));
   updateQuizSessionView();
 }
 
 function renderSentenceQuiz() {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
   applyPagePatch(renderSentenceQuizPage({
     quiz: sentenceQuiz,
-    helpers: renderHelpers()
+    itemById: id => entries.find(entry => entry.id === id) || null,
+    helpers: { ...renderHelpers({ marks: false }), linkedEntriesForSentence: linkedEntriesForAnySentence }
   }));
   updateQuizSessionView();
 }
 
 function updateQuizSessionView() {
   const grid = byId("quizSelectGrid");
-  const exitBtn = byId("quizExitBtn");
-  if (!grid || !exitBtn) {
+  const header = byId("quizSelectHeader");
+  if (!grid || !header) {
     return;
   }
-  const sessionActive = Boolean(wordQuiz.question || kanjiQuiz.question || sentenceQuiz.question);
+  // The selection grid and its title give way to the session panel (which has
+  // its own one-line header) while a run, or its result view, is showing.
+  const sessionActive = Boolean(wordQuiz.session || kanjiQuiz.session || sentenceQuiz.session);
   grid.hidden = sessionActive;
-  exitBtn.hidden = !sessionActive;
+  header.hidden = sessionActive;
+}
+
+const QUIZ_UNIT_LABELS = { word: "단어", kanji: "한자", "sentence-meaning": "문장", "sentence-listen": "문장" };
+const QUIZ_UNIT_SUBJECT = { word: "단어가", kanji: "한자가", "sentence-meaning": "문장이", "sentence-listen": "문장이" };
+
+// Pool size + startability on each available card, using the same rule the
+// question generators use (core.quizAvailability).
+function renderQuizAvailability() {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
+  Object.keys(QUIZ_UNIT_LABELS).forEach(quizKind => {
+    const pool = byId(`quizPool-${quizKind}`);
+    const startBtn = document.querySelector(`.quiz-start-btn[data-quiz-kind="${quizKind}"]`);
+    if (!pool || !startBtn) {
+      return;
+    }
+    const availability = core.quizAvailability({
+      items: state.items,
+      entries,
+      quizKind,
+      mode: quizKind === "kanji" ? kanjiQuizMode : wordQuizMode
+    });
+    const warning = availability.canStart ? "" : availability.reason === "count"
+      ? `${QUIZ_UNIT_SUBJECT[quizKind]} ${availability.required}개 이상 필요합니다 (현재 ${availability.poolSize}개)`
+      : `서로 다른 보기가 ${availability.required}개 이상 필요합니다 (현재 ${availability.distinctCount}개)`;
+    pool.innerHTML = `<span>${QUIZ_UNIT_LABELS[quizKind]} ${availability.poolSize}개</span>${warning ? `<p class="quiz-card-warn">${escapeHtml(warning)}</p>` : ""}`;
+    startBtn.disabled = !availability.canStart;
+  });
+}
+
+// Quiz shortcuts: 1-4 pick a choice, Enter goes to the next question.
+function handleQuizKeydown(event) {
+  if (currentPage !== "quiz" || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) {
+    return;
+  }
+  const target = event.target;
+  if (target?.closest?.("input, textarea, select, [contenteditable='true']") || document.querySelector("dialog[open]")) {
+    return;
+  }
+  const panels = [["word", "wordQuizPanel", wordQuiz], ["kanji", "kanjiQuizPanel", kanjiQuiz], ["sentence", "sentenceQuizPanel", sentenceQuiz]];
+  const active = panels.find(([, , quiz]) => quiz.session && !quiz.session.finished && quiz.question);
+  if (!active) {
+    return;
+  }
+  const [, panelId, quiz] = active;
+  const panel = byId(panelId);
+  if (/^[1-4]$/.test(event.key) && !quiz.answered) {
+    const choice = panel.querySelectorAll(".word-quiz-choice")[Number(event.key) - 1];
+    if (choice && !choice.disabled) {
+      event.preventDefault();
+      choice.click();
+    }
+  } else if (event.key === "Enter" && quiz.answered && !event.repeat && !target?.closest?.("button, a")) {
+    const next = panel.querySelector("[data-quiz-next]");
+    if (next) {
+      event.preventDefault();
+      next.click();
+    }
+  }
 }
 
 function exitQuizSession() {
   exitQuizSessionImpl(quizCtx());
 }
 
-// The 종류 filter is a view filter, not a setting, so it lives in the
-// <select> itself exactly like the 단어 page's wordPartFilter/wordScriptFilter/
-// wordReviewFilter - no module-level state and (unlike the 설정-tab
-// listPageSizeOverrides) nothing written to localStorage.
-function reviewKindFilterValue() {
-  return core.normalizeReviewKindFilter(byId("reviewKindFilter")?.value || "");
+function loadReviewHideMeaning() {
+  try {
+    return localStorage.getItem(REVIEW_HIDE_MEANING_STORAGE_KEY) !== "0";
+  } catch {
+    // localStorage unavailable - use the default (hidden).
+    return true;
+  }
+}
+
+function saveReviewHideMeaning() {
+  try {
+    localStorage.setItem(REVIEW_HIDE_MEANING_STORAGE_KEY, reviewHideMeaning ? "1" : "0");
+  } catch {
+    // Ignore write failures - the setting just won't survive a reload.
+  }
 }
 
 function renderReview() {
-  // Not narrowed by the kind filter: hiding a card must not throw away the
-  // draft the user already set on it.
-  reviewQueueDrafts = core.pruneReviewQueueDrafts({
-    items: state.items,
-    drafts: reviewQueueDrafts
-  });
-  const kindFilter = reviewKindFilterValue();
+  const counts = core.reviewKindCounts(state.items, searchTerm);
+  // A kind whose last row was just completed has no tab left to show: fall
+  // back to 전체 instead of an empty list.
+  reviewKindFilter = core.normalizeReviewKindFilter(reviewKindFilter);
+  if (reviewKindFilter && !counts[reviewKindFilter]) {
+    reviewKindFilter = "";
+  }
+  const queueIds = new Set(state.items.map(item => item.id));
+  reviewRevealedIds = new Set([...reviewRevealedIds].filter(id => queueIds.has(id)));
+  byId("reviewHideMeaning").checked = reviewHideMeaning;
   applyPagePatch(renderReviewPage({
-    reviewItems: core.reviewItems(state.items, searchTerm, kindFilter),
-    kindFilter,
+    reviewItems: core.reviewItems(state.items, searchTerm, reviewKindFilter),
+    kindFilter: reviewKindFilter,
     kindFilterOptions: core.REVIEW_KIND_FILTER_OPTIONS,
+    kindCounts: counts,
+    progress: core.reviewQueueProgress(state.items, searchTerm, state.selectedDate || undefined),
+    scheduledReviewOptions,
+    hideMeaning: reviewHideMeaning,
+    revealedIds: reviewRevealedIds,
     helpers: renderHelpers()
   }));
 }
@@ -1699,6 +1925,73 @@ async function deleteNote(id) {
   renderAll();
 }
 
+function focusReviewRow(id) {
+  const row = [...document.querySelectorAll("#reviewCards .review-row")].find(candidate => candidate.dataset.itemId === id);
+  row?.querySelector("[data-review-value]")?.focus();
+}
+
+// One click on an interval saves that single item through the same
+// store.completeReview call "선택 복습 완료" used (review, due date,
+// lastReviewedAt), then offers a 5s undo.
+async function saveReviewInterval(id, review, { fromKeyboard = false } = {}) {
+  const item = state.items.find(candidate => candidate.id === id);
+  if (reviewSaving || !item || !scheduledReviewOptions.includes(review)) {
+    return;
+  }
+  reviewSaving = true;
+  try {
+    const rows = [...document.querySelectorAll("#reviewCards .review-row")];
+    const rowIndex = rows.findIndex(row => row.dataset.itemId === id);
+    const snapshot = core.reviewSnapshot(item);
+    state = await store.completeReview([{ id, review }], selectedDate);
+    reviewRevealedIds.delete(id);
+    showReviewToast({ id, title: item.title, review, snapshot });
+    renderAll();
+    if (fromKeyboard) {
+      // The saved row just left the list: keep keyboard triage going on
+      // whichever row took its place.
+      const next = document.querySelectorAll("#reviewCards .review-row")[rowIndex]
+        || document.querySelector("#reviewCards .review-row:last-child");
+      next?.querySelector("[data-review-value]")?.focus();
+    }
+  } finally {
+    reviewSaving = false;
+  }
+}
+
+function showReviewToast(undo) {
+  // A new save replaces the toast: the earlier one is final.
+  clearTimeout(reviewUndo?.timer);
+  reviewUndo = { ...undo, timer: setTimeout(hideReviewToast, REVIEW_UNDO_MS) };
+  const toast = byId("reviewToast");
+  toast.innerHTML = `<span>${escapeHtml(undo.title)} → ${escapeHtml(undo.review)}</span><button class="review-toast-btn" type="button" data-review-undo>되돌리기</button>`;
+  toast.hidden = false;
+}
+
+function hideReviewToast() {
+  clearTimeout(reviewUndo?.timer);
+  reviewUndo = null;
+  const toast = byId("reviewToast");
+  toast.hidden = true;
+  toast.innerHTML = "";
+}
+
+async function undoReviewInterval() {
+  const undo = reviewUndo;
+  if (!undo || reviewSaving) {
+    return;
+  }
+  reviewSaving = true;
+  try {
+    hideReviewToast();
+    state = await store.restoreItemReview(undo.id, undo.snapshot, selectedDate);
+    renderAll();
+    focusReviewRow(undo.id);
+  } finally {
+    reviewSaving = false;
+  }
+}
+
 function renderStats() {
   applyPagePatch(renderStatsPage({
     stats: core.studyStats(state)
@@ -1707,7 +2000,7 @@ function renderStats() {
 
 function renderQuickFilters() {
   applyPagePatch(renderQuickFiltersPage({
-    counts: core.quickFilterCounts(state, searchTerm)
+    counts: core.quickFilterCounts(state)
   }));
 }
 
@@ -1881,7 +2174,8 @@ function openPage(pageId) {
   currentPage = pageId;
   hideNoteCardPopover();
   renderAll();
-  byId(pageId).scrollIntoView({ block: "start" });
+  // 검색 중에는 페이지 위의 검색 상태 칩이 가려지지 않게 그쪽으로 맞춘다.
+  (searchTerm ? byId("searchStatus") : byId(pageId)).scrollIntoView({ block: "start" });
 }
 
 function applyQuickFilter(filter) {
@@ -2241,6 +2535,7 @@ function openNoteDialog(kind, item = null) {
   noteDialogKind = kind;
   noteDialogItemId = item?.id || "";
   byId("noteDialogTitle").textContent = `${CARD_LABELS[kind]} ${item ? "수정" : "추가"}`;
+  byId("noteDialogDelete").hidden = !item;
   byId("noteDialogFields").innerHTML = noteFormFields({
     kind,
     item: item || {},
@@ -2311,11 +2606,11 @@ function normalizeSourceProgressInput(value) {
 async function deleteItem(id) {
   const item = state.items.find(candidate => candidate.id === id);
   if (!item || !window.confirm(`${item.title} 항목을 삭제할까요?`)) {
-    return;
+    return false;
   }
   state = await store.deleteItem(id, selectedDate);
-  reviewQueueDrafts.delete(id);
   renderAll();
+  return true;
 }
 
 async function deleteDailyEntry(id) {
@@ -2328,10 +2623,6 @@ async function deleteDailyEntry(id) {
 }
 
 function startQuiz(kind) {
-  if (kind === "sentence-meaning" || kind === "sentence-listen") {
-    startSentenceQuizSession(kind === "sentence-listen" ? "listen" : "meaning", quizCtx());
-    return;
-  }
   startQuizSession(kind, quizCtx());
 }
 
@@ -2339,29 +2630,13 @@ async function submitQuizChoice(kind, selectedAnswer) {
   await submitQuizChoiceImpl(kind, selectedAnswer, quizCtx());
 }
 
-async function completeSelectedReview() {
-  const targets = core.reviewCompletionTargets({
-    items: state.items,
-    drafts: reviewQueueDrafts,
-    searchTerm,
-    kindFilter: reviewKindFilterValue()
-  });
-  if (!targets.length) {
-    window.alert("복습 완료로 변경할 항목을 먼저 선택하세요.");
-    return;
-  }
-  state = await store.completeReview(targets, selectedDate);
-  reviewQueueDrafts = new Map();
-  renderAll();
-}
-
 async function resetSampleData() {
-  if (!window.confirm("샘플 데이터를 초기 상태로 되돌릴까요?")) {
+  if (!window.confirm("저장된 공부 데이터를 모두 지우고 샘플 데이터로 되돌릴까요? 되돌릴 수 없습니다.")) {
     return;
   }
   state = await store.resetSampleData();
   resetTransientUiState();
-  storageStatus = "샘플 데이터로 초기화했습니다.";
+  storageStatus = "모든 데이터를 초기화했습니다. (샘플 데이터)";
   renderAll();
 }
 
@@ -2400,18 +2675,18 @@ async function loadBackupFromFile(event) {
   }
 
   try {
-    if (!window.confirm("현재 브라우저에 저장된 일본어 공부 데이터를 선택한 백업으로 교체할까요?")) {
+    if (!window.confirm("지금 저장된 일본어 공부 데이터를 지우고 선택한 백업으로 교체할까요?")) {
       return;
     }
     const backup = core.parseBackupFile(await file.text());
     state = await store.importFullBackup(backup);
     resetTransientUiState();
-    storageStatus = `백업 로드 완료: ${file.name}`;
+    storageStatus = `백업 교체 완료: ${file.name}`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
-    setStorageStatus(`백업 로드 실패: ${message}`);
-    window.alert(`백업 로드 실패\n${message}`);
+    setStorageStatus(`백업 교체 실패: ${message}`);
+    window.alert(`백업 교체 실패\n${message}`);
   } finally {
     input.value = "";
   }
@@ -2425,7 +2700,7 @@ async function mergeBackupFromFile(event) {
   }
 
   try {
-    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 추가할까요? 중복 데이터는 제외됩니다.")) {
+    if (!window.confirm("선택한 백업 데이터를 현재 데이터에 합칠까요? 겹치는 항목은 더 최근에 수정된 쪽이 남습니다.")) {
       return;
     }
     const backup = core.parseBackupFile(await file.text());
@@ -2433,12 +2708,12 @@ async function mergeBackupFromFile(event) {
     const result = core.mergeBackupData(core.backupData(current), core.backupData(backup), selectedDate || todayKey());
     state = await store.importFullBackup({ data: result.data });
     resetTransientUiState();
-    storageStatus = `백업 추가 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
+    storageStatus = `백업 합치기 완료: ${file.name} · 추가 ${result.summary.added}개, 갱신 ${result.summary.updated}개, 중복 제외 ${result.summary.skipped}개`;
     renderAll();
   } catch (error) {
     const message = error.message || String(error);
-    setStorageStatus(`백업 추가 실패: ${message}`);
-    window.alert(`백업 추가 실패\n${message}`);
+    setStorageStatus(`백업 합치기 실패: ${message}`);
+    window.alert(`백업 합치기 실패\n${message}`);
   } finally {
     input.value = "";
   }
@@ -2451,7 +2726,8 @@ function resetTransientUiState() {
   wordSort = { key: "", direction: "" };
   wordQuiz = emptyQuiz();
   kanjiQuiz = emptyQuiz();
-  reviewQueueDrafts = new Map();
+  reviewRevealedIds = new Set();
+  hideReviewToast();
   byId("globalSearch").value = "";
 }
 
@@ -2475,12 +2751,38 @@ function moveCalendarMonth(offset) {
   renderCalendar();
 }
 
+// 원본 문장 링크: 문장 탭에서 해당 문장 카드를 펼쳐 보여 준다. 검색·필터에
+// 가려지지 않도록 풀고, 카드가 있는 쪽으로 넘긴다. 문장 탭에 없는 문장이면
+// 예전처럼 그 날짜의 오늘 공부 탭으로 간다.
 function jumpToSentence(id, sourceDate) {
-  selectedDate = sourceDate || selectedDate;
-  calendarMonth = selectedDate.slice(0, 7);
-  openPage("today");
+  setSearch("");
+  if (sentenceStatusFilter !== "all") {
+    setSentenceFilter("status", "all");
+  }
+  if (sentencePeriodFilter !== "all") {
+    setSentenceFilter("period", "all");
+  }
+  const index = sentenceNoteEntries().filtered.findIndex(entry => entry.id === id);
+  if (index < 0) {
+    selectedDate = sourceDate || selectedDate;
+    calendarMonth = selectedDate.slice(0, 7);
+    openPage("today");
+    window.setTimeout(() => {
+      byId(`daily-entry-${id}`)?.scrollIntoView({ block: "center" });
+    }, 0);
+    return;
+  }
+  pageIndex.sentences = Math.floor(index / pageSizeFor("sentences")) + 1;
+  openPage("sentences");
   window.setTimeout(() => {
-    byId(`daily-entry-${id}`)?.scrollIntoView({ block: "center" });
+    const card = byId(`sentence-card-${id}`);
+    if (!card) {
+      return;
+    }
+    card.open = true;
+    card.scrollIntoView({ block: "center" });
+    card.classList.add("is-jump-target");
+    window.setTimeout(() => card.classList.remove("is-jump-target"), 1600);
   }, 0);
 }
 
@@ -2543,26 +2845,96 @@ function applyQuizQuestionFontSize() {
 }
 
 function setSearch(value) {
+  window.clearTimeout(searchTimer);
   searchTerm = String(value || "").trim();
   byId("globalSearch").value = searchTerm;
   resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
+  syncSearchClearButton();
+}
+
+function scheduleSearch(value, delay) {
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => {
+    const next = String(value || "").trim();
+    if (next === searchTerm) {
+      return;
+    }
+    searchTerm = next;
+    resetPageIndex("sentences", "words", "grammar", "expression", "kanji", "notes");
+    renderAll();
+  }, delay);
+}
+
+function clearSearch() {
+  setSearch("");
+  renderAll();
+}
+
+function syncSearchClearButton() {
+  const button = byId("searchClearBtn");
+  if (button) {
+    button.hidden = !byId("globalSearch").value;
+  }
+}
+
+// Result count for the tab being viewed; null where the tab lists no results.
+function searchResultCount() {
+  switch (currentPage) {
+    case "sources": return items("source").length;
+    case "sentences": return sentenceNoteEntries().filtered.length;
+    case "words": return items("word").length;
+    case "grammar": return items("grammar").length;
+    case "expressions": return items("expression").length;
+    case "kanji": return items("kanji").length;
+    case "review": return core.reviewItems(state.items, searchTerm, reviewKindFilter).length;
+    case "notes": return core.visibleNotes(allNotes(), searchTerm).length;
+    default: return null;
+  }
+}
+
+function renderSearchStatus() {
+  syncSearchClearButton();
+  let html = "";
+  if (searchTerm) {
+    const term = escapeHtml(searchTerm);
+    const count = searchResultCount();
+    html = currentPage === "home"
+      ? `<span class="search-chip">'${term}' 검색 중 <button type="button" data-clear-search aria-label="검색 지우기">✕</button></span><span class="search-status-hint">단어·문장·문법·표현·한자 탭에서 결과를 확인하세요</span>`
+      : `<span class="search-chip">'${term}' 검색 중${count === null ? "" : ` · ${count}건`} <button type="button" data-clear-search aria-label="검색 지우기">✕</button></span>`;
+  }
+  applyPagePatch({ html: { searchStatus: html }, hidden: { searchStatus: !searchTerm } });
 }
 
 function applyPagePatch(patch) {
   applySharedPagePatch(patch, { document });
 }
 
-function renderHelpers() {
+// marks: false for tabs that search never filters (home, today, quiz), so
+// they don't show stale search highlights.
+function renderHelpers({ marks = true } = {}) {
   return {
     badgeClassByKind,
     core,
     escapeHtml,
-    highlight,
+    highlight: marks ? highlight : escapeHtml,
     kindLabels,
-    reviewQueueStatusText,
-    reviewQueueReview,
-    reviewStatusText: core.reviewStatusText
+    reviewStatusText: core.reviewStatusText,
+    sentenceMeaning
   };
+}
+
+// Korean meaning of a daily sentence entry by id (sourceSentences only carry
+// id/title/studyDate). Index rebuilt only when the entries array changes.
+let sentenceMeaningIndex = { entries: null, map: new Map() };
+function sentenceMeaning(id) {
+  const entries = state.allDailyEntries || state.dailyEntries || [];
+  if (sentenceMeaningIndex.entries !== entries) {
+    sentenceMeaningIndex = {
+      entries,
+      map: new Map(entries.filter(entry => entry.meaning).map(entry => [entry.id, entry.meaning]))
+    };
+  }
+  return sentenceMeaningIndex.map.get(id) || "";
 }
 
 function items(kind) {
@@ -2573,18 +2945,21 @@ function dailyEntriesForSelectedDate() {
   return state.dailyEntries.filter(entry => !entry.studyDate || entry.studyDate === selectedDate);
 }
 
+// A sentence matches when every search term appears in its own title/reading/
+// meaning plus those of its linked word/grammar/expression/kanji entries.
 function allDailyEntriesForSentences() {
   const entries = state.allDailyEntries || state.dailyEntries;
   if (!searchTerm) {
     return entries;
   }
-  const normalizedSearch = searchTerm.toLowerCase();
-  return entries.filter(entry => [
-    entry.title,
-    entry.reading,
-    entry.meaning,
-    entry.studyDate
-  ].some(value => String(value || "").toLowerCase().includes(normalizedSearch)));
+  return entries.filter(entry => {
+    const children = ["word", "grammar", "expression", "kanji"]
+      .flatMap(kind => linkedEntriesForAnySentence(kind, entry.id));
+    return core.matchesSearchText(
+      [entry, ...children].map(row => [row.title, row.reading, row.meaning].join(" ")).join(" "),
+      searchTerm
+    );
+  });
 }
 
 function dailyEntriesByKind(kind) {
@@ -2597,18 +2972,6 @@ function linkedEntriesForSentence(kind, sentenceId) {
 
 function linkedEntriesForAnySentence(kind, sentenceId) {
   return core.linkedEntriesForSentence(state.allDailyEntries || state.dailyEntries, kind, sentenceId);
-}
-
-function reviewQueueStatusText(item) {
-  return core.reviewQueueStatusText({
-    item,
-    drafts: reviewQueueDrafts,
-    todayKey: selectedDate
-  });
-}
-
-function reviewQueueReview(item) {
-  return core.reviewQueueReview(item, reviewQueueDrafts);
 }
 
 function pageForKind(kind) {
@@ -2629,7 +2992,19 @@ function nextId(prefix) {
 }
 
 function highlight(value) {
-  return escapeHtml(value);
+  const text = String(value ?? "");
+  const ranges = searchTerm ? core.searchHighlightRanges(text, searchTerm) : [];
+  if (!ranges.length) {
+    return escapeHtml(text);
+  }
+  let html = "";
+  let cursor = 0;
+  ranges.forEach(([start, end]) => {
+    html += escapeHtml(text.slice(cursor, start));
+    html += `<mark class="search-hit">${escapeHtml(text.slice(start, end))}</mark>`;
+    cursor = end;
+  });
+  return html + escapeHtml(text.slice(cursor));
 }
 
 function quizCtx() {
@@ -2705,6 +3080,9 @@ function applyMobileAdSlotVisibility() {
 
 async function start() {
   renderAppShell(byId);
+  if (!desktopApp && isNativePlatform()) {
+    applyAppStorageWording();
+  }
   if (desktopApp) {
     applyDesktopGating();
     initVoicevoxSettings({

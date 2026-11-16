@@ -70,6 +70,6 @@ describe("desktop TTS wording", () => {
     };
     applyDesktopGating(root);
     expect(description.textContent).toContain("VOICEVOX");
-    expect(description.textContent).toContain("SpeechSynthesis");
+    expect(description.textContent).toContain("브라우저");
   });
 });

@@ -6,9 +6,21 @@ const DESKTOP_HIDDEN_SELECTORS = ["#settings-account", ".ai-sentence-analysis-to
 const DESKTOP_HIDDEN_TOC_IDS = new Set(["settings-account"]);
 
 const DESKTOP_TTS_DESCRIPTION =
-  "스피커 버튼은 로컬 VOICEVOX 엔진이 실행 중이면 VOICEVOX로, 연결할 수 없으면 브라우저 기본 SpeechSynthesis로 일본어를 재생합니다.";
+  "스피커 버튼을 누르면 로컬 VOICEVOX 엔진이 실행 중일 때 VOICEVOX로, 연결할 수 없으면 브라우저 기본 음성으로 일본어를 읽어 줍니다.";
+
+const APP_STORAGE_NOTE =
+  "공부 데이터는 이 앱에만 저장됩니다. 앱 데이터를 지우거나 앱을 삭제하면 함께 사라지니 백업해 두세요.";
+
+// Desktop and native (Capacitor) builds keep data in the app, not a browser tab.
+export function applyAppStorageWording(root = document) {
+  const note = root.querySelector?.("#storageNote");
+  if (note) {
+    note.textContent = APP_STORAGE_NOTE;
+  }
+}
 
 export function applyDesktopGating(root = document) {
+  applyAppStorageWording(root);
   const ttsDescription = root.querySelector?.("#ttsDescription");
   if (ttsDescription) {
     ttsDescription.textContent = DESKTOP_TTS_DESCRIPTION;

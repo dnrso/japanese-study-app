@@ -3,6 +3,8 @@ import {
   createSyncCoordinator as createSyncCoordinatorImpl,
   createSyncingStorage as createSyncingStorageImpl
 } from "@nihongo-study/sync";
+import { applyPagePatch, renderAccountStatusPage } from "@nihongo-study/ui";
+import { escapeHtml } from "./templates.js";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
@@ -74,56 +76,21 @@ export function renderAccountStatus(ctx) {
     ctx.updateDailyEntryPlaceholder();
   }
 
-  const signInBtn = byId("googleSignInBtn");
-  const signOutBtn = byId("googleSignOutBtn");
-  const status = byId("accountStatus");
-  const syncStatus = byId("syncStatus");
-  const lastSuccess = byId("syncLastSuccess");
-  const retryBtn = byId("syncRetryBtn");
-  if (!signInBtn || !signOutBtn || !status) {
+  if (!byId("accountStatus")) {
     return;
   }
-  const accountSession = ctx.getAccountSession();
-  const email = accountSession?.user?.email || "";
-  signInBtn.hidden = Boolean(accountSession);
-  signOutBtn.hidden = !accountSession;
-  status.textContent = accountSession
-    ? `${email} 계정으로 로그인되어 있습니다.`
-    : ctx.sync.isEnabled
-      ? "로그인되어 있지 않습니다."
-      : "Supabase 환경변수가 설정되지 않아 로그인을 사용할 수 없습니다.";
-
   const coordinatorState = ctx.syncCoordinator.getState();
-  const canSync = Boolean(ctx.sync.isEnabled && accountSession && coordinatorState.authenticated);
-  if (syncStatus) {
-    if (!ctx.sync.isEnabled) {
-      syncStatus.textContent = "동기화 비활성";
-    } else if (!accountSession) {
-      syncStatus.textContent = "동기화 대기";
-    } else if (!coordinatorState.authenticated) {
-      syncStatus.textContent = "동기화 세션 만료";
-    } else if (coordinatorState.status === "syncing") {
-      syncStatus.textContent = "동기화 중";
-    } else if (coordinatorState.status === "success") {
-      syncStatus.textContent = "동기화 완료";
-    } else if (coordinatorState.status === "error") {
-      syncStatus.textContent = `동기화 실패: ${coordinatorState.error?.message || coordinatorState.error || "알 수 없는 오류"}`;
-    } else {
-      syncStatus.textContent = "동기화 대기";
-    }
-  }
-  if (lastSuccess) {
-    const date = coordinatorState.lastSuccessAt ? new Date(coordinatorState.lastSuccessAt) : null;
-    lastSuccess.textContent = date && !Number.isNaN(date.getTime())
-      ? `마지막 성공: ${new Intl.DateTimeFormat("ko-KR", {
-          dateStyle: "medium",
-          timeStyle: "medium"
-        }).format(date)}`
-      : "마지막 성공: 없음";
-  }
-  if (retryBtn) {
-    retryBtn.disabled = !canSync || coordinatorState.status === "syncing";
-  }
+  applyPagePatch(renderAccountStatusPage({
+    state: {
+      syncEnabled: Boolean(ctx.sync.isEnabled),
+      session: ctx.getAccountSession(),
+      authenticated: Boolean(coordinatorState.authenticated),
+      status: coordinatorState.status,
+      error: coordinatorState.error,
+      lastSuccessAt: coordinatorState.lastSuccessAt
+    },
+    helpers: { escapeHtml }
+  }), { getElementById: byId });
 }
 
 export async function signInWithGoogle(ctx) {
@@ -160,7 +127,7 @@ export async function signInWithGoogle(ctx) {
       console.error("Google 로그인 실패:", result.error);
     }
     const message = result.reason === "disabled"
-      ? "Supabase 환경변수가 설정되지 않았습니다."
+      ? "이 환경에서는 로그인을 사용할 수 없습니다."
       : `Google 로그인 실패: ${result.error?.message || result.reason}`;
     window.alert(message);
     const status = byId("accountStatus");

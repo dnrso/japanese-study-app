@@ -253,7 +253,6 @@ describe("web auth and status wiring", () => {
       ["googleSignInBtn", {}],
       ["googleSignOutBtn", {}],
       ["accountStatus", {}],
-      ["syncStatus", {}],
       ["syncLastSuccess", {}],
       ["syncRetryBtn", {}]
     ]);
@@ -277,11 +276,13 @@ describe("web auth and status wiring", () => {
     };
 
     renderAccountStatus(ctx);
-    expect(elements.get("syncStatus").textContent).toBe("동기화 대기");
+    expect(elements.get("accountStatus").innerHTML).toContain("로그인됨");
+    expect(elements.get("accountStatus").innerHTML).toContain("동기화 대기 중");
+    expect(elements.get("syncLastSuccess").hidden).toBe(true);
 
     coordinatorState = { ...coordinatorState, status: "syncing" };
     renderAccountStatus(ctx);
-    expect(elements.get("syncStatus").textContent).toBe("동기화 중");
+    expect(elements.get("accountStatus").innerHTML).toContain("동기화 중");
     expect(elements.get("syncRetryBtn").disabled).toBe(true);
 
     coordinatorState = {
@@ -291,12 +292,13 @@ describe("web auth and status wiring", () => {
       authenticated: true
     };
     renderAccountStatus(ctx);
-    expect(elements.get("syncStatus").textContent).toBe("동기화 완료");
-    expect(elements.get("syncLastSuccess").textContent).toContain("마지막 성공:");
+    expect(elements.get("accountStatus").innerHTML).toContain("동기화 켜짐");
+    expect(elements.get("syncLastSuccess").hidden).toBe(false);
+    expect(elements.get("syncLastSuccess").textContent).toContain("마지막 동기화:");
 
     coordinatorState = { ...coordinatorState, status: "error", error: new Error("offline") };
     renderAccountStatus(ctx);
-    expect(elements.get("syncStatus").textContent).toBe("동기화 실패: offline");
+    expect(elements.get("accountStatus").innerHTML).toContain("offline");
     expect(elements.get("syncRetryBtn").disabled).toBe(false);
   });
 });
