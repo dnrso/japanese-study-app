@@ -17,6 +17,8 @@ import {
   renderHomePage,
   renderHomeSentencePanel,
   renderKanjiPage,
+  renderMarkdown,
+  renderNotesPage,
   renderKanjiQuizPage,
   renderLearnedSectionsPage,
   renderQuickFiltersPage,
@@ -122,6 +124,11 @@ const LIST_PAGE_SIZE_STORAGE_KEY = "nihongo-study.listPageSizes";
 // 한자 카드 단어 표시 수: page-size와 같은 방식(전용 localStorage 키, 백업 제외).
 const KANJI_WORD_LIMIT_STORAGE_KEY = "nihongo-study.kanjiWordLimit";
 
+// The note being written, kept outside IndexedDB until 저장 is pressed so a
+// reload or a closed tab does not lose it. Device-local on purpose: an
+// unsaved draft is not study data and must not ride along in backups/sync.
+const NOTE_DRAFT_STORAGE_KEY = "nihongo-study.noteDraft";
+
 let state = createSampleState(todayKey);
 let aiSentenceAnalysisInProgress = false;
 let aiSentenceAnalysisEnabled = false;
@@ -147,6 +154,14 @@ let quizReviewOnCorrect = true;
 let quizCorrectReview = "내일";
 let storageStatus = storageNotice;
 let homeSentenceEntryId = null;
+// 노트 tab. `notesView` is "list" | "read" | "edit"; `activeNoteId` is the note
+// being read or edited (a freshly minted id while a new note is being
+// written, so the saved note can be opened straight away).
+let notesView = "list";
+let activeNoteId = null;
+let noteEditorIsNew = false;
+// Headings of the note being read, offered as the sidebar 목차.
+let noteHeadings = [];
 // Current page (1-based) per paginated list tab. Reset to 1 wherever that
 // tab's filter/search/sort changes (see resetPageIndex callers below);
 // paginate() itself also falls back to 1 if data shrinks below the
@@ -332,6 +347,35 @@ function bindEvents() {
       return;
     }
 
+    const openNoteTarget = event.target.closest("[data-open-note]");
+    if (openNoteTarget) {
+      openNote(openNoteTarget.dataset.openNote);
+      return;
+    }
+
+    const editNoteTarget = event.target.closest("[data-edit-note]");
+    if (editNoteTarget) {
+      openNoteEditor(editNoteTarget.dataset.editNote);
+      return;
+    }
+
+    const deleteNoteTarget = event.target.closest("[data-delete-note]");
+    if (deleteNoteTarget) {
+      await deleteNote(deleteNoteTarget.dataset.deleteNote);
+      return;
+    }
+
+    if (event.target.closest("[data-notes-back]")) {
+      showNotesList();
+      return;
+    }
+
+    const notePaneTarget = event.target.closest("[data-note-pane]");
+    if (notePaneTarget) {
+      setNoteEditorPane(notePaneTarget.dataset.notePane);
+      return;
+    }
+
     const deleteTarget = event.target.closest("[data-delete-item]");
     if (deleteTarget) {
       await deleteItem(deleteTarget.dataset.deleteItem);
@@ -510,6 +554,27 @@ function bindEvents() {
   // home 복습 항목 stat intentionally stay whole-queue numbers.
   byId("reviewKindFilter").addEventListener("change", renderReview);
 
+  byId("newNoteBtn").addEventListener("click", () => openNoteEditor(null));
+  byId("noteEditBtn").addEventListener("click", () => openNoteEditor(activeNoteId));
+  byId("noteDeleteBtn").addEventListener("click", () => deleteNote(activeNoteId));
+  byId("noteCancelBtn").addEventListener("click", cancelNoteEdit);
+  byId("noteDiscardDraftBtn").addEventListener("click", discardNoteDraft);
+  byId("notesEditView").addEventListener("submit", saveNoteFromEditor);
+  byId("notesEditView").addEventListener("keydown", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      byId("notesEditView").requestSubmit();
+    }
+  });
+  ["noteTitleInput", "noteBodyInput"].forEach(id => {
+    byId(id).addEventListener("input", () => {
+      saveNoteDraft();
+      if (id === "noteBodyInput") {
+        renderNotePreview();
+      }
+    });
+  });
+
   byId("addTaskBtn").addEventListener("click", addTask);
   byId("prevMonthBtn").addEventListener("click", () => moveCalendarMonth(-1));
   byId("nextMonthBtn").addEventListener("click", () => moveCalendarMonth(1));
@@ -676,6 +741,7 @@ function renderAll() {
   renderKanjiQuiz();
   renderSentenceQuiz();
   renderReview();
+  renderNotes();
   renderStats();
   renderQuickFilters();
   renderQuizSettings();
@@ -1077,6 +1143,222 @@ function renderReview() {
   }));
 }
 
+function allNotes() {
+  return state.notes || [];
+}
+
+function noteById(id) {
+  return allNotes().find(note => note.id === id) || null;
+}
+
+function renderNotes() {
+  // The note being read can disappear underneath us (deleted on another
+  // device and synced in, or a backup loaded): fall back to the list.
+  if (notesView === "read" && !noteById(activeNoteId)) {
+    notesView = "list";
+    activeNoteId = null;
+  }
+  const note = notesView === "read" ? noteById(activeNoteId) : null;
+  const rendered = note ? renderMarkdown(note.body) : null;
+  noteHeadings = rendered ? rendered.headings : [];
+  applyPagePatch(renderNotesPage({
+    view: notesView,
+    notes: core.visibleNotes(allNotes(), searchTerm),
+    total: allNotes().length,
+    note,
+    rendered,
+    searchTerm,
+    helpers: renderHelpers()
+  }));
+  if (currentPage === "notes") {
+    renderToc("notes");
+  }
+}
+
+function scrollNotesToTop() {
+  byId("notes").scrollIntoView({ block: "start" });
+}
+
+function showNotesList() {
+  notesView = "list";
+  activeNoteId = null;
+  renderNotes();
+  scrollNotesToTop();
+}
+
+function openNote(id) {
+  if (!noteById(id)) {
+    return;
+  }
+  notesView = "read";
+  activeNoteId = id;
+  renderNotes();
+  scrollNotesToTop();
+}
+
+function loadNoteDraft() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(NOTE_DRAFT_STORAGE_KEY) || "null");
+    if (parsed && typeof parsed === "object" && typeof parsed.body === "string") {
+      return { noteId: String(parsed.noteId || ""), title: String(parsed.title || ""), body: parsed.body };
+    }
+  } catch {
+    // localStorage unavailable or a malformed value - there is no draft.
+  }
+  return null;
+}
+
+// `noteId` is "" for a note that has never been saved, so a draft of a new
+// note is offered again the next time 새 노트 is pressed.
+function saveNoteDraft() {
+  if (notesView !== "edit") {
+    return;
+  }
+  try {
+    localStorage.setItem(NOTE_DRAFT_STORAGE_KEY, JSON.stringify({
+      noteId: noteEditorIsNew ? "" : activeNoteId,
+      title: byId("noteTitleInput").value,
+      body: byId("noteBodyInput").value
+    }));
+  } catch {
+    // Ignore write failures - the draft just won't survive a reload.
+  }
+}
+
+function clearNoteDraft() {
+  try {
+    localStorage.removeItem(NOTE_DRAFT_STORAGE_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+function setNoteEditorStatus(message, { draft = false } = {}) {
+  byId("noteEditorStatusText").textContent = message;
+  byId("noteDiscardDraftBtn").hidden = !draft;
+  byId("noteEditorStatus").hidden = !message;
+}
+
+function fillNoteEditor({ title = "", body = "" }) {
+  byId("noteTitleInput").value = title || "";
+  byId("noteBodyInput").value = body || "";
+  renderNotePreview();
+}
+
+function renderNotePreview() {
+  const body = byId("noteBodyInput").value;
+  byId("notePreview").innerHTML = body.trim()
+    ? renderMarkdown(body).html
+    : `<p class="muted">본문을 입력하면 여기에 미리보기가 나타납니다.</p>`;
+}
+
+// 편집/미리보기 toggle. Only matters on narrow screens; wide screens show
+// both panes side by side regardless of the selected one.
+function setNoteEditorPane(pane) {
+  const active = pane === "preview" ? "preview" : "write";
+  byId("noteEditor").dataset.pane = active;
+  document.querySelectorAll("[data-note-pane]").forEach(tab => {
+    const selected = tab.dataset.notePane === active;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+  });
+}
+
+// Opens the editor on an existing note, or on a blank one when `id` matches
+// no note. A leftover draft for the same note is restored instead of the
+// stored text - that is the whole point of keeping it.
+function openNoteEditor(id) {
+  const note = id ? noteById(id) : null;
+  noteEditorIsNew = !note;
+  activeNoteId = note ? note.id : nextId("note");
+  const draft = loadNoteDraft();
+  const restoreDraft = Boolean(draft)
+    && draft.noteId === (note ? note.id : "")
+    && core.noteDraftIsDirty(note, draft);
+  byId("noteEditorHeading").textContent = note ? "노트 수정" : "새 노트";
+  fillNoteEditor(restoreDraft ? draft : { title: note?.title, body: note?.body });
+  setNoteEditorStatus(restoreDraft ? "저장하지 않은 초안을 불러왔습니다." : "", { draft: restoreDraft });
+  setNoteEditorPane("write");
+  notesView = "edit";
+  renderNotes();
+  scrollNotesToTop();
+  byId(note ? "noteBodyInput" : "noteTitleInput").focus();
+}
+
+function noteEditorIsDirty() {
+  return core.noteDraftIsDirty(noteEditorIsNew ? null : noteById(activeNoteId), {
+    title: byId("noteTitleInput").value,
+    body: byId("noteBodyInput").value
+  });
+}
+
+function leaveNoteEditor() {
+  clearNoteDraft();
+  setNoteEditorStatus("");
+  if (noteEditorIsNew || !noteById(activeNoteId)) {
+    notesView = "list";
+    activeNoteId = null;
+  } else {
+    notesView = "read";
+  }
+  renderNotes();
+  scrollNotesToTop();
+}
+
+function cancelNoteEdit() {
+  if (noteEditorIsDirty() && !window.confirm("저장하지 않은 변경 내용을 버릴까요?")) {
+    return;
+  }
+  leaveNoteEditor();
+}
+
+// Throws the restored draft away and goes back to the stored text, staying
+// in the editor.
+function discardNoteDraft() {
+  const note = noteEditorIsNew ? null : noteById(activeNoteId);
+  clearNoteDraft();
+  fillNoteEditor({ title: note?.title, body: note?.body });
+  setNoteEditorStatus("");
+  byId("noteBodyInput").focus();
+}
+
+async function saveNoteFromEditor(event) {
+  event.preventDefault();
+  const title = byId("noteTitleInput").value.trim();
+  const body = byId("noteBodyInput").value;
+  if (!title && !body.trim()) {
+    setNoteEditorStatus("제목이나 본문을 입력한 뒤 저장하세요.");
+    byId("noteBodyInput").focus();
+    return;
+  }
+  try {
+    state = await store.upsertNote({ id: activeNoteId, title, body }, selectedDate);
+  } catch (error) {
+    // The draft stays in localStorage, so nothing typed is lost.
+    setNoteEditorStatus(`저장하지 못했습니다: ${error?.message || String(error)}`);
+    return;
+  }
+  clearNoteDraft();
+  setNoteEditorStatus("");
+  noteEditorIsNew = false;
+  notesView = "read";
+  renderAll();
+  scrollNotesToTop();
+}
+
+async function deleteNote(id) {
+  const note = noteById(id);
+  if (!note || !window.confirm(`'${core.noteDisplayTitle(note)}' 노트를 삭제할까요?`)) {
+    return;
+  }
+  state = await store.deleteNote(id, selectedDate);
+  if (activeNoteId === id && notesView !== "edit") {
+    notesView = "list";
+    activeNoteId = null;
+  }
+  renderAll();
+}
+
 function renderStats() {
   applyPagePatch(renderStatsPage({
     stats: core.studyStats(state)
@@ -1148,10 +1430,15 @@ function renderDate() {
 }
 
 function renderToc(pageId) {
-  const tocItems = filterTocForPlatform(tocByPage[pageId] || [], desktopApp);
+  // A note that is being read lists its own headings (h1-h3) instead of the
+  // page's fixed sections. Heading text is user input, hence the escaping.
+  const noteToc = pageId === "notes" && notesView === "read"
+    ? noteHeadings.filter(heading => heading.level <= 3 && heading.text).map(heading => [heading.id, heading.text, ""])
+    : [];
+  const tocItems = noteToc.length ? noteToc : filterTocForPlatform(tocByPage[pageId] || [], desktopApp);
   byId("tocList").innerHTML = tocItems.map((item, index) => `
-    <a class="toc-item ${index === 0 ? "active" : ""}" href="#${item[0]}">
-      <span>${item[1]}</span>
+    <a class="toc-item ${index === 0 ? "active" : ""}" href="#${escapeHtml(item[0])}">
+      <span>${escapeHtml(item[1])}</span>
       ${item[2] ? `<span class="count">${item[2]}</span>` : ""}
     </a>
   `).join("");
@@ -1188,6 +1475,10 @@ function updatePageVisibility() {
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-current", active ? "page" : "false");
   });
+  // The tabbar scrolls sideways when it does not fit (narrow windows, the
+  // mobile bottom bar): keep the current tab visible. "nearest" on both axes
+  // so this never moves the page itself.
+  document.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function updateDailyEntryPlaceholder() {

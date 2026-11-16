@@ -7,6 +7,8 @@ const syncMutationMethods = Object.freeze([
   "updateTaskDone",
   "upsertItem",
   "deleteItem",
+  "upsertNote",
+  "deleteNote",
   "updateItemReview",
   "completeReview",
   "submitWordQuizAnswer",

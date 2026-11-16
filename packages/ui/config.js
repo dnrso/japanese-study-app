@@ -9,6 +9,7 @@ export const tocByPage = {
   kanji: [["kanji-grid", "한자 목록", ""]],
   quiz: [["quiz-select", "퀴즈 선택", "4"]],
   review: [["review-queue", "복습 큐", ""]],
+  notes: [["notes-list", "노트 목록", ""]],
   stats: [["stats-overview", "주간 통계", ""]],
   settings: [["settings-general", "일반 설정", ""], ["settings-account", "계정 및 동기화", ""], ["settings-quiz", "퀴즈 표시", ""], ["settings-tts", "음성 재생", ""]]
 };

@@ -4,6 +4,7 @@
 import { addDays, dateKey, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
 
 export * from "./merge.js";
+export * from "./notes.js";
 
 // Display-only copy of the AI 문장 분석 usage limits, for the client to show
 // alongside the AI checkbox (see apps/web/src/main.js). The limits are

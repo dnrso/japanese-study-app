@@ -46,7 +46,7 @@ const SAFE_RECORD_ID = /^[A-Za-z0-9._:-]{1,200}$/;
 // rejected.
 const RECORD_ID_FIELDS = ["id", "parentId", "entryId", "entry_id", "sentenceId", "sentence_id"];
 
-const ID_BEARING_COLLECTIONS = ["dailyEntries", "allDailyEntries", "dailyEntryLinks", "tasks", "items"];
+const ID_BEARING_COLLECTIONS = ["dailyEntries", "allDailyEntries", "dailyEntryLinks", "tasks", "items", "notes"];
 
 export function isSafeRecordId(id) {
   return SAFE_RECORD_ID.test(String(id ?? ""));
@@ -95,7 +95,8 @@ function isBackupData(data) {
     "allDailyEntries",
     "dailyEntryLinks",
     "tasks",
-    "items"
+    "items",
+    "notes"
   ].some(name => Array.isArray(data[name])));
 }
 
@@ -125,6 +126,14 @@ export function mergeBackupData(currentData, importedData, fallbackDate) {
     rows(importedData.items),
     itemKeys
   );
+  // Notes match on id only: two notes with the same title are still two notes,
+  // so there is no content key to dedupe on. A snapshot written by a build
+  // without the 노트 tab carries no `notes` at all and keeps the local ones.
+  const notes = mergeUniqueRows(
+    rows(currentData.notes),
+    rows(importedData.notes),
+    noteKeys
+  );
   const dailyEntryLinks = mergeUniqueRows(
     rows(currentData.dailyEntryLinks),
     rows(importedData.dailyEntryLinks)
@@ -140,9 +149,10 @@ export function mergeBackupData(currentData, importedData, fallbackDate) {
       dailyEntries: dailyEntries.rows,
       dailyEntryLinks: dailyEntryLinks.rows,
       tasks: tasks.rows,
-      items: items.rows
+      items: items.rows,
+      notes: notes.rows
     },
-    summary: sumMergeSummaries([studyDays, dailyEntries, dailyEntryLinks, tasks, items])
+    summary: sumMergeSummaries([studyDays, dailyEntries, dailyEntryLinks, tasks, items, notes])
   };
 }
 
@@ -306,6 +316,10 @@ function itemKeys(row) {
     key("itemId", row.id),
     key("item", row.kind, row.title, row.reading, row.meaning)
   ]);
+}
+
+function noteKeys(row) {
+  return compactKeys([key("noteId", row.id)]);
 }
 
 function compactKeys(keys) {

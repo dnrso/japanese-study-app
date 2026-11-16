@@ -1,6 +1,11 @@
 .app {
   min-height: 100vh;
   display: grid;
+  /* An implicit `auto` column grows to the topbar's max-content width, which
+     with every tab on one row is wider than a ~1024px window and made the
+     whole page scroll sideways. Pin the column to the viewport instead: the
+     tabbar already scrolls on its own (overflow-x: auto). */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--topbar-height) 1fr;
 }
 
@@ -54,6 +59,13 @@
   align-items: center;
   gap: 4px;
   overflow-x: auto;
+  /* Scrolls when the window is too narrow for every tab, without drawing a
+     scrollbar across the topbar; the active tab is scrolled into view. */
+  scrollbar-width: none;
+}
+
+.tabbar::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {

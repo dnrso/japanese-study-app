@@ -19,7 +19,7 @@ import {
   withKanjiItems
 } from "@nihongo-study/storage-core";
 
-const databaseVersion = 2;
+const databaseVersion = 3;
 
 const storeDefinitions = [
   { name: "meta", options: { keyPath: "key" }, indexes: [] },
@@ -50,7 +50,10 @@ const storeDefinitions = [
     name: "items",
     options: { keyPath: "id" },
     indexes: [{ name: "kind", keyPath: "kind" }]
-  }
+  },
+  // 노트 탭의 자유 필기(Markdown 원문). 이 스토어가 없는 기존 DB는 버전 3으로
+  // 올라가면서 ensureDatabaseSchema()가 만들어 준다.
+  { name: "notes", options: { keyPath: "id" }, indexes: [] }
 ];
 const stores = storeDefinitions.map(store => store.name);
 
@@ -76,12 +79,13 @@ export function createIdbStorage(options = {}) {
   async function getState(studyDate = todayKey()) {
     await promoteDueReviews();
     const selectedDate = normalizeDate(studyDate);
-    const [studyDays, allDailyEntries, tasks, items, links] = await Promise.all([
+    const [studyDays, allDailyEntries, tasks, items, links, notes] = await Promise.all([
       getAllActive("studyDays"),
       getAllActive("dailyEntries"),
       getAllActive("tasks"),
       getAllActive("items"),
-      getAllActive("dailyEntryLinks")
+      getAllActive("dailyEntryLinks"),
+      getAllActive("notes")
     ]);
 
     const allDailyEntriesWithLinks = allDailyEntries
@@ -110,7 +114,8 @@ export function createIdbStorage(options = {}) {
       dailyEntries,
       allDailyEntries: allDailyEntriesWithLinks,
       tasks: tasks.sort(sortNewest),
-      items: itemsWithLinks
+      items: itemsWithLinks,
+      notes: notes.sort(sortRecentlyUpdated)
     };
   }
 
@@ -310,6 +315,33 @@ export function createIdbStorage(options = {}) {
     return getState(studyDate);
   }
 
+  // The caller may choose the id of a new note (the UI opens the note it just
+  // saved, so it has to know the id up front). An existing row is merged into,
+  // and updatedAt is always re-stamped so the newest edit wins a sync merge.
+  async function upsertNote(note = {}, studyDate = todayKey()) {
+    const id = text(note.id) || createId();
+    const existing = await getValue("notes", id);
+    const payload = normalizeNote({
+      ...existing,
+      ...note,
+      id,
+      deletedAt: null,
+      updatedAt: now()
+    });
+    await putValue("notes", payload);
+    return getState(studyDate);
+  }
+
+  async function deleteNote(id, studyDate = todayKey()) {
+    const noteId = text(id);
+    const note = noteId ? await getValue("notes", noteId) : null;
+    if (note && !note.deletedAt) {
+      const tombstoneAt = now();
+      await putValue("notes", { ...note, deletedAt: tombstoneAt, updatedAt: tombstoneAt });
+    }
+    return getState(studyDate);
+  }
+
   async function updateItemReview(id, review, studyDate = todayKey()) {
     const item = await getValue("items", id);
     if (item) {
@@ -421,7 +453,8 @@ export function createIdbStorage(options = {}) {
       dailyEntries: pruneStaleTombstones(await getAll("dailyEntries")),
       dailyEntryLinks: pruneStaleTombstones(await getAll("dailyEntryLinks")),
       tasks: pruneStaleTombstones(await getAll("tasks")),
-      items: pruneStaleTombstones(await getAll("items"))
+      items: pruneStaleTombstones(await getAll("items")),
+      notes: pruneStaleTombstones(await getAll("notes"))
     };
     return { data };
   }
@@ -464,7 +497,7 @@ export function createIdbStorage(options = {}) {
     }
 
     const db = await getDb();
-    const dataStores = ["studyDays", "dailyEntries", "dailyEntryLinks", "tasks", "items"];
+    const dataStores = ["studyDays", "dailyEntries", "dailyEntryLinks", "tasks", "items", "notes"];
     const data = await new Promise((resolve, reject) => {
       const transaction = db.transaction(stores, "readwrite");
       const rows = {};
@@ -499,7 +532,8 @@ export function createIdbStorage(options = {}) {
               dailyEntries: pruneStaleTombstones(rows.dailyEntries),
               dailyEntryLinks: pruneStaleTombstones(rows.dailyEntryLinks),
               tasks: pruneStaleTombstones(rows.tasks),
-              items: pruneStaleTombstones(rows.items)
+              items: pruneStaleTombstones(rows.items),
+              notes: pruneStaleTombstones(rows.notes)
             };
             const result = merge(local, remote);
             if (result && typeof result.then === "function") {
@@ -614,6 +648,8 @@ export function createIdbStorage(options = {}) {
     updateTaskDone,
     upsertItem,
     deleteItem,
+    upsertNote,
+    deleteNote,
     updateItemReview,
     completeReview,
     submitWordQuizAnswer,
@@ -637,6 +673,7 @@ function writeNormalizedSeed(transaction, normalized) {
   normalized.dailyEntryLinks.forEach(link => transaction.objectStore("dailyEntryLinks").put(link));
   normalized.tasks.forEach(task => transaction.objectStore("tasks").put(task));
   normalized.items.forEach(item => transaction.objectStore("items").put(item));
+  normalized.notes.forEach(note => transaction.objectStore("notes").put(note));
 }
 
 function openDatabase(dbName) {
@@ -732,7 +769,8 @@ function normalizeSeedState(seed = {}) {
     dailyEntries,
     dailyEntryLinks,
     tasks: (seed.tasks || []).map(normalizeTask),
-    items: (seed.items || []).map(normalizeItem)
+    items: (seed.items || []).map(normalizeItem),
+    notes: (Array.isArray(seed.notes) ? seed.notes : []).map(normalizeNote)
   };
 }
 
@@ -1032,6 +1070,20 @@ function normalizeItem(item = {}) {
   };
 }
 
+function normalizeNote(note = {}) {
+  return {
+    id: text(note.id || createId()),
+    title: text(note.title),
+    // The body is Markdown source: line breaks and indentation carry meaning,
+    // so it is stored as typed rather than trimmed through text().
+    body: typeof note.body === "string" ? note.body : "",
+    pinned: Boolean(note.pinned),
+    createdAt: text(note.createdAt || now()),
+    updatedAt: text(note.updatedAt || now()),
+    deletedAt: normalizeDeletedAt(note.deletedAt)
+  };
+}
+
 function normalizeStudyLog(studyLog = {}) {
   return {
     studyDate: normalizeDate(studyLog.studyDate),
@@ -1149,6 +1201,10 @@ function reviewDueDateFor(review, baseDate = todayKey()) {
 
 function sortNewest(left, right) {
   return text(right.createdAt).localeCompare(text(left.createdAt));
+}
+
+function sortRecentlyUpdated(left, right) {
+  return text(right.updatedAt).localeCompare(text(left.updatedAt));
 }
 
 function now() {

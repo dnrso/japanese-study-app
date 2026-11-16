@@ -109,7 +109,7 @@ const adapter = {
 describe("storage contract", () => {
   it("storageMethodNames stays derived from storageContract", () => {
     expect(storageMethodNames).toEqual(storageContract.map(entry => entry.name));
-    expect(storageMethodNames).toHaveLength(20);
+    expect(storageMethodNames).toHaveLength(22);
     expect(new Set(storageMethodNames).size).toBe(storageMethodNames.length);
   });
 
