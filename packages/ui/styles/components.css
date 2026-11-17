@@ -1126,6 +1126,21 @@ h1 {
   font-size: 17px;
 }
 
+/* "노트 · 제목" over a quiz run limited to a note's cards. */
+.quiz-session-scope {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiz-session-scope-kind {
+  color: var(--muted);
+}
+
 .quiz-session-progress {
   color: var(--muted-strong);
   font-size: 14px;

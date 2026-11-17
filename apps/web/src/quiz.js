@@ -61,14 +61,15 @@ function buildQuestion(kind, ctx, excludeIds, questionIds = null, itemId = "") {
 // The session's question ids, planned once at session start (weak / new /
 // stale buckets, see core.planQuizQuestionIds) from the current item stats.
 // Sentence entries use the stats of their registered sentence item.
-function planFor(kind, ctx, questionIds) {
+// `size` defaults to the 퀴즈 문제 수 setting; a scoped run passes its own.
+function planFor(kind, ctx, questionIds, size = ctx.quizSessionSize) {
   const { items } = ctx.getState();
   const isSentence = kind === "sentence-meaning" || kind === "sentence-listen";
   return core.planQuizQuestionIds({
     candidates: isSentence
       ? core.sentenceQuizPlanCandidates({ items, entries: allEntries(ctx) })
       : core.quizCandidates(items, kind),
-    size: ctx.quizSessionSize,
+    size,
     questionIds
   });
 }
@@ -110,11 +111,16 @@ function renderAllQuizzes(ctx) {
 
 // Starts a new session of up to ctx.quizSessionSize questions (the 퀴즈 문제 수
 // setting), planned up front; "다시 풀기" calls this again and re-plans.
-export function startQuiz(kind, ctx) {
+//
+// `scope` ({ noteId, title, questionIds }, e.g. a note's cards) narrows what may
+// be asked on top of the weak-only restriction, and a scoped run asks every
+// askable card in it once, ignoring the 퀴즈 문제 수 setting. It is kept on the
+// quiz state (see quizScopeOf) so 다시 풀기 can start the same scoped quiz.
+export function startQuiz(kind, ctx, { scope = null } = {}) {
   const { byId } = ctx;
   const family = familyOf(kind);
-  const questionIds = questionIdsFor(kind, ctx);
-  const plan = planFor(kind, ctx, questionIds);
+  const questionIds = core.intersectQuestionIds(questionIdsFor(kind, ctx), scope?.questionIds ?? null);
+  const plan = planFor(kind, ctx, questionIds, scope ? (questionIds || []).length : ctx.quizSessionSize);
   const question = plan.length ? buildQuestion(kind, ctx, [], questionIds, plan[0]) : null;
   ctx.setWordQuiz(emptyQuiz());
   ctx.setKanjiQuiz(emptyQuiz());
@@ -129,7 +135,8 @@ export function startQuiz(kind, ctx) {
     question,
     session,
     questionIds,
-    plan
+    plan,
+    ...(scope ? { scope } : {})
   });
   renderAllQuizzes(ctx);
   window.setTimeout(() => {
@@ -138,6 +145,11 @@ export function startQuiz(kind, ctx) {
   if (question.mode === "listen") {
     ctx.speak(question.item.title);
   }
+}
+
+// The scope of the run held in `kind`'s panel (see startQuiz), or null.
+export function quizScopeOf(kind, ctx) {
+  return slot(familyOf(kind), ctx).get()?.scope || null;
 }
 
 export function exitQuizSession(ctx) {

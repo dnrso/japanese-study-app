@@ -11,8 +11,12 @@ export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulat
   if (!quiz.question || !quiz.session) {
     return { hidden: true, html: "" };
   }
+  // A run limited to a scope (a note's cards, see apps/web startQuiz) names it
+  // above the header; an unscoped run renders exactly as it always did.
+  const scope = quiz.scope || null;
+  const scopeLine = scopeLabel(scope, helpers);
   if (quiz.session.finished) {
-    return { hidden: false, html: quizResult({ session: quiz.session, title, restartKind, itemById, missedCard, missedListClass, showReviewChanges }, helpers) };
+    return { hidden: false, html: scopeLine + quizResult({ session: quiz.session, title, restartKind, itemById, missedCard, missedListClass, showReviewChanges, scope }, helpers) };
   }
 
   const { item, choices } = quiz.question;
@@ -22,7 +26,7 @@ export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulat
   const percent = session.total ? Math.round((answeredCount / session.total) * 100) : 0;
   return {
     hidden: false,
-    html: `
+    html: `${scopeLine}
       <div class="quiz-session-header">
         <strong class="quiz-session-title">${title}</strong>
         <span class="quiz-session-progress">${session.index + 1} / ${session.total}</span>
@@ -40,6 +44,14 @@ export function quizPanel({ quiz, family, title, promptText, promptHtml, cumulat
       ${quizFeedback(quiz, family)}
     `
   };
+}
+
+// "노트 · 청소 정리" over a scoped run; "" for an unscoped one.
+function scopeLabel(scope, { escapeHtml }) {
+  if (!scope) {
+    return "";
+  }
+  return `<p class="quiz-session-scope"><span class="quiz-session-scope-kind">노트</span> · <span class="quiz-session-scope-title">${escapeHtml(scope.title || "")}</span></p>`;
 }
 
 function quizChoice(choice, index, quiz, choiceAttribute, { escapeHtml, highlight }) {
@@ -82,7 +94,7 @@ function reviewChangesText(changes = {}) {
   return parts.length ? ["복습 일정 반영", ...parts].join(" · ") : "";
 }
 
-function quizResult({ session, title, restartKind, itemById, missedCard, missedListClass, showReviewChanges }, helpers) {
+function quizResult({ session, title, restartKind, itemById, missedCard, missedListClass, showReviewChanges, scope = null }, helpers) {
   const { escapeHtml } = helpers;
   const seen = new Set();
   const cards = [];
@@ -108,6 +120,7 @@ function quizResult({ session, title, restartKind, itemById, missedCard, missedL
       <div class="quiz-result-actions">
         <button class="primary-btn" type="button" data-quiz-kind="${escapeHtml(restartKind)}">다시 풀기</button>
         <button class="ghost-btn" type="button" data-quiz-exit>목록으로</button>
+        ${scope?.noteId ? `<button class="ghost-btn" type="button" data-quiz-open-note="${escapeHtml(scope.noteId)}">노트로 돌아가기</button>` : ""}
       </div>
       ${cards.length
         ? `<h3 class="quiz-missed-title">틀린 문제 ${cards.length}개</h3>

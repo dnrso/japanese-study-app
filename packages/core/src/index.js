@@ -5,6 +5,7 @@ import { addDays, dateKey, isWeakItem, weakItems, reviewIntervals as REVIEW_QUEU
 
 export * from "./merge.js";
 export * from "./notes.js";
+export * from "./noteQuiz.js";
 // Weak-item stats (recordQuizStat / isWeakItem / weakItems) live in storage-core
 // so the storage adapter can write them; re-exported here for the app and tests.
 export { WEAK_ITEM_CORRECT_STREAK, recordQuizStat, isWeakItem, weakItems } from "@nihongo-study/storage-core";
@@ -449,7 +450,10 @@ export function weakQuizCounts({ items = [], entries = [] } = {}) {
 // `onlyWeak`, the card is also unavailable (reason "weak") when no weak item
 // of that kind can be asked; `questionCount` is how many questions may be
 // asked (the whole pool, or the weak ids) and sizes the session.
-export function quizAvailability({ items = [], entries = [], quizKind, mode = "random", onlyWeak = false } = {}) {
+// `questionIds` (null = unrestricted) narrows what may be asked to a scope
+// such as a note's cards; the pool rules above still use the whole pool. When
+// no candidate is in that scope at all, the reason is "scope".
+export function quizAvailability({ items = [], entries = [], quizKind, mode = "random", onlyWeak = false, questionIds = null } = {}) {
   const isSentence = quizKind === "sentence-meaning" || quizKind === "sentence-listen";
   const candidates = isSentence ? sentenceQuizCandidates(entries) : quizCandidates(items, quizKind);
   let answerTypes;
@@ -465,7 +469,11 @@ export function quizAvailability({ items = [], entries = [], quizKind, mode = "r
   const distinct = Math.min(...answerTypes.map(type => new Set(candidates.map(item => item[type])).size));
   const poolSize = candidates.length;
   const poolStartable = poolSize >= QUIZ_MIN_CANDIDATES && distinct >= QUIZ_MIN_CANDIDATES;
-  const questionCount = onlyWeak ? weakQuizQuestionIds({ items, entries, quizKind }).length : poolSize;
+  const scope = Array.isArray(questionIds) ? new Set(questionIds) : null;
+  const inScope = id => !scope || scope.has(id);
+  const askable = onlyWeak ? weakQuizQuestionIds({ items, entries, quizKind }) : candidates.map(item => item.id);
+  const questionCount = askable.filter(inScope).length;
+  const scopeEmpty = Boolean(scope) && !candidates.some(item => scope.has(item.id));
   const canStart = poolStartable && questionCount > 0;
   return {
     poolSize,
@@ -473,7 +481,7 @@ export function quizAvailability({ items = [], entries = [], quizKind, mode = "r
     required: QUIZ_MIN_CANDIDATES,
     questionCount,
     canStart,
-    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : distinct < QUIZ_MIN_CANDIDATES ? "distinct" : "weak"
+    reason: canStart ? "" : poolSize < QUIZ_MIN_CANDIDATES ? "count" : distinct < QUIZ_MIN_CANDIDATES ? "distinct" : scopeEmpty ? "scope" : "weak"
   };
 }
 

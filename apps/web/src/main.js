@@ -52,6 +52,7 @@ import {
   startQuiz as startQuizSession,
   nextQuizQuestion as nextQuizQuestionImpl,
   exitQuizSession as exitQuizSessionImpl,
+  quizScopeOf,
   submitQuizChoice as submitQuizChoiceImpl,
   submitSentenceQuizChoice as submitSentenceQuizChoiceImpl
 } from "./quiz.js";
@@ -636,9 +637,28 @@ function bindEvents() {
       return;
     }
 
+    const noteQuizTarget = event.target.closest("[data-note-quiz-kind]");
+    if (noteQuizTarget) {
+      startNoteQuiz(noteQuizTarget.dataset.noteQuizNote, noteQuizTarget.dataset.noteQuizKind);
+      return;
+    }
+
+    const openQuizNoteTarget = event.target.closest("[data-quiz-open-note]");
+    if (openQuizNoteTarget) {
+      openNoteFromQuiz(openQuizNoteTarget.dataset.quizOpenNote);
+      return;
+    }
+
     const quizTarget = event.target.closest("[data-quiz-kind]");
     if (quizTarget) {
-      startQuiz(quizTarget.dataset.quizKind);
+      // 다시 풀기 on a result view restarts that run with the same scope.
+      const replay = Boolean(quizTarget.closest(".word-quiz-panel"));
+      const scope = replay ? quizScopeOf(quizTarget.dataset.quizKind, quizCtx()) : null;
+      if (scope) {
+        replayScopedQuiz(scope, quizTarget.dataset.quizKind);
+      } else {
+        startQuiz(quizTarget.dataset.quizKind);
+      }
       return;
     }
 
@@ -1586,6 +1606,7 @@ function renderNotes() {
     rendered,
     searchTerm,
     linksFor: noteLinksFor,
+    quizFor: noteQuizFor,
     helpers: renderHelpers()
   }));
   if (notesView === "edit") {
@@ -1608,6 +1629,24 @@ function noteLinksFor(note) {
     noteLinksCache.set(note, links);
   }
   return links;
+}
+
+// Per quiz kind, how many of the note's cards a 노트 퀴즈 may ask and how many
+// it links to; cached per note object and items array like noteLinksFor.
+const noteQuizCache = new WeakMap();
+
+function noteQuizFor(note) {
+  const cached = noteQuizCache.get(note);
+  if (cached && cached.items === state.items) {
+    return cached.counts;
+  }
+  const counts = core.NOTE_QUIZ_KINDS.map(kind => ({
+    kind,
+    askable: core.noteQuizQuestionIds(note, state.items, kind).length,
+    linked: core.noteQuizLinkedCount(note, state.items, kind)
+  }));
+  noteQuizCache.set(note, { items: state.items, counts });
+  return counts;
 }
 
 // The kind a [[제목]] is coloured as: the first registered card with that
@@ -2681,6 +2720,69 @@ async function deleteDailyEntry(id) {
 
 function startQuiz(kind) {
   startQuizSession(kind, quizCtx());
+}
+
+// Why a 노트 퀴즈 cannot start, for each core.quizAvailability reason.
+function noteQuizBlockedMessage(kind, availability) {
+  const unit = QUIZ_UNIT_LABELS[kind];
+  const detail = availability.reason === "count"
+    ? `등록된 ${QUIZ_UNIT_SUBJECT[kind]} ${availability.required}개 이상 필요합니다 (현재 ${availability.poolSize}개)`
+    : availability.reason === "distinct"
+    ? `서로 다른 보기가 ${availability.required}개 이상 필요합니다 (현재 ${availability.distinctCount}개)`
+    : availability.reason === "weak"
+    ? `이 노트의 ${unit} 중 약한 항목이 없습니다. '약한 항목만 풀기'를 끄면 풀 수 있습니다.`
+    : `이 노트에는 출제할 수 있는 ${unit} 카드가 없습니다. 뜻이 있는 ${unit} 카드를 연결해 보세요.`;
+  return `${unit} 퀴즈를 시작할 수 없습니다.\n${detail}`;
+}
+
+// 노트 퀴즈: every askable card of `kind` linked to the note, asked once. The
+// scope rides on the quiz state, so 다음 문제 / 다시 풀기 stay inside the note.
+function startNoteQuiz(noteId, kind) {
+  const note = noteById(noteId);
+  if (!note || !core.NOTE_QUIZ_KINDS.includes(kind)) {
+    return;
+  }
+  const questionIds = core.noteQuizQuestionIds(note, state.items, kind);
+  const availability = core.quizAvailability({
+    items: state.items,
+    entries: state.allDailyEntries || state.dailyEntries || [],
+    quizKind: kind,
+    mode: kind === "kanji" ? kanjiQuizMode : wordQuizMode,
+    onlyWeak: quizWeakOnly,
+    questionIds
+  });
+  if (!availability.canStart) {
+    window.alert(noteQuizBlockedMessage(kind, availability));
+    return;
+  }
+  if (currentPage !== "quiz") {
+    openPage("quiz");
+  }
+  startQuizSession(kind, quizCtx(), {
+    scope: { noteId: note.id, title: core.noteDisplayTitle(note), questionIds }
+  });
+}
+
+// 다시 풀기 of a scoped run: re-read the note's cards (they may have changed);
+// a note deleted meanwhile keeps the ids the run started with.
+function replayScopedQuiz(scope, kind) {
+  if (scope.noteId && noteById(scope.noteId)) {
+    startNoteQuiz(scope.noteId, kind);
+  } else {
+    startQuizSession(kind, quizCtx(), { scope });
+  }
+}
+
+// 노트로 돌아가기 on a scoped run's result: leave the run and read that note
+// (the list when it no longer exists; an open editor is left as it is).
+function openNoteFromQuiz(noteId) {
+  exitQuizSessionImpl(quizCtx());
+  if (notesView !== "edit") {
+    const note = noteById(noteId);
+    notesView = note ? "read" : "list";
+    activeNoteId = note ? note.id : null;
+  }
+  openPage("notes");
 }
 
 async function submitQuizChoice(kind, selectedAnswer) {
