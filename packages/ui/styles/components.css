@@ -806,23 +806,48 @@ h1 {
 
 .kanji-card-head {
   display: flex;
-  /* 오답 표시가 복습 선택 아래로 내려가도 수정·삭제는 첫 줄에 맞춘다. */
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 4px;
   min-width: 0;
 }
 
-.kanji-head-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
+/* 오답 표시는 복습 선택과 수정 버튼 사이, 한 줄에 둔다. */
+.kanji-card-head {
+  gap: 3px;
+}
+
+.kanji-card-head .weak-badge {
+  margin-right: auto;
+  padding: 1px 5px;
+  font-size: 10px;
+}
+
+/* 카드가 좁아 "오답" 글자 대신 ✕로 줄여 쓴다. */
+.kanji-card-head .weak-badge-label {
+  display: none;
+}
+
+.kanji-card-head .weak-badge::before {
+  content: "✕";
+  margin-right: 2px;
+  font-size: 9px;
+}
+
+.kanji-card-head .kanji-actions {
+  gap: 0;
+}
+
+.kanji-card-head .kanji-actions .row-action-btn,
+.kanji-card-head .kanji-actions .row-delete-btn {
+  width: 23px;
+  height: 23px;
+  min-height: 23px;
 }
 
 .kanji-card-head .review-select-sm {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 48px;
   margin-right: 0;
 }
 
