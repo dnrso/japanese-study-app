@@ -16,7 +16,7 @@ function wordRow(item, reviewOptions, helpers) {
   const meta = [item.part, item.script].filter(Boolean).map(value => helpers.highlight(value)).join(" · ");
   return `
     <tr data-item-id="${id}">
-      <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span></div></td>
+      <td><div class="japanese word-table-title">${speakerButton(item.title, helpers)}<span lang="ja">${helpers.highlight(item.title)}</span>${weakBadge(item, helpers)}</div></td>
       <td class="word-reading" lang="ja">${reading}</td>
       <td class="word-meaning word-meaning-col">${helpers.highlight(item.meaning || "")}</td>
       <td class="word-kanji" lang="ja">${item.kanji ? helpers.highlight(item.kanji) : `<span class="muted">–</span>`}</td>
@@ -27,7 +27,6 @@ function wordRow(item, reviewOptions, helpers) {
           <select class="review-select ${review === "오늘" ? "is-today" : ""}" data-review-select="${id}" aria-label="복습 시기">
             ${reviewOptions.map(option => `<option value="${helpers.escapeHtml(option)}" ${option === review ? "selected" : ""}>${helpers.escapeHtml(option)}</option>`).join("")}
           </select>
-          ${weakBadge(item, helpers)}
         </div>
       </td>
       <td class="word-edit-col">
