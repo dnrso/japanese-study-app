@@ -172,6 +172,7 @@ const REVIEW_UNDO_MS = 5000;
 const initialQuizSettings = loadQuizSettings();
 let quizQuestionFontSize = initialQuizSettings.questionFontSize;
 let quizReflectInReview = initialQuizSettings.reflectInReview;
+let quizSessionSize = initialQuizSettings.sessionSize;
 let storageStatus = "";
 let homeSentenceEntryId = null;
 // 노트 tab. `notesView` is "list" | "read" | "edit"; `activeNoteId` is the note
@@ -303,7 +304,8 @@ function saveQuizSettings() {
   try {
     localStorage.setItem(QUIZ_SETTINGS_STORAGE_KEY, JSON.stringify({
       questionFontSize: quizQuestionFontSize,
-      reflectInReview: quizReflectInReview
+      reflectInReview: quizReflectInReview,
+      sessionSize: quizSessionSize
     }));
   } catch {
     // Ignore write failures - the setting just won't survive a reload.
@@ -915,6 +917,13 @@ function bindEvents() {
 
   byId("quizQuestionFontSizeRange").addEventListener("input", event => {
     quizQuestionFontSize = core.clampQuizQuestionFontSize(event.target.value);
+    saveQuizSettings();
+    renderQuizSettings();
+    flashSaved(event.target);
+  });
+
+  byId("quizSessionSizeInput").addEventListener("change", event => {
+    quizSessionSize = core.clampQuizSessionSize(event.target.value);
     saveQuizSettings();
     renderQuizSettings();
     flashSaved(event.target);
@@ -2060,7 +2069,7 @@ function renderQuickFilters() {
 
 function renderQuizSettings() {
   applyQuizQuestionFontSize();
-  applyPagePatch(renderQuizSettingsPage({ quizQuestionFontSize }));
+  applyPagePatch(renderQuizSettingsPage({ quizQuestionFontSize, quizSessionSize }));
   byId("quizReflectInReviewCheckbox").checked = quizReflectInReview;
 }
 
@@ -3066,6 +3075,7 @@ function quizCtx() {
     wordQuizMode,
     kanjiQuizMode,
     quizReflectInReview,
+    quizSessionSize,
     quizWeakOnly,
     today: todayKey(),
     getWordQuiz: () => wordQuiz,

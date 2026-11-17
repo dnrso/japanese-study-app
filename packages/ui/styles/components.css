@@ -1469,6 +1469,24 @@ label {
   width: 200px;
 }
 
+.quiz-session-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.quiz-session-size-control input {
+  width: 80px;
+  min-width: 0;
+  text-align: right;
+}
+
+.quiz-session-size-unit {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .setting-row-control .setting-switch {
   width: 18px;
   height: 18px;

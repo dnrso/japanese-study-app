@@ -38,12 +38,12 @@ function sentenceModeOf(kind) {
 }
 
 // Builds one question for `kind` (word | kanji | sentence-meaning |
-// sentence-listen), skipping items already asked in the session.
-// `questionIds` (null = whole pool) limits what may be asked; choices always
-// come from the full pool.
-function buildQuestion(kind, ctx, excludeIds, questionIds = null) {
+// sentence-listen), skipping items already asked in the session. `itemId` is
+// the item the session plan wants asked next. `questionIds` (null = whole
+// pool) limits what may be asked; choices always come from the full pool.
+function buildQuestion(kind, ctx, excludeIds, questionIds = null, itemId = "") {
   if (kind === "sentence-meaning" || kind === "sentence-listen") {
-    return core.buildSentenceQuizQuestion({ entries: allEntries(ctx), mode: sentenceModeOf(kind), excludeIds, questionIds });
+    return core.buildSentenceQuizQuestion({ entries: allEntries(ctx), mode: sentenceModeOf(kind), excludeIds, questionIds, itemId });
   }
   const isKanji = kind === "kanji";
   return core.buildQuizQuestion({
@@ -53,6 +53,22 @@ function buildQuestion(kind, ctx, excludeIds, questionIds = null) {
     forwardMode: isKanji ? "kanjiToMeaning" : "jpToMeaning",
     reverseMode: isKanji ? "meaningToKanji" : "meaningToJp",
     excludeIds,
+    questionIds,
+    itemId
+  });
+}
+
+// The session's question ids, planned once at session start (weak / new /
+// stale buckets, see core.planQuizQuestionIds) from the current item stats.
+// Sentence entries use the stats of their registered sentence item.
+function planFor(kind, ctx, questionIds) {
+  const { items } = ctx.getState();
+  const isSentence = kind === "sentence-meaning" || kind === "sentence-listen";
+  return core.planQuizQuestionIds({
+    candidates: isSentence
+      ? core.sentenceQuizPlanCandidates({ items, entries: allEntries(ctx) })
+      : core.quizCandidates(items, kind),
+    size: ctx.quizSessionSize,
     questionIds
   });
 }
@@ -65,17 +81,6 @@ function questionIdsFor(kind, ctx) {
     return null;
   }
   return core.weakQuizQuestionIds({ items: ctx.getState().items, entries: allEntries(ctx), quizKind: kind });
-}
-
-// Session length source: whole pool, or just the weak items in weak-only mode.
-function sessionPoolSizeFor(kind, ctx) {
-  return core.quizAvailability({
-    items: ctx.getState().items,
-    entries: allEntries(ctx),
-    quizKind: kind,
-    mode: kind === "kanji" ? ctx.kanjiQuizMode : ctx.wordQuizMode,
-    onlyWeak: Boolean(ctx.quizWeakOnly)
-  }).questionCount;
 }
 
 function panelIdFor(kind) {
@@ -103,12 +108,14 @@ function renderAllQuizzes(ctx) {
   ctx.renderSentenceQuiz();
 }
 
-// Starts a new session of up to QUIZ_SESSION_SIZE questions.
+// Starts a new session of up to ctx.quizSessionSize questions (the 퀴즈 문제 수
+// setting), planned up front; "다시 풀기" calls this again and re-plans.
 export function startQuiz(kind, ctx) {
   const { byId } = ctx;
   const family = familyOf(kind);
   const questionIds = questionIdsFor(kind, ctx);
-  const question = buildQuestion(kind, ctx, [], questionIds);
+  const plan = planFor(kind, ctx, questionIds);
+  const question = plan.length ? buildQuestion(kind, ctx, [], questionIds, plan[0]) : null;
   ctx.setWordQuiz(emptyQuiz());
   ctx.setKanjiQuiz(emptyQuiz());
   ctx.setSentenceQuiz(emptySentenceQuiz());
@@ -116,12 +123,13 @@ export function startQuiz(kind, ctx) {
     renderAllQuizzes(ctx);
     return;
   }
-  const session = core.createQuizSession(sessionPoolSizeFor(kind, ctx));
+  const session = core.createQuizSession(plan.length, plan.length);
   slot(family, ctx).set({
     ...(family === "sentence" ? emptySentenceQuiz() : emptyQuiz()),
     question,
     session,
-    questionIds
+    questionIds,
+    plan
   });
   renderAllQuizzes(ctx);
   window.setTimeout(() => {
@@ -153,7 +161,7 @@ export function nextQuizQuestion(family, ctx) {
   } else {
     const mode = quiz.question.mode;
     const kind = family === "sentence" ? (mode === "listen" ? "sentence-listen" : "sentence-meaning") : family;
-    const question = buildQuestion(kind, ctx, session.seenIds, quiz.questionIds || null);
+    const question = buildQuestion(kind, ctx, session.seenIds, quiz.questionIds || null, quiz.plan?.[session.index] || "");
     if (!question) {
       set({ ...quiz, session: { ...session, finished: true } });
     } else {

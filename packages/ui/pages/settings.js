@@ -1,6 +1,7 @@
-export function renderQuizSettingsPage({ quizQuestionFontSize }) {
+export function renderQuizSettingsPage({ quizQuestionFontSize, quizSessionSize }) {
   return {
     value: {
+      quizSessionSizeInput: String(quizSessionSize),
       quizQuestionFontSizeRange: String(quizQuestionFontSize)
     },
     text: {
