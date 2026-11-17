@@ -823,6 +823,10 @@ h1 {
   font-size: 10px;
 }
 
+.weak-badge-label {
+  margin-right: 3px;
+}
+
 /* 카드가 좁아 "오답" 글자 대신 ✕로 줄여 쓴다. */
 .kanji-card-head .weak-badge-label {
   display: none;
