@@ -639,9 +639,15 @@ function settingsPageTemplate() {
         <div class="panel-header settings-panel-header">
           <div>
             <h2 class="panel-title">퀴즈</h2>
-            <p class="muted settings-panel-desc">문제 글자 크기와 퀴즈 결과의 복습 일정 반영을 정합니다.</p>
+            <p class="muted settings-panel-desc">문제 수, 문제 글자 크기, 퀴즈 결과의 복습 일정 반영을 정합니다.</p>
           </div>
         </div>
+        ${settingRow({
+          label: "퀴즈 문제 수",
+          labelId: "quizSessionSizeLabel",
+          description: "한 번에 풀 문제 수입니다. 항목이 모자라면 있는 만큼만 냅니다.",
+          control: `<span class="quiz-session-size-control"><input id="quizSessionSizeInput" type="number" min="5" max="50" step="1" inputmode="numeric" value="10" aria-labelledby="quizSessionSizeLabel" /><span class="quiz-session-size-unit">문제</span></span>`
+        })}
         ${settingRow({
           label: "문제 텍스트 크기",
           labelId: "quizQuestionFontSizeLabel",

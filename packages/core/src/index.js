@@ -1,7 +1,7 @@
 // Single definition of the SRS intervals lives in packages/storage-core, which
 // the storage adapter also reads, so the review queue's due-date arithmetic
 // can never drift from the intervals the adapter actually persists.
-import { addDays, dateKey, weakItems, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
+import { addDays, dateKey, isWeakItem, weakItems, reviewIntervals as REVIEW_QUEUE_INTERVALS } from "@nihongo-study/storage-core";
 
 export * from "./merge.js";
 export * from "./notes.js";
@@ -82,13 +82,27 @@ export function looksLikeSentenceBlockAttempt(rawText) {
   return lines.some(line => line.startsWith("#") || line.startsWith("읽기") || line.startsWith("해석"));
 }
 
-// 퀴즈 설정(문제 글자 크기, 퀴즈 결과의 복습 일정 반영 여부)을 localStorage에서
+// 퀴즈 설정(문제 글자 크기, 퀴즈 결과의 복습 일정 반영 여부, 퀴즈 문제 수)을 localStorage에서
 // 읽은 원시 값(JSON 문자열 또는 이미 파싱된 객체)으로부터 검증해 복원한다.
-// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬)으로 돌아간다.
+// 알 수 없거나 깨진 값은 필드별로 기본값(32px, 켬, 10문제)으로 돌아간다.
 export const DEFAULT_QUIZ_SETTINGS = Object.freeze({
   questionFontSize: 32,
-  reflectInReview: true
+  reflectInReview: true,
+  sessionSize: 10
 });
+
+export const QUIZ_SESSION_SIZE_MIN = 5;
+export const QUIZ_SESSION_SIZE_MAX = 50;
+
+// Questions per quiz session: rounded to an integer and clamped to 5-50;
+// anything that is not a finite number falls back to the default (10).
+export function clampQuizSessionSize(value) {
+  const number = typeof value === "number" || (typeof value === "string" && value.trim()) ? Number(value) : NaN;
+  if (!Number.isFinite(number)) {
+    return DEFAULT_QUIZ_SETTINGS.sessionSize;
+  }
+  return Math.min(QUIZ_SESSION_SIZE_MAX, Math.max(QUIZ_SESSION_SIZE_MIN, Math.round(number)));
+}
 
 export function resolveQuizSettings(raw) {
   let parsed = raw;
@@ -109,7 +123,8 @@ export function resolveQuizSettings(raw) {
       : DEFAULT_QUIZ_SETTINGS.questionFontSize,
     reflectInReview: typeof parsed.reflectInReview === "boolean"
       ? parsed.reflectInReview
-      : DEFAULT_QUIZ_SETTINGS.reflectInReview
+      : DEFAULT_QUIZ_SETTINGS.reflectInReview,
+    sessionSize: clampQuizSessionSize(parsed.sessionSize)
   };
 }
 
@@ -305,6 +320,100 @@ export function nextWordSort(currentSort = { key: "", direction: "" }, key) {
 export const QUIZ_MIN_CANDIDATES = 4;
 export const QUIZ_SESSION_SIZE = 10;
 
+// --- Session planning (pure). Which items a session asks about, chosen once at
+// session start from three buckets so newly added items cannot crowd out the
+// rest:
+//   weak  - isWeakItem (wrong at least once, not yet 2 correct in a row)
+//   new   - never quizzed (quizCorrectCount + quizWrongCount === 0)
+//   stale - quizzed before and not weak
+// Quotas of `size`: weak 40%, new 30%, stale 30% (floored; the rounding
+// remainder goes to weak first, then stale: 10 -> 4/3/3, 5 -> 3/1/1). A bucket
+// with fewer items than its quota gives the shortfall to the others, stale
+// first, then weak, then new. The chosen ids are shuffled so buckets interleave.
+export const QUIZ_PLAN_QUOTAS = Object.freeze({ weak: 0.4, new: 0.3, stale: 0.3 });
+
+function quizItemIsNew(item) {
+  return Number(item?.quizCorrectCount || 0) + Number(item?.quizWrongCount || 0) === 0;
+}
+
+function quizPlanQuotas(size) {
+  const quotas = {
+    weak: Math.floor(size * QUIZ_PLAN_QUOTAS.weak),
+    new: Math.floor(size * QUIZ_PLAN_QUOTAS.new),
+    stale: Math.floor(size * QUIZ_PLAN_QUOTAS.stale)
+  };
+  let remainder = size - quotas.weak - quotas.new - quotas.stale;
+  for (const key of ["weak", "stale"]) {
+    if (remainder > 0) {
+      quotas[key] += 1;
+      remainder -= 1;
+    }
+  }
+  return quotas;
+}
+
+// Candidates need { id, ...quiz stats }. `questionIds` (weak-only quiz)
+// restricts the askable set first. Returns ordered ids, no duplicates, of length
+// min(size, askable count).
+export function planQuizQuestionIds({ candidates = [], size = QUIZ_SESSION_SIZE, random = Math.random, questionIds = null } = {}) {
+  const allowed = questionIds ? new Set(questionIds) : null;
+  const seen = new Set();
+  const askable = candidates.filter(item => {
+    if (!item || item.id == null || seen.has(item.id) || (allowed && !allowed.has(item.id))) {
+      return false;
+    }
+    seen.add(item.id);
+    return true;
+  });
+  const wanted = Math.max(0, Math.min(Math.trunc(Number(size)) || 0, askable.length));
+  if (!wanted) {
+    return [];
+  }
+  const quotas = quizPlanQuotas(Math.max(0, Math.trunc(Number(size)) || 0));
+  const stamp = item => String(item.lastQuizzedAt || "");
+  // Shuffle first, then stable-sort: ties keep their random order.
+  const buckets = {
+    weak: shuffle(askable.filter(isWeakItem), random).sort((a, b) =>
+      Number(b.quizWrongCount || 0) - Number(a.quizWrongCount || 0) || stamp(a).localeCompare(stamp(b))),
+    new: shuffle(askable.filter(item => !isWeakItem(item) && quizItemIsNew(item)), random),
+    stale: shuffle(askable.filter(item => !isWeakItem(item) && !quizItemIsNew(item)), random)
+      .sort((a, b) => stamp(a).localeCompare(stamp(b)))
+  };
+  const chosen = [];
+  const taken = { weak: 0, new: 0, stale: 0 };
+  for (const key of ["weak", "new", "stale"]) {
+    taken[key] = Math.min(quotas[key], buckets[key].length, wanted - chosen.length);
+    chosen.push(...buckets[key].slice(0, taken[key]));
+  }
+  for (const key of ["stale", "weak", "new"]) {
+    const extra = Math.min(wanted - chosen.length, buckets[key].length - taken[key]);
+    if (extra > 0) {
+      chosen.push(...buckets[key].slice(taken[key], taken[key] + extra));
+      taken[key] += extra;
+    }
+  }
+  return shuffle(chosen, random).map(item => item.id);
+}
+
+// Plan candidates for the sentence quizzes: each sentence entry carries the
+// stats of the registered `sentence` item with the same title (the mapping
+// weakQuizQuestionIds / applyQuizReview use); an unregistered entry has none, so
+// it counts as "new".
+export function sentenceQuizPlanCandidates({ items = [], entries = [] } = {}) {
+  const byTitle = new Map();
+  items.forEach(item => {
+    if (item.kind === "sentence" && !byTitle.has(item.title)) {
+      byTitle.set(item.title, item);
+    }
+  });
+  return sentenceQuizCandidates(entries).map(entry => {
+    const item = byTitle.get(entry.title);
+    return item
+      ? { id: entry.id, quizCorrectCount: item.quizCorrectCount, quizWrongCount: item.quizWrongCount, quizCorrectStreak: item.quizCorrectStreak, lastQuizzedAt: item.lastQuizzedAt, deletedAt: item.deletedAt }
+      : { id: entry.id };
+  });
+}
+
 export function quizCandidates(items = [], kind) {
   return items.filter(item => item.kind === kind && item.title && item.meaning);
 }
@@ -368,8 +477,8 @@ export function quizAvailability({ items = [], entries = [], quizKind, mode = "r
   };
 }
 
-// --- Quiz session bookkeeping (pure). A session is up to QUIZ_SESSION_SIZE
-// questions; `index` is the 0-based current question.
+// --- Quiz session bookkeeping (pure). A session is up to `size` (default
+// QUIZ_SESSION_SIZE, the 퀴즈 문제 수 setting) questions; `index` is the 0-based current question.
 export function createQuizSession(poolSize, size = QUIZ_SESSION_SIZE) {
   return { index: 0, total: Math.max(0, Math.min(size, poolSize)), correct: 0, missed: [], seenIds: [], finished: false, reviewChanges: { reset: 0, advanced: 0 } };
 }
@@ -422,7 +531,8 @@ export function buildQuizQuestion({
   reverseMode,
   random = Math.random,
   excludeIds = [],
-  questionIds = null
+  questionIds = null,
+  itemId = ""
 }) {
   const candidates = quizCandidates(items, kind);
   const resolvedMode = mode === "random" ? randomItem([forwardMode, reverseMode], random) : mode;
@@ -432,18 +542,18 @@ export function buildQuizQuestion({
     return null;
   }
 
-  // Items already asked in this session are skipped while others remain.
   // `questionIds` (optional) restricts which items may be ASKED (weak-only
-  // quiz); the choices still come from every candidate.
+  // quiz); the choices still come from every candidate. `itemId` (the planned
+  // item, see planQuizQuestionIds) is asked exactly when it is still an unseen
+  // askable candidate; otherwise a random unseen askable item is used (any
+  // askable item once all were seen).
   const askableCandidates = questionIds ? candidates.filter(item => questionIds.includes(item.id)) : candidates;
   if (!askableCandidates.length) {
     return null;
   }
   const fresh = askableCandidates.filter(item => !excludeIds.includes(item.id));
   const askable = fresh.length ? fresh : askableCandidates;
-  const minCorrect = Math.min(...askable.map(item => Number(item.quizCorrectCount || 0)));
-  const weakestItems = askable.filter(item => Number(item.quizCorrectCount || 0) === minCorrect);
-  const item = randomItem(weakestItems, random);
+  const item = (itemId && fresh.find(candidate => candidate.id === itemId)) || randomItem(askable, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
     .map(candidate => candidate[answerType])
@@ -466,15 +576,15 @@ export function buildQuizQuestion({
 
 // Sentence quiz question builder. Unlike buildQuizQuestion, `entries` are
 // daily-entry-shaped sentence records (title = 원문, meaning = 해석), not
-// review items, so there is no quizCorrectCount weighting and answering a
-// sentence question never touches SRS/review state.
+// review items; `itemId` asks a planned entry (see sentenceQuizPlanCandidates).
 export function buildSentenceQuizQuestion({
   entries = [],
   mode = "meaning",
   random = Math.random,
   excludeItemId = "",
   excludeIds = [],
-  questionIds = null
+  questionIds = null,
+  itemId = ""
 } = {}) {
   const candidates = sentenceQuizCandidates(entries);
   const answerType = mode === "listen" ? "title" : "meaning";
@@ -490,7 +600,7 @@ export function buildSentenceQuizQuestion({
     return null;
   }
   const pool = askableCandidates.filter(entry => entry.id !== excludeItemId && !excludeIds.includes(entry.id));
-  const item = randomItem(pool.length ? pool : askableCandidates, random);
+  const item = (itemId && pool.find(entry => entry.id === itemId)) || randomItem(pool.length ? pool : askableCandidates, random);
   const correctAnswer = item[answerType];
   const distractors = shuffle(candidates.filter(candidate => candidate.id !== item.id && candidate[answerType] !== correctAnswer), random)
     .map(candidate => candidate[answerType])
@@ -636,7 +746,7 @@ export function pickRandomSentence(dailyEntries = [], random = Math.random, { ex
 
 // Selectable page sizes for the 설정 tab's "페이지당 항목 수" control, plus
 // the per-view defaults used when the user picks 기본값 (no override).
-export const LIST_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+export const LIST_PAGE_SIZE_OPTIONS = [10, 20, 30, 50, 100];
 
 export const DEFAULT_LIST_PAGE_SIZES = {
   sentences: 10,

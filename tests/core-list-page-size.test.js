@@ -14,7 +14,7 @@ describe("DEFAULT_LIST_PAGE_SIZES / LIST_PAGE_SIZE_OPTIONS", () => {
   });
 
   it("offers the selectable page sizes used by the 설정 tab", () => {
-    expect(LIST_PAGE_SIZE_OPTIONS).toEqual([10, 20, 30, 50]);
+    expect(LIST_PAGE_SIZE_OPTIONS).toEqual([10, 20, 30, 50, 100]);
   });
 });
 
