@@ -104,10 +104,52 @@ export function createCapacitorProvider(TextToSpeech, { isNative = () => false, 
   };
 }
 
+// Higher-quality Japanese voices first: Edge/Windows neural ("Natural"/"Online",
+// e.g. Microsoft Nanami), Chrome's "Google 日本語", Apple Kyoko / O-ren.
+const PREFERRED_VOICE_PATTERNS = [/natural|online/i, /google/i, /kyoko|o-?ren/i];
+
+function isJapaneseVoice(voice) {
+  return /^ja([-_]|$)/i.test(String(voice?.lang || ""));
+}
+
+// Picks the best Japanese voice from speechSynthesis.getVoices(), or null.
+// Order: preferred name pattern -> localService -> first Japanese voice.
+export function pickJapaneseVoice(voices) {
+  const japanese = Array.from(voices || []).filter(isJapaneseVoice);
+  if (!japanese.length) return null;
+  for (const pattern of PREFERRED_VOICE_PATTERNS) {
+    const match = japanese.find(voice => pattern.test(voice.name || ""));
+    if (match) return match;
+  }
+  return japanese.find(voice => voice.localService) || japanese[0];
+}
+
 export function createBrowserProvider({
   getSynth = () => globalThis.speechSynthesis,
   Utterance = globalThis.SpeechSynthesisUtterance
 } = {}) {
+  let cachedVoice; // undefined = not resolved yet, null = no Japanese voice
+  let watched = null;
+
+  function refreshVoice(synth) {
+    const voices = synth.getVoices?.() || [];
+    // Chrome returns [] until voices load; stay unresolved so we retry.
+    cachedVoice = voices.length ? pickJapaneseVoice(voices) : undefined;
+  }
+
+  function japaneseVoice(synth) {
+    if (watched !== synth && synth.addEventListener) {
+      watched = synth;
+      synth.addEventListener("voiceschanged", () => refreshVoice(synth));
+    }
+    if (cachedVoice === undefined) refreshVoice(synth);
+    return cachedVoice || null;
+  }
+
+  // Start loading the voice list early so the first speak() already has it.
+  const initialSynth = getSynth();
+  if (initialSynth) japaneseVoice(initialSynth);
+
   return {
     id: "browser",
     isAvailable: () => Boolean(getSynth()),
@@ -119,6 +161,8 @@ export function createBrowserProvider({
       synth.cancel();
       const utterance = new Utterance(text);
       utterance.lang = "ja-JP";
+      const voice = japaneseVoice(synth);
+      if (voice) utterance.voice = voice;
       synth.speak(utterance);
     },
     stop() {

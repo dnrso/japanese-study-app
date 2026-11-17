@@ -7,6 +7,7 @@ import {
   createCapacitorProvider,
   createDesktopVoicevoxProvider,
   createSpeechChain,
+  pickJapaneseVoice,
   selectSpeechProviders
 } from "../apps/web/src/ttsProviders.js";
 import { filterTocForPlatform } from "../apps/web/src/desktopGating.js";
@@ -143,6 +144,77 @@ describe("browser and capacitor providers", () => {
     await Promise.resolve();
     expect(warn).toHaveBeenCalled();
     expect(createCapacitorProvider(TextToSpeech, { isNative: () => false }).isAvailable()).toBe(false);
+  });
+});
+
+describe("browser japanese voice selection", () => {
+  const voice = (name, lang, localService = false) => ({ name, lang, localService });
+
+  function fakeSynth(voices) {
+    const listeners = {};
+    return {
+      voices,
+      cancel: vi.fn(),
+      speak: vi.fn(),
+      getVoices: vi.fn(function () { return this.voices; }),
+      addEventListener: vi.fn((type, fn) => { listeners[type] = fn; }),
+      fire(type) { listeners[type]?.(); }
+    };
+  }
+  class Utterance { constructor(text) { this.text = text; } }
+
+  it("prefers a Japanese voice over others, accepting ja-JP and ja_JP", () => {
+    const ja = voice("Some JP", "ja_JP");
+    expect(pickJapaneseVoice([voice("Google US English", "en-US"), ja])).toBe(ja);
+    expect(pickJapaneseVoice([voice("X", "en-US"), voice("Y", "ko-KR")])).toBeNull();
+    expect(pickJapaneseVoice([])).toBeNull();
+  });
+
+  it("orders by quality name, then localService, then first", () => {
+    const plain = voice("Microsoft Haruka", "ja-JP");
+    const local = voice("Local JP", "ja-JP", true);
+    const google = voice("Google 日本語", "ja-JP");
+    const nanami = voice("Microsoft Nanami Online (Natural) - Japanese (Japan)", "ja-JP");
+    const kyoko = voice("Kyoko", "ja-JP", true);
+    expect(pickJapaneseVoice([plain, local, kyoko, google, nanami])).toBe(nanami);
+    expect(pickJapaneseVoice([plain, local, kyoko, google])).toBe(google);
+    expect(pickJapaneseVoice([plain, local, kyoko])).toBe(kyoko);
+    expect(pickJapaneseVoice([plain, local])).toBe(local);
+    expect(pickJapaneseVoice([plain, voice("Other", "ja-JP")])).toBe(plain);
+  });
+
+  it("sets utterance.voice to the chosen Japanese voice", () => {
+    const nanami = voice("Microsoft Nanami Online (Natural)", "ja-JP");
+    const synth = fakeSynth([voice("Microsoft David", "en-US"), nanami]);
+    createBrowserProvider({ getSynth: () => synth, Utterance }).speak("猫");
+    expect(synth.speak.mock.calls[0][0]).toMatchObject({ lang: "ja-JP", voice: nanami });
+  });
+
+  it("re-reads voices on voiceschanged after an initially empty list, then caches", () => {
+    const synth = fakeSynth([]);
+    const provider = createBrowserProvider({ getSynth: () => synth, Utterance });
+    provider.speak("一");
+    expect(synth.speak.mock.calls[0][0].voice).toBeUndefined();
+    expect(synth.speak.mock.calls[0][0].lang).toBe("ja-JP");
+
+    const kyoko = voice("Kyoko", "ja-JP", true);
+    synth.voices = [voice("Alex", "en-US"), kyoko];
+    synth.fire("voiceschanged");
+    provider.speak("二");
+    expect(synth.speak.mock.calls[1][0].voice).toBe(kyoko);
+    expect(synth.addEventListener).toHaveBeenCalledTimes(1);
+
+    const calls = synth.getVoices.mock.calls.length;
+    provider.speak("三");
+    expect(synth.getVoices.mock.calls.length).toBe(calls);
+  });
+
+  it("leaves voice unset (lang only) when there is no Japanese voice", () => {
+    const synth = fakeSynth([voice("Alex", "en-US")]);
+    createBrowserProvider({ getSynth: () => synth, Utterance }).speak("猫");
+    const utterance = synth.speak.mock.calls[0][0];
+    expect(utterance.lang).toBe("ja-JP");
+    expect("voice" in utterance).toBe(false);
   });
 });
 
