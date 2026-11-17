@@ -746,7 +746,7 @@ export function pickRandomSentence(dailyEntries = [], random = Math.random, { ex
 
 // Selectable page sizes for the 설정 tab's "페이지당 항목 수" control, plus
 // the per-view defaults used when the user picks 기본값 (no override).
-export const LIST_PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
+export const LIST_PAGE_SIZE_OPTIONS = [10, 20, 30, 50, 100];
 
 export const DEFAULT_LIST_PAGE_SIZES = {
   sentences: 10,
