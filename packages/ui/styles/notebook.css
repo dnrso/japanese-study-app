@@ -417,6 +417,77 @@ button.notebook-chip:focus-visible {
   margin-top: 4px;
 }
 
+/* 문장 tab kanji tooltip: › to the card, then words using the kanji. */
+.notebook-popover-open,
+.notebook-popover-word {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.notebook-popover-open {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.notebook-popover-open:hover {
+  background: var(--accent-soft);
+}
+
+.notebook-popover-words {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.notebook-popover-word {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 4px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.notebook-popover-word:hover {
+  background: var(--surface-soft);
+}
+
+.notebook-popover-word-title {
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.notebook-popover-word-reading {
+  color: var(--muted-strong);
+}
+
+.notebook-popover-word-meaning {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notebook-popover-chevron {
+  margin-left: auto;
+  padding-left: 4px;
+  color: var(--accent);
+  font-weight: 800;
+}
+
 /* ---- reader / editor chrome ---- */
 
 .notebook-toolbar {

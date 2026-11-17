@@ -93,3 +93,32 @@ describe("noteCardPopover meaning fallback", () => {
     expect(html).toContain("등록된 카드가 없습니다.");
   });
 });
+
+describe("noteCardPopover kanji tooltip (words given)", () => {
+  const words = [
+    { kind: "word", title: "疲労", reading: "ひろう", meaning: "피로" },
+    { kind: "word", title: "お疲れ", reading: "おつかれ", meaning: "수고" }
+  ];
+
+  it("puts a › to the card in the head and lists the words with their own links", () => {
+    const html = noteCardPopover({ title: "疲", item: items[0], pageLabel: "한자", words, helpers });
+    expect(html).toContain('class="notebook-popover-open" data-note-card-open-kind="kanji" data-note-card-open-title="疲" title="한자 탭에서 보기"');
+    expect(html).not.toContain('class="link-btn"');
+    expect(html).toContain('data-note-card-open-kind="word" data-note-card-open-title="疲労"');
+    expect(html).toContain('data-note-card-open-kind="word" data-note-card-open-title="お疲れ"');
+    expect(html).toContain("ひろう");
+  });
+
+  it("still lists the words when the kanji has no card", () => {
+    const html = noteCardPopover({ title: "労", item: null, meaning: "일할 로", words: words.slice(0, 1), helpers });
+    expect(html).toContain("등록된 카드가 없습니다.");
+    expect(html).toContain('data-note-card-open-title="疲労"');
+    expect(html).not.toContain("notebook-popover-open");
+  });
+
+  it("keeps the 노트 tab's text link when no words are given", () => {
+    const html = noteCardPopover({ title: "疲", item: items[0], pageLabel: "한자", helpers });
+    expect(html).toContain("한자 탭에서 보기</button>");
+    expect(html).not.toContain("notebook-popover-words");
+  });
+});

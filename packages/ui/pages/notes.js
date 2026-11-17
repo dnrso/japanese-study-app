@@ -226,24 +226,43 @@ export function renderNoteLinkEditor({ links = [], excluded = [], results = [], 
 // registered card, or null when the link points at nothing. `meaning` is what
 // the caller already knows about an unregistered card (the 문장 tab passes a
 // word's 한자= meaning) and is shown above the missing note.
-export function noteCardPopover({ title, item, pageLabel = "", meaning = "", helpers }) {
+//
+// `words` (the 문장 tab's kanji tooltip) switches to the compact form: the
+// way to the card is a › in the head instead of the "○○ 탭에서 보기" line,
+// and the given word cards that use the kanji are listed, each opening its
+// own card.
+export function noteCardPopover({ title, item, pageLabel = "", meaning = "", words = null, helpers }) {
   const { badgeClassByKind, escapeHtml, kindLabels } = helpers;
+  const compact = Array.isArray(words);
+  const openAttrs = card => `data-note-card-open-kind="${escapeHtml(card.kind)}" data-note-card-open-title="${escapeHtml(card.title)}"`;
+  const wordList = compact && words.length
+    ? `<ul class="notebook-popover-words">${words.map(word => `
+        <li><button type="button" class="notebook-popover-word" ${openAttrs(word)} aria-label="${escapeHtml(`${word.title} 단어 카드 보기`)}">
+          <span class="notebook-popover-word-title" lang="ja">${escapeHtml(word.title)}</span>
+          ${word.reading && word.reading !== word.title ? `<span class="notebook-popover-word-reading" lang="ja">${escapeHtml(word.reading)}</span>` : ""}
+          ${word.meaning ? `<span class="notebook-popover-word-meaning">${escapeHtml(word.meaning)}</span>` : ""}
+          <span class="notebook-popover-chevron" aria-hidden="true">›</span>
+        </button></li>`).join("")}</ul>`
+    : "";
   if (!item) {
     return `
       <p class="notebook-popover-title" lang="ja">${escapeHtml(title)}</p>
       ${meaning ? `<p class="notebook-popover-meaning">${escapeHtml(meaning)}</p>` : ""}
       <p class="notebook-popover-missing">등록된 카드가 없습니다.</p>
+      ${wordList}
     `;
   }
   const reading = item.reading && item.reading !== item.title ? item.reading : "";
+  const openLabel = `${pageLabel || "카드"} 탭에서 보기`;
   return `
     <div class="notebook-popover-head">
       <span class="badge ${badgeClassByKind[item.kind] || "green"}">${escapeHtml(kindLabels[item.kind] || item.kind)}</span>
       ${speakerButton(item.title, helpers)}
       <span class="notebook-popover-title" lang="ja">${escapeHtml(item.title)}</span>
+      ${compact ? `<button type="button" class="notebook-popover-open" ${openAttrs(item)} title="${escapeHtml(openLabel)}" aria-label="${escapeHtml(openLabel)}">›</button>` : ""}
     </div>
     ${reading ? `<p class="notebook-popover-reading" lang="ja">${escapeHtml(reading)}</p>` : ""}
     ${item.meaning ? `<p class="notebook-popover-meaning">${escapeHtml(item.meaning)}</p>` : ""}
-    <button type="button" class="link-btn" data-note-card-open-kind="${escapeHtml(item.kind)}" data-note-card-open-title="${escapeHtml(item.title)}">${escapeHtml(pageLabel || "카드")} 탭에서 보기</button>
+    ${compact ? wordList : `<button type="button" class="link-btn" ${openAttrs(item)}>${escapeHtml(openLabel)}</button>`}
   `;
 }

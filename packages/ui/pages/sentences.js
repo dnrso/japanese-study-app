@@ -74,7 +74,7 @@ export function sentenceWordRow(item, helpers) {
       }
       const { char, meaning, card } = segment.kanji;
       const label = [char, meaning].filter(Boolean).join(" ");
-      return `<button type="button" class="sentence-word-kanji${card ? "" : " is-unregistered"}" data-note-card-kind="kanji" data-note-card-title="${escapeHtml(char)}" data-note-card-meaning="${escapeHtml(meaning)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(`한자 ${label}`)}">${escapeHtml(char)}</button>`;
+      return `<button type="button" class="sentence-word-kanji${card ? "" : " is-unregistered"}" data-note-card-kind="kanji" data-note-card-title="${escapeHtml(char)}" data-note-card-meaning="${escapeHtml(meaning)}" data-note-card-word="${escapeHtml(String(item.title || "").trim())}" title="${escapeHtml(label)}" aria-label="${escapeHtml(`한자 ${label}`)}">${escapeHtml(char)}</button>`;
     }).join("")
     : highlight(item.title);
   const card = info?.card;

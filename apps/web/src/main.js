@@ -1688,6 +1688,7 @@ function toggleNoteCardPopover(anchor) {
     item,
     pageLabel: item ? kindLabels[item.kind] : "",
     meaning: anchor.dataset.noteCardMeaning || "",
+    words: "noteCardWord" in anchor.dataset ? kanjiTooltipWords(title, anchor.dataset.noteCardWord) : null,
     helpers: renderHelpers()
   });
   popover.hidden = false;
@@ -1700,6 +1701,15 @@ function toggleNoteCardPopover(anchor) {
   const top = below + height + margin <= window.innerHeight ? below : Math.max(margin, rect.top - height - 6);
   popover.style.left = `${Math.round(left)}px`;
   popover.style.top = `${Math.round(top)}px`;
+}
+
+// The 문장 tab's kanji tooltip lists a couple of other word cards that use the
+// kanji; the word the tooltip was opened from is already on screen.
+const KANJI_TOOLTIP_WORD_LIMIT = 2;
+function kanjiTooltipWords(char, fromWord) {
+  return wordsUsingKanji({ title: char }, core.itemsByKind(state.items, "word"))
+    .filter(word => String(word.title || "").trim() !== fromWord)
+    .slice(0, KANJI_TOOLTIP_WORD_LIMIT);
 }
 
 // "○○ 탭에서 보기" in the card preview: that kind's tab, searched for the card.
