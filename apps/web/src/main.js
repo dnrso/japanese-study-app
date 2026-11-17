@@ -1687,6 +1687,7 @@ function toggleNoteCardPopover(anchor) {
     title,
     item,
     pageLabel: item ? kindLabels[item.kind] : "",
+    meaning: anchor.dataset.noteCardMeaning || "",
     helpers: renderHelpers()
   });
   popover.hidden = false;
@@ -3079,7 +3080,8 @@ function renderHelpers({ marks = true } = {}) {
     isWeakItem: core.isWeakItem,
     kindLabels,
     reviewStatusText: core.reviewStatusText,
-    sentenceMeaning
+    sentenceMeaning,
+    wordInfo: word => core.sentenceWordInfo(word, state.items)
   };
 }
 

@@ -223,12 +223,15 @@ export function renderNoteLinkEditor({ links = [], excluded = [], results = [], 
 }
 
 // Preview shown when a card chip or a [[제목]] link is clicked. `item` is the
-// registered card, or null when the link points at nothing.
-export function noteCardPopover({ title, item, pageLabel = "", helpers }) {
+// registered card, or null when the link points at nothing. `meaning` is what
+// the caller already knows about an unregistered card (the 문장 tab passes a
+// word's 한자= meaning) and is shown above the missing note.
+export function noteCardPopover({ title, item, pageLabel = "", meaning = "", helpers }) {
   const { badgeClassByKind, escapeHtml, kindLabels } = helpers;
   if (!item) {
     return `
       <p class="notebook-popover-title" lang="ja">${escapeHtml(title)}</p>
+      ${meaning ? `<p class="notebook-popover-meaning">${escapeHtml(meaning)}</p>` : ""}
       <p class="notebook-popover-missing">등록된 카드가 없습니다.</p>
     `;
   }
