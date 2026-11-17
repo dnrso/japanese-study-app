@@ -222,6 +222,35 @@ button.notebook-chip:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+/* 노트 퀴즈 row: sits inside the 연결된 카드 block's bottom border. */
+.notebook-links:has(+ .notebook-quiz-row:not([hidden])) {
+  margin-bottom: 10px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.notebook-quiz-row {
+  gap: 6px 10px;
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notebook-quiz-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notebook-quiz-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.notebook-quiz-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .notebook-links-label {
   margin-right: 4px;
   color: var(--muted-strong);

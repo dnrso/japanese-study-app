@@ -46,10 +46,42 @@ export function noteCardChips(links, helpers, { limit = Infinity } = {}) {
     + (rest > 0 ? `<span class="notebook-chip notebook-chip--more">+${rest}</span>` : "");
 }
 
-function noteRow(note, { helpers, now, linksFor }) {
+// 노트 퀴즈: the name on a kind's button and the counter word in its hint.
+const NOTE_QUIZ_LABELS = {
+  kanji: { name: "한자", unit: "자" },
+  word: { name: "단어", unit: "개" }
+};
+
+// The kinds a quiz can start for: `quizFor(note)` gives [{ kind, askable,
+// linked }] (askable = ids a quiz may ask, linked = registered linked cards of
+// that kind); a kind with nothing askable gets no button.
+function noteQuizKinds(note, quizFor) {
+  return (quizFor(note) || []).filter(entry => NOTE_QUIZ_LABELS[entry.kind] && Number(entry.askable) > 0);
+}
+
+function noteQuizAttrs(kind, id, escapeHtml) {
+  return `data-note-quiz-kind="${escapeHtml(kind)}" data-note-quiz-note="${id}"`;
+}
+
+// The reader's quiz row: "한자 퀴즈 25" buttons, each with a muted
+// "27자 중 25자 출제 가능" when some linked cards cannot be asked yet.
+function noteQuizRow(note, kinds, { escapeHtml }) {
+  const id = escapeHtml(note.id);
+  return `<span class="notebook-links-label">퀴즈</span>${kinds.map(({ kind, askable, linked }) => {
+    const { name, unit } = NOTE_QUIZ_LABELS[kind];
+    const count = Number(askable);
+    const hint = Number(linked) > count ? `<span class="notebook-quiz-hint">${Number(linked)}${unit} 중 ${count}${unit} 출제 가능</span>` : "";
+    return `<span class="notebook-quiz-group"><button type="button" class="ghost-btn compact-action-btn notebook-quiz-btn" ${noteQuizAttrs(kind, id, escapeHtml)}>${name} 퀴즈 <span class="notebook-quiz-count">${count}</span></button>${hint}</span>`;
+  }).join("")}`;
+}
+
+function noteRow(note, { helpers, now, linksFor, quizFor }) {
   const { core, escapeHtml, highlight } = helpers;
   const id = escapeHtml(note.id);
   const links = linksFor(note);
+  const quizMenu = noteQuizKinds(note, quizFor)
+    .map(({ kind }) => `<button type="button" ${noteQuizAttrs(kind, id, escapeHtml)}>${NOTE_QUIZ_LABELS[kind].name} 퀴즈</button>`)
+    .join("");
   // The chips say what the note is about; the body preview is only needed
   // when there are none.
   const preview = links.length ? "" : core.notePreview(note);
@@ -68,6 +100,7 @@ function noteRow(note, { helpers, now, linksFor }) {
         <div class="notebook-menu-list">
           <button type="button" data-pin-note="${id}">${pinned ? "고정 해제" : "맨 위에 고정"}</button>
           <button type="button" data-edit-note="${id}">수정</button>
+          ${quizMenu}
           <button type="button" data-duplicate-note="${id}">복제</button>
           <button type="button" class="notebook-menu-danger" data-delete-note="${id}">삭제</button>
         </div>
@@ -88,13 +121,16 @@ function noteRow(note, { helpers, now, linksFor }) {
 //   note      the open note (read view), or null
 //   rendered  { html } from renderMarkdown(note.body) for the read view
 //   linksFor  note => its card links (core.noteCardLinks), for the chips
+//   quizFor   note => [{ kind, askable, linked }] per quiz kind, for the
+//             reader's quiz row and the row menu's 퀴즈 items
 //   matched   notes matching the search across every page (defaults to
 //             notes.length for an unpaged list)
 //   sort      the active sort key, re-selected in #noteSortSelect
 //   pagination  markup for the prev/next bar ("" when there is one page)
-export function renderNotesPage({ view = "list", notes = [], total = 0, matched = notes.length, note = null, rendered = null, searchTerm = "", sort = "", pagination = "", now = new Date(), linksFor = () => [], helpers }) {
+export function renderNotesPage({ view = "list", notes = [], total = 0, matched = notes.length, note = null, rendered = null, searchTerm = "", sort = "", pagination = "", now = new Date(), linksFor = () => [], quizFor = () => [], helpers }) {
   const { core, escapeHtml } = helpers;
   const activeView = view === "read" && !note ? "list" : view;
+  const openQuizKinds = note ? noteQuizKinds(note, quizFor) : [];
   const emptyMessage = searchTerm
     ? `'${escapeHtml(searchTerm)}' 검색 결과가 없습니다.`
     : "공부하면서 정리한 내용을 노트로 남겨 보세요. Markdown 표와 목록을 그대로 붙여 넣을 수 있습니다.";
@@ -106,6 +142,7 @@ export function renderNotesPage({ view = "list", notes = [], total = 0, matched 
     hidden: {
       notesReadTitle: !title,
       notesReadLinks: !openLinks.length,
+      notesReadQuiz: !openQuizKinds.length,
       notesListView: activeView !== "list",
       notesReadView: activeView !== "read",
       notesEditView: activeView !== "edit"
@@ -120,12 +157,13 @@ export function renderNotesPage({ view = "list", notes = [], total = 0, matched 
     },
     html: {
       notesList: notes.length
-        ? notes.map(item => noteRow(item, { helpers, now, linksFor })).join("")
+        ? notes.map(item => noteRow(item, { helpers, now, linksFor, quizFor })).join("")
         : empty(emptyMessage),
       notesPagination: pagination,
       notesReadLinks: openLinks.length
         ? `<span class="notebook-links-label">연결된 카드 ${openLinks.length}</span>${noteCardChips(openLinks, helpers)}`
         : "",
+      notesReadQuiz: openQuizKinds.length ? noteQuizRow(note, openQuizKinds, helpers) : "",
       notesReadBody: note
         ? (String(note.body || "").trim() ? rendered?.html || "" : empty("본문이 비어 있습니다."))
         : ""

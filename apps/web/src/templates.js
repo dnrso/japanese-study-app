@@ -504,6 +504,7 @@ function notesPageTemplate() {
           <h2 class="notebook-title" id="notesReadTitle"></h2>
           <p class="notebook-meta" id="notesReadMeta"></p>
           <div class="notebook-chips notebook-links" id="notesReadLinks" hidden></div>
+          <div class="notebook-chips notebook-quiz-row" id="notesReadQuiz" hidden></div>
           <div class="notebook-body" id="notesReadBody"></div>
         </div>
 
