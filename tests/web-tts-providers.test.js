@@ -4,6 +4,7 @@ import { voicevoxSpeakerOptions } from "@nihongo-study/tts";
 import {
   VOICEVOX_FALLBACK_NOTICE,
   createBrowserProvider,
+  findJapaneseVoice,
   createCapacitorProvider,
   createDesktopVoicevoxProvider,
   createSpeechChain,
@@ -123,14 +124,56 @@ describe("desktop voicevox provider", () => {
 });
 
 describe("browser and capacitor providers", () => {
-  it("browser provider cancels then speaks ja-JP, and is unavailable without speechSynthesis", () => {
+  it("browser provider cancels then speaks ja-JP, and is unavailable without speechSynthesis", async () => {
     const synth = { cancel: vi.fn(), speak: vi.fn() };
     class Utterance { constructor(text) { this.text = text; } }
     const provider = createBrowserProvider({ getSynth: () => synth, Utterance });
-    provider.speak("猫");
+    await provider.speak("猫");
     expect(synth.cancel).toHaveBeenCalledBefore(synth.speak);
     expect(synth.speak.mock.calls[0][0]).toMatchObject({ text: "猫", lang: "ja-JP" });
     expect(createBrowserProvider({ getSynth: () => undefined, Utterance }).isAvailable()).toBe(false);
+  });
+
+  class VoiceUtterance { constructor(text) { this.text = text; } }
+  const koVoice = { lang: "ko-KR", name: "Heami", localService: true };
+  const jaVoice = { lang: "ja-JP", name: "Haruka", localService: true };
+
+  it("browser provider sets a Japanese voice explicitly (Firefox ignores lang)", async () => {
+    const synth = { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [koVoice, jaVoice] };
+    await createBrowserProvider({ getSynth: () => synth, Utterance: VoiceUtterance }).speak("猫");
+    expect(synth.speak.mock.calls[0][0].voice).toBe(jaVoice);
+  });
+
+  it("browser provider waits for voiceschanged when the voice list is not loaded yet", async () => {
+    let voices = [];
+    const listeners = {};
+    const synth = {
+      cancel: vi.fn(), speak: vi.fn(), getVoices: () => voices,
+      addEventListener: (type, fn) => { listeners[type] = fn; },
+      removeEventListener: vi.fn()
+    };
+    const pending = createBrowserProvider({ getSynth: () => synth, Utterance: VoiceUtterance }).speak("猫");
+    expect(synth.speak).not.toHaveBeenCalled();
+    voices = [koVoice, jaVoice];
+    listeners.voiceschanged();
+    await pending;
+    expect(synth.speak.mock.calls[0][0].voice).toBe(jaVoice);
+  });
+
+  it("browser provider notifies once when no Japanese voice is installed", async () => {
+    const synth = { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [koVoice] };
+    const onMissingVoice = vi.fn();
+    const provider = createBrowserProvider({ getSynth: () => synth, Utterance: VoiceUtterance, onMissingVoice });
+    await provider.speak("猫");
+    await provider.speak("犬");
+    expect(onMissingVoice).toHaveBeenCalledTimes(1);
+    expect(synth.speak).toHaveBeenCalledTimes(2);
+  });
+
+  it("findJapaneseVoice accepts ja_JP and bare ja", () => {
+    expect(findJapaneseVoice([koVoice, { lang: "ja_JP" }])).toEqual({ lang: "ja_JP" });
+    expect(findJapaneseVoice([{ lang: "ja" }])).toEqual({ lang: "ja" });
+    expect(findJapaneseVoice([koVoice])).toBeNull();
   });
 
   it("capacitor provider keeps lang/rate and swallows failures", async () => {

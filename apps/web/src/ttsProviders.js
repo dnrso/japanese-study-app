@@ -104,24 +104,76 @@ export function createCapacitorProvider(TextToSpeech, { isNative = () => false, 
   };
 }
 
+export const BROWSER_JA_VOICE_MISSING_NOTICE =
+  "일본어 음성이 설치되어 있지 않아 다른 언어 음성으로 읽힐 수 있습니다. OS 설정에서 일본어 음성을 추가하세요.";
+
+// Prefer ja-JP, then any ja / ja_JP voice (Android reports underscores).
+export function findJapaneseVoice(voices = []) {
+  const list = Array.from(voices || []);
+  const isJa = voice => /^ja([-_]|$)/i.test(String(voice?.lang || ""));
+  return list.find(voice => /^ja[-_]jp$/i.test(String(voice?.lang || "")) && voice.localService)
+    || list.find(voice => /^ja[-_]jp$/i.test(String(voice?.lang || "")))
+    || list.find(isJa)
+    || null;
+}
+
+// The voice list loads asynchronously (getVoices() is [] until
+// "voiceschanged" fires, notably on the first call in Chrome/Firefox).
+function waitForVoices(synth, timeoutMs) {
+  const voices = synth.getVoices?.() || [];
+  if (voices.length || typeof synth.addEventListener !== "function") {
+    return Promise.resolve(voices);
+  }
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      synth.removeEventListener?.("voiceschanged", finish);
+      resolve(synth.getVoices?.() || []);
+    };
+    synth.addEventListener("voiceschanged", finish);
+    setTimeout(finish, timeoutMs);
+  });
+}
+
+// Firefox ignores utterance.lang when choosing a voice and uses the system
+// default (e.g. Korean), so the Japanese voice must be set explicitly.
 export function createBrowserProvider({
   getSynth = () => globalThis.speechSynthesis,
-  Utterance = globalThis.SpeechSynthesisUtterance
+  Utterance = globalThis.SpeechSynthesisUtterance,
+  onMissingVoice = () => {},
+  voiceTimeoutMs = 1500
 } = {}) {
+  let token = 0;
+  let warnedMissing = false;
+
   return {
     id: "browser",
     isAvailable: () => Boolean(getSynth()),
-    speak(text) {
+    async speak(text) {
       const synth = getSynth();
       if (!synth) {
         return;
       }
       synth.cancel();
+      const myToken = ++token;
+      const voices = await waitForVoices(synth, voiceTimeoutMs);
+      if (myToken !== token) return; // superseded by a newer speak()/stop()
+
       const utterance = new Utterance(text);
       utterance.lang = "ja-JP";
+      const voice = findJapaneseVoice(voices);
+      if (voice) {
+        utterance.voice = voice;
+      } else if (voices.length && !warnedMissing) {
+        warnedMissing = true;
+        onMissingVoice(BROWSER_JA_VOICE_MISSING_NOTICE);
+      }
       synth.speak(utterance);
     },
     stop() {
+      token += 1;
       getSynth()?.cancel();
     }
   };
