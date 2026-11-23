@@ -104,6 +104,7 @@ export function sentenceCard(entry, helpers, { domId = true, open = false } = {}
                 <ul>
                   ${children[kind].map(item => `
                     <li>
+                      ${kind === "word" ? speakerButton(item.title, helpers) : ""}
                       <strong lang="ja">${helpers.highlight(item.title)}</strong>
                       ${item.reading ? `<span class="sentence-item-reading" lang="ja">${helpers.highlight(item.reading)}</span>` : ""}
                       <span class="sentence-meaning" data-reveal-meaning>${helpers.highlight(item.meaning || "-")}</span>

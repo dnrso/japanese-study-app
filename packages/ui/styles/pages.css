@@ -1119,6 +1119,19 @@ mark {
   font-size: 14px;
 }
 
+.sentence-items li .speaker-btn {
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border-radius: 6px;
+}
+
+.sentence-items li .speaker-btn .icon {
+  width: 12px;
+  height: 12px;
+}
+
 .sentence-items li strong {
   font-size: 15px;
 }
