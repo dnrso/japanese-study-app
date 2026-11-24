@@ -54,7 +54,8 @@ export function entryFormatHelp(mode, { escapeHtml }) {
         "<code>읽기 …</code> / <code>해석 …</code> 줄로 읽기와 뜻",
         "<code>단어장</code> 다음 줄부터 <code>`단어` (읽기) 뜻 | 한자=… | 품사=… | 문자=…</code>",
         "<code>한자=雨(비 우)</code>처럼 괄호 안에 한자의 뜻·음을 쓰면 한자 노트에 함께 등록",
-        "<code>문법</code> · <code>표현</code> 다음 줄부터 <code>`항목` 설명</code>"
+        "<code>문법</code> · <code>표현</code> 다음 줄부터 <code>`항목` 설명</code>",
+        "<code>`…`</code> 대신 <code>'…'</code> 또는 <code>\"…\"</code>로 감싸도 됩니다"
       ]
     : mode === "word"
       ? [
