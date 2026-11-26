@@ -23,7 +23,8 @@ export function itemToRawText(item) {
 
 export function parseDailyEntry(kind, rawText) {
   const normalizedKind = normalizeDailyKind(kind);
-  const raw = text(rawText).trim();
+  const original = text(rawText).trim();
+  const raw = backtickQuotedTerms(original);
   const title = firstMatch(raw, /^#{1,6}\s*(.+)$/m) || firstMatch(raw, /`([^`]+)`/) || raw.split(/\r?\n/)[0] || "";
   const reading = firstMatch(raw, /^읽기\s+(.+)$/m) || firstMatch(raw, /\*\*읽기\*\*\s*:\s*(.+)/) || firstMatch(raw, /`[^`]+`\s*\(([^)]+)\)/) || "";
   const meaning = firstMatch(raw, /^해석\s+(.+)$/m) || firstMatch(raw, /\*\*해석\*\*\s*:\s*(.+)/) || inlineMeaning(raw) || "";
@@ -36,7 +37,7 @@ export function parseDailyEntry(kind, rawText) {
     words: parseWordLines(raw),
     grammar: parseGrammarLines(raw),
     expressions: parseExpressionLines(raw),
-    note: raw
+    note: original
   };
 }
 
@@ -55,6 +56,16 @@ function sectionedBulletLines(raw) {
   });
 
   return result;
+}
+
+// A term may be wrapped in '…' or "…" (or curly quotes) instead of
+// backticks. Only a term at the very start of a line (after an optional
+// "- " bullet) is rewritten to the backtick form, so apostrophes or quotes
+// later in a meaning are left alone.
+const LEADING_QUOTED_TERM = /^([ \t]*(?:-[ \t]*)?)(?:'([^'\n]+)'|"([^"\n]+)"|“([^”\n]+)”|‘([^’\n]+)’)/gm;
+
+export function backtickQuotedTerms(raw) {
+  return text(raw).replace(LEADING_QUOTED_TERM, (_match, prefix, a, b, c, d) => `${prefix}\`${a ?? b ?? c ?? d}\``);
 }
 
 function parseWordLines(raw) {

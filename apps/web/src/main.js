@@ -3003,7 +3003,7 @@ const speechChain = createSpeechChain(selectSpeechProviders({
   isNative: isNativePlatform(),
   voicevox: voicevoxProvider,
   capacitor: createCapacitorProvider(TextToSpeech, { isNative: isNativePlatform }),
-  browser: createBrowserProvider()
+  browser: createBrowserProvider({ onMissingVoice: showSpeechNotice })
 }), { onNotice: showSpeechNotice });
 
 function speak(text) {

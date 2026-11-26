@@ -80,6 +80,7 @@ export function sentenceWordRow(item, helpers) {
   const card = info?.card;
   return `
     <li class="sentence-word">
+      ${speakerButton(item.title, helpers)}
       <strong lang="ja">${title}</strong>
       ${item.reading ? `<span class="sentence-item-reading" lang="ja">${highlight(item.reading)}</span>` : ""}
       ${info?.part ? `<span class="sentence-word-part">${highlight(info.part)}</span>` : ""}

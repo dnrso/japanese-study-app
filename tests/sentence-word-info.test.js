@@ -66,6 +66,7 @@ describe("sentenceWordInfo", () => {
 describe("sentenceWordRow", () => {
   it("makes each kanji a preview button and links the registered word card", () => {
     const html = sentenceWordRow({ title: "疲れる", reading: "つかれる", meaning: "피곤하다", parsed: { part: "동사" } }, helpers);
+    expect(html).toContain('class="speaker-btn" data-speak-text="疲れる"');
     expect(html).toContain('class="sentence-word-kanji" data-note-card-kind="kanji" data-note-card-title="疲" data-note-card-meaning="피곤할 피"');
     expect(html).toContain('<span class="sentence-word-part">동사</span>');
     expect(html).toContain('data-note-card-open-kind="word" data-note-card-open-title="疲れる"');

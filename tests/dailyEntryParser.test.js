@@ -344,3 +344,40 @@ describe("storage-idb uses the shared parser", () => {
     expect(item.kanji).toBe("天 (하늘 천)");
   });
 });
+
+describe("quoted terms instead of backticks", () => {
+  const quotedBlock = [
+    "# 雨が降っています",
+    "읽기 あめがふっています",
+    "해석 비가 내리고 있습니다",
+    "단어장",
+    "- '雨' (あめ) 비 | 한자=雨(비 우) | 품사=명사 | 문자=한자",
+    "\"降る\" (ふる) 내리다 | 품사=동사",
+    "문법",
+    "- “〜ている” 진행·상태",
+    "표현",
+    "‘雨が降る’ (あめがふる) 비가 오다"
+  ].join("\n");
+
+  it("parses '…', \"…\" and curly quotes like backticks", () => {
+    const parsed = parseDailyEntry("sentence", quotedBlock);
+    expect(parsed.words.map(word => [word.title, word.reading, word.meaning])).toEqual([
+      ["雨", "あめ", "비"],
+      ["降る", "ふる", "내리다"]
+    ]);
+    expect(parsed.words[0].kanji).toBe("雨(비 우)");
+    expect(parsed.grammar).toMatchObject([{ title: "〜ている", meaning: "진행·상태" }]);
+    expect(parsed.expressions).toMatchObject([{ title: "雨が降る", reading: "あめがふる", meaning: "비가 오다" }]);
+    expect(parsed.note).toBe(quotedBlock);
+  });
+
+  it("parses a quoted manual word entry", () => {
+    const parsed = parseDailyEntry("word", "'天気' (てんき) 날씨 | 품사=명사");
+    expect(parsed).toMatchObject({ title: "天気", reading: "てんき", meaning: "날씨" });
+  });
+
+  it("leaves quotes later in the line alone", () => {
+    const parsed = parseDailyEntry("sentence", "# 文\n단어장\n- `言う` (いう) 'say'라는 뜻");
+    expect(parsed.words).toMatchObject([{ title: "言う", meaning: "'say'라는 뜻" }]);
+  });
+});

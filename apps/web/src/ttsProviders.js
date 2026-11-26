@@ -104,6 +104,9 @@ export function createCapacitorProvider(TextToSpeech, { isNative = () => false, 
   };
 }
 
+export const BROWSER_JA_VOICE_MISSING_NOTICE =
+  "일본어 음성이 설치되어 있지 않아 다른 언어 음성으로 읽힐 수 있습니다. OS 설정에서 일본어 음성을 추가하세요.";
+
 // Higher-quality Japanese voices first: Edge/Windows neural ("Natural"/"Online",
 // e.g. Microsoft Nanami), Chrome's "Google 日本語", Apple Kyoko / O-ren.
 const PREFERRED_VOICE_PATTERNS = [/natural|online/i, /google/i, /kyoko|o-?ren/i];
@@ -113,7 +116,7 @@ function isJapaneseVoice(voice) {
 }
 
 // Picks the best Japanese voice from speechSynthesis.getVoices(), or null.
-// Order: preferred name pattern -> localService -> first Japanese voice.
+// Order: preferred name pattern -> ja-JP localService -> localService -> ja-JP -> first Japanese voice.
 export function pickJapaneseVoice(voices) {
   const japanese = Array.from(voices || []).filter(isJapaneseVoice);
   if (!japanese.length) return null;
@@ -121,51 +124,127 @@ export function pickJapaneseVoice(voices) {
     const match = japanese.find(voice => pattern.test(voice.name || ""));
     if (match) return match;
   }
-  return japanese.find(voice => voice.localService) || japanese[0];
+  const isJaJp = voice => /^ja[-_]jp$/i.test(String(voice?.lang || ""));
+  return japanese.find(voice => isJaJp(voice) && voice.localService)
+    || japanese.find(voice => voice.localService)
+    || japanese.find(isJaJp)
+    || japanese[0];
 }
 
+// Firefox ignores utterance.lang when choosing a voice and uses the system
+// default (e.g. Korean), so the Japanese voice must be set explicitly.
+// The voice list loads asynchronously (getVoices() is [] until "voiceschanged"
+// fires, notably on the first call in Chrome/Firefox).
 export function createBrowserProvider({
   getSynth = () => globalThis.speechSynthesis,
-  Utterance = globalThis.SpeechSynthesisUtterance
+  Utterance = globalThis.SpeechSynthesisUtterance,
+  onMissingVoice = () => {},
+  voiceTimeoutMs = 1500
 } = {}) {
-  let cachedVoice; // undefined = not resolved yet, null = no Japanese voice
-  let watched = null;
+  let token = 0;
+  let warnedMissing = false;
+  let cachedVoices = [];
+  let cachedVoice = null;
+  let voicesLoaded = false;
+  let watchedSynth = null;
+  let listenedSynth = null;
+  const waiters = new Set();
 
-  function refreshVoice(synth) {
-    const voices = synth.getVoices?.() || [];
-    // Chrome returns [] until voices load; stay unresolved so we retry.
-    cachedVoice = voices.length ? pickJapaneseVoice(voices) : undefined;
+  function flushWaiters() {
+    for (const resolve of waiters) resolve();
+    waiters.clear();
   }
 
-  function japaneseVoice(synth) {
-    if (watched !== synth && synth.addEventListener) {
-      watched = synth;
-      synth.addEventListener("voiceschanged", () => refreshVoice(synth));
+  function refreshVoices(synth) {
+    const voices = synth.getVoices?.() || [];
+    cachedVoices = voices;
+    if (voices.length) {
+      voicesLoaded = true;
+      cachedVoice = pickJapaneseVoice(voices);
+    } else {
+      voicesLoaded = false;
+      cachedVoice = null;
     }
-    if (cachedVoice === undefined) refreshVoice(synth);
-    return cachedVoice || null;
+  }
+
+  function ensureSynth(synth) {
+    if (watchedSynth !== synth) {
+      watchedSynth = synth;
+      cachedVoices = [];
+      cachedVoice = null;
+      voicesLoaded = false;
+      flushWaiters();
+    }
+    if (listenedSynth !== synth && typeof synth.addEventListener === "function") {
+      listenedSynth = synth;
+      synth.addEventListener("voiceschanged", () => {
+        if (watchedSynth !== synth) return;
+        refreshVoices(synth);
+        flushWaiters();
+      });
+    }
+    if (!voicesLoaded) {
+      refreshVoices(synth);
+    }
+  }
+
+  function waitForVoices(synth) {
+    if (voicesLoaded || typeof synth.addEventListener !== "function") {
+      return null;
+    }
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        waiters.delete(finish);
+        resolve();
+      };
+      waiters.add(finish);
+      const timer = setTimeout(() => {
+        if (watchedSynth === synth && !voicesLoaded) {
+          refreshVoices(synth);
+        }
+        finish();
+      }, voiceTimeoutMs);
+    });
   }
 
   // Start loading the voice list early so the first speak() already has it.
   const initialSynth = getSynth();
-  if (initialSynth) japaneseVoice(initialSynth);
+  if (initialSynth) ensureSynth(initialSynth);
 
   return {
     id: "browser",
     isAvailable: () => Boolean(getSynth()),
-    speak(text) {
+    async speak(text) {
       const synth = getSynth();
       if (!synth) {
         return;
       }
       synth.cancel();
+      const myToken = ++token;
+      ensureSynth(synth);
+      const pending = waitForVoices(synth);
+      if (pending) {
+        await pending;
+        if (myToken !== token) return; // superseded by a newer speak()/stop()
+      }
+
       const utterance = new Utterance(text);
       utterance.lang = "ja-JP";
-      const voice = japaneseVoice(synth);
-      if (voice) utterance.voice = voice;
+      if (cachedVoice) {
+        utterance.voice = cachedVoice;
+      } else if (cachedVoices.length && !warnedMissing) {
+        warnedMissing = true;
+        onMissingVoice(BROWSER_JA_VOICE_MISSING_NOTICE);
+      }
       synth.speak(utterance);
     },
     stop() {
+      token += 1;
+      flushWaiters();
       getSynth()?.cancel();
     }
   };
