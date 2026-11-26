@@ -6,6 +6,7 @@ import { addDays, dateKey, isWeakItem, weakItems, reviewIntervals as REVIEW_QUEU
 export * from "./merge.js";
 export * from "./notes.js";
 export * from "./noteQuiz.js";
+export * from "./wordInfo.js";
 // Weak-item stats (recordQuizStat / isWeakItem / weakItems) live in storage-core
 // so the storage adapter can write them; re-exported here for the app and tests.
 export { WEAK_ITEM_CORRECT_STREAK, recordQuizStat, isWeakItem, weakItems } from "@nihongo-study/storage-core";

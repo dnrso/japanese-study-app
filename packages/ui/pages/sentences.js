@@ -59,6 +59,37 @@ export function sentenceChildren(entry, helpers) {
   return Object.fromEntries(CHILD_KINDS.map(([kind]) => [kind, helpers.linkedEntriesForSentence(kind, entry.id)]));
 }
 
+// A word under a sentence: each kanji in the title is a button that opens the
+// card preview (main.js, [data-note-card-title]) with that kanji's 뜻 and
+// 음·훈, then the reading, a 품사 tag, the meaning and a › to the 단어 card.
+// `helpers.wordInfo(item)` (core.sentenceWordInfo) is optional; without it the
+// row is plain text as before.
+export function sentenceWordRow(item, helpers) {
+  const { escapeHtml, highlight } = helpers;
+  const info = helpers.wordInfo ? helpers.wordInfo(item) : null;
+  const title = info?.segments?.length
+    ? info.segments.map(segment => {
+      if (!segment.kanji) {
+        return highlight(segment.text);
+      }
+      const { char, meaning, card } = segment.kanji;
+      const label = [char, meaning].filter(Boolean).join(" ");
+      return `<button type="button" class="sentence-word-kanji${card ? "" : " is-unregistered"}" data-note-card-kind="kanji" data-note-card-title="${escapeHtml(char)}" data-note-card-meaning="${escapeHtml(meaning)}" data-note-card-word="${escapeHtml(String(item.title || "").trim())}" title="${escapeHtml(label)}" aria-label="${escapeHtml(`한자 ${label}`)}">${escapeHtml(char)}</button>`;
+    }).join("")
+    : highlight(item.title);
+  const card = info?.card;
+  return `
+    <li class="sentence-word">
+      ${speakerButton(item.title, helpers)}
+      <strong lang="ja">${title}</strong>
+      ${item.reading ? `<span class="sentence-item-reading" lang="ja">${highlight(item.reading)}</span>` : ""}
+      ${info?.part ? `<span class="sentence-word-part">${highlight(info.part)}</span>` : ""}
+      <span class="sentence-meaning" data-reveal-meaning>${highlight(item.meaning || "-")}</span>
+      ${card ? `<button type="button" class="sentence-word-card-link" data-note-card-open-kind="word" data-note-card-open-title="${escapeHtml(card.title)}" title="단어 카드 보기" aria-label="${escapeHtml(`${card.title} 단어 카드 보기`)}">›</button>` : ""}
+    </li>
+  `;
+}
+
 // One sentence row. Shared by the 문장 tab and the quiz result view; the quiz
 // passes `domId: false` so the element id stays unique on the page.
 export function sentenceCard(entry, helpers, { domId = true, open = false } = {}) {
@@ -102,9 +133,8 @@ export function sentenceCard(entry, helpers, { domId = true, open = false } = {}
               <div class="sentence-item-group">
                 <span class="sentence-item-kind">${label}</span>
                 <ul>
-                  ${children[kind].map(item => `
+                  ${children[kind].map(item => kind === "word" ? sentenceWordRow(item, helpers) : `
                     <li>
-                      ${kind === "word" ? speakerButton(item.title, helpers) : ""}
                       <strong lang="ja">${helpers.highlight(item.title)}</strong>
                       ${item.reading ? `<span class="sentence-item-reading" lang="ja">${helpers.highlight(item.reading)}</span>` : ""}
                       <span class="sentence-meaning" data-reveal-meaning>${helpers.highlight(item.meaning || "-")}</span>

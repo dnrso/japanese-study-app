@@ -1141,6 +1141,56 @@ mark {
   font-size: 13px;
 }
 
+/* A kanji inside a word's title: tapping it opens the 한자 preview. */
+.sentence-word-kanji {
+  padding: 0;
+  border: 0;
+  border-bottom: 1.5px dotted var(--yellow);
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.sentence-word-kanji:hover,
+.sentence-word-kanji:focus-visible {
+  background: var(--yellow-soft);
+  border-bottom-style: solid;
+}
+
+.sentence-word-kanji.is-unregistered {
+  border-bottom-color: var(--line-strong);
+}
+
+.sentence-word-part {
+  align-self: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.sentence-word-card-link {
+  align-self: center;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.sentence-word-card-link:hover {
+  background: var(--accent-soft);
+}
+
 .sentence-row-actions {
   display: flex;
   justify-content: flex-end;

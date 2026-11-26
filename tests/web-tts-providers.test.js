@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { tocByPage } from "@nihongo-study/ui";
 import { voicevoxSpeakerOptions } from "@nihongo-study/tts";
 import {
+  BROWSER_JA_VOICE_MISSING_NOTICE,
   VOICEVOX_FALLBACK_NOTICE,
   createBrowserProvider,
-  findJapaneseVoice,
   createCapacitorProvider,
   createDesktopVoicevoxProvider,
   createSpeechChain,
+  pickJapaneseVoice,
   selectSpeechProviders
 } from "../apps/web/src/ttsProviders.js";
 import { filterTocForPlatform } from "../apps/web/src/desktopGating.js";
@@ -134,48 +135,6 @@ describe("browser and capacitor providers", () => {
     expect(createBrowserProvider({ getSynth: () => undefined, Utterance }).isAvailable()).toBe(false);
   });
 
-  class VoiceUtterance { constructor(text) { this.text = text; } }
-  const koVoice = { lang: "ko-KR", name: "Heami", localService: true };
-  const jaVoice = { lang: "ja-JP", name: "Haruka", localService: true };
-
-  it("browser provider sets a Japanese voice explicitly (Firefox ignores lang)", async () => {
-    const synth = { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [koVoice, jaVoice] };
-    await createBrowserProvider({ getSynth: () => synth, Utterance: VoiceUtterance }).speak("猫");
-    expect(synth.speak.mock.calls[0][0].voice).toBe(jaVoice);
-  });
-
-  it("browser provider waits for voiceschanged when the voice list is not loaded yet", async () => {
-    let voices = [];
-    const listeners = {};
-    const synth = {
-      cancel: vi.fn(), speak: vi.fn(), getVoices: () => voices,
-      addEventListener: (type, fn) => { listeners[type] = fn; },
-      removeEventListener: vi.fn()
-    };
-    const pending = createBrowserProvider({ getSynth: () => synth, Utterance: VoiceUtterance }).speak("猫");
-    expect(synth.speak).not.toHaveBeenCalled();
-    voices = [koVoice, jaVoice];
-    listeners.voiceschanged();
-    await pending;
-    expect(synth.speak.mock.calls[0][0].voice).toBe(jaVoice);
-  });
-
-  it("browser provider notifies once when no Japanese voice is installed", async () => {
-    const synth = { cancel: vi.fn(), speak: vi.fn(), getVoices: () => [koVoice] };
-    const onMissingVoice = vi.fn();
-    const provider = createBrowserProvider({ getSynth: () => synth, Utterance: VoiceUtterance, onMissingVoice });
-    await provider.speak("猫");
-    await provider.speak("犬");
-    expect(onMissingVoice).toHaveBeenCalledTimes(1);
-    expect(synth.speak).toHaveBeenCalledTimes(2);
-  });
-
-  it("findJapaneseVoice accepts ja_JP and bare ja", () => {
-    expect(findJapaneseVoice([koVoice, { lang: "ja_JP" }])).toEqual({ lang: "ja_JP" });
-    expect(findJapaneseVoice([{ lang: "ja" }])).toEqual({ lang: "ja" });
-    expect(findJapaneseVoice([koVoice])).toBeNull();
-  });
-
   it("capacitor provider keeps lang/rate and swallows failures", async () => {
     const TextToSpeech = { speak: vi.fn(async () => { throw new Error("no engine"); }) };
     const warn = vi.fn();
@@ -186,6 +145,106 @@ describe("browser and capacitor providers", () => {
     await Promise.resolve();
     expect(warn).toHaveBeenCalled();
     expect(createCapacitorProvider(TextToSpeech, { isNative: () => false }).isAvailable()).toBe(false);
+  });
+});
+
+describe("browser japanese voice selection", () => {
+  const voice = (name, lang, localService = false) => ({ name, lang, localService });
+
+  function fakeSynth(voices) {
+    const listeners = {};
+    return {
+      voices,
+      cancel: vi.fn(),
+      speak: vi.fn(),
+      getVoices: vi.fn(function () { return this.voices; }),
+      addEventListener: vi.fn((type, fn) => { listeners[type] = fn; }),
+      fire(type) { listeners[type]?.(); }
+    };
+  }
+  class Utterance { constructor(text) { this.text = text; } }
+
+  it("prefers a Japanese voice over others, accepting ja-JP, ja_JP, and bare ja", () => {
+    const jaJp = voice("Some JP", "ja_JP");
+    const bareJa = voice("Bare JP", "ja");
+    expect(pickJapaneseVoice([voice("Google US English", "en-US"), jaJp])).toBe(jaJp);
+    expect(pickJapaneseVoice([voice("Heami", "ko-KR"), bareJa])).toBe(bareJa);
+    expect(pickJapaneseVoice([voice("X", "en-US"), voice("Y", "ko-KR")])).toBeNull();
+    expect(pickJapaneseVoice([])).toBeNull();
+  });
+
+  it("orders by quality name, then localService, then first", () => {
+    const plain = voice("Microsoft Haruka", "ja-JP");
+    const local = voice("Local JP", "ja-JP", true);
+    const google = voice("Google 日本語", "ja-JP");
+    const nanami = voice("Microsoft Nanami Online (Natural) - Japanese (Japan)", "ja-JP");
+    const kyoko = voice("Kyoko", "ja-JP", true);
+    expect(pickJapaneseVoice([plain, local, kyoko, google, nanami])).toBe(nanami);
+    expect(pickJapaneseVoice([plain, local, kyoko, google])).toBe(google);
+    expect(pickJapaneseVoice([plain, local, kyoko])).toBe(kyoko);
+    expect(pickJapaneseVoice([plain, local])).toBe(local);
+    expect(pickJapaneseVoice([plain, voice("Other", "ja-JP")])).toBe(plain);
+  });
+
+  it("sets utterance.voice to the chosen Japanese voice", async () => {
+    const nanami = voice("Microsoft Nanami Online (Natural)", "ja-JP");
+    const synth = fakeSynth([voice("Microsoft David", "en-US"), nanami]);
+    await createBrowserProvider({ getSynth: () => synth, Utterance }).speak("猫");
+    expect(synth.speak.mock.calls[0][0]).toMatchObject({ lang: "ja-JP", voice: nanami });
+  });
+
+  it("waits for voiceschanged when voices are initially empty, then caches", async () => {
+    const synth = fakeSynth([]);
+    const provider = createBrowserProvider({ getSynth: () => synth, Utterance });
+    const pending = provider.speak("一");
+    expect(synth.speak).not.toHaveBeenCalled();
+
+    const kyoko = voice("Kyoko", "ja-JP", true);
+    synth.voices = [voice("Alex", "en-US"), kyoko];
+    synth.fire("voiceschanged");
+    await pending;
+    expect(synth.speak.mock.calls[0][0].voice).toBe(kyoko);
+    expect(synth.addEventListener).toHaveBeenCalledTimes(1);
+
+    const calls = synth.getVoices.mock.calls.length;
+    await provider.speak("二");
+    expect(synth.speak.mock.calls[1][0].voice).toBe(kyoko);
+    expect(synth.getVoices.mock.calls.length).toBe(calls);
+  });
+
+  it("drops a pending speak() when superseded by a newer speak() or stop()", async () => {
+    const synth = fakeSynth([]);
+    const provider = createBrowserProvider({ getSynth: () => synth, Utterance });
+    const first = provider.speak("一");
+    const second = provider.speak("二");
+
+    const kyoko = voice("Kyoko", "ja-JP", true);
+    synth.voices = [kyoko];
+    synth.fire("voiceschanged");
+    await Promise.all([first, second]);
+    expect(synth.speak).toHaveBeenCalledTimes(1);
+    expect(synth.speak.mock.calls[0][0]).toMatchObject({ text: "二", voice: kyoko });
+
+    const synth2 = fakeSynth([]);
+    const provider2 = createBrowserProvider({ getSynth: () => synth2, Utterance });
+    const pending = provider2.speak("三");
+    provider2.stop();
+    await pending;
+    expect(synth2.speak).not.toHaveBeenCalled();
+  });
+
+  it("leaves voice unset (lang only) and notifies once when no Japanese voice is installed", async () => {
+    const synth = fakeSynth([voice("Alex", "en-US"), voice("Heami", "ko-KR", true)]);
+    const onMissingVoice = vi.fn();
+    const provider = createBrowserProvider({ getSynth: () => synth, Utterance, onMissingVoice });
+    await provider.speak("猫");
+    await provider.speak("犬");
+    const utterance = synth.speak.mock.calls[0][0];
+    expect(utterance.lang).toBe("ja-JP");
+    expect("voice" in utterance).toBe(false);
+    expect(onMissingVoice).toHaveBeenCalledTimes(1);
+    expect(onMissingVoice).toHaveBeenCalledWith(BROWSER_JA_VOICE_MISSING_NOTICE);
+    expect(synth.speak).toHaveBeenCalledTimes(2);
   });
 });
 
